@@ -1,0 +1,28 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Git local
+*.log
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+coverage/
+
+# .NET
+**/bin/
+**/obj/
+**/TestResults/
+
+# Environment secrets
+**/.env
+!.env.example
+
+# Python (if present)
+__pycache__/
+*.pyc
