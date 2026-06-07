@@ -1,0 +1,298 @@
+:host {
+  display: block;
+}
+
+.search-icon {
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.indicator {
+  border: 0;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.hero-panel {
+  position: relative;
+  margin-bottom: 2rem;
+  border-radius: 1.25rem;
+//   background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+:host ::ng-deep .hero-carousel {
+  border-radius: 1.25rem;
+  overflow: hidden;
+}
+
+:host ::ng-deep .hero-carousel .p-carousel-content-container {
+  position: relative;
+}
+
+:host ::ng-deep .hero-carousel .p-carousel-prev-button,
+:host ::ng-deep .hero-carousel .p-carousel-next-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  color: var(--accent);
+}
+
+:host ::ng-deep .hero-carousel .p-carousel-prev-button {
+  left: 0.9rem;
+}
+
+:host ::ng-deep .hero-carousel .p-carousel-next-button {
+  right: 0.9rem;
+}
+
+:host ::ng-deep .hero-carousel .p-carousel-viewport {
+  border-radius: 1.25rem 1.25rem 0 0;
+}
+
+:host ::ng-deep .hero-carousel .p-carousel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 250, 225, 0.9);
+  border-top: 1px solid var(--border);
+}
+
+.hero-visual {
+  position: relative;
+  width: 100%;
+  height: clamp(18rem, 40vw, 30rem);
+  overflow: hidden;
+  background: linear-gradient(135deg, #f9f9fa, #eeeef0);
+}
+
+.hero-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 1.4rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 15%, rgba(0, 0, 0, 0.34) 100%);
+}
+
+.hero-overlay h1 {
+  max-width: 12ch;
+  margin: 0;
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 7vw, 4.75rem);
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  font-weight: 400;
+  text-wrap: balance;
+  text-transform: uppercase;
+}
+
+.carousel-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+}
+
+.carousel-position {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+  min-width: 3rem;
+  text-align: center;
+}
+
+.carousel-indicators {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.indicator {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 9999px;
+  background: rgba(18, 18, 18, 0.22);
+  transition: transform 160ms ease, background-color 160ms ease, width 160ms ease;
+}
+
+.indicator.active {
+  width: 1.1rem;
+  background: var(--accent);
+}
+
+.promo-band {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 1rem;
+  margin: 0 0 1rem;
+  padding: 1.4rem;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #f7d20a 0%, #f5cb00 100%);
+  color: var(--text-strong);
+}
+
+.promo-copy h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-weight: 400;
+}
+
+.promo-copy p,
+.promo-delivery p {
+  margin: 0;
+  line-height: 1.55;
+  color: var(--text-soft);
+}
+
+.promo-delivery {
+  padding: 1rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.delivery-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.delivery-head h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.search-wrap {
+  display: flex;
+  justify-content: center;
+  margin: 2rem 0 1.6rem;
+}
+
+:host ::ng-deep .search-group.p-inputgroup {
+  width: min(860px, 100%);
+  background: #fffef7;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  overflow: hidden;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+}
+
+:host ::ng-deep .search-group.p-inputgroup > * {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+:host ::ng-deep .search-group .p-inputgroup-addon {
+  border: 0 !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--accent);
+  padding-left: 1rem;
+  padding-right: 0.45rem;
+  box-shadow: none !important;
+}
+
+:host ::ng-deep .search-group .p-inputtext {
+  flex: 1;
+  border: 0 !important;
+  border-color: transparent !important;
+  background: transparent;
+  font: inherit;
+  color: var(--text-strong);
+  padding: 0.95rem 0.4rem 0.95rem 0;
+  box-shadow: none !important;
+}
+
+:host ::ng-deep .search-group .p-inputtext:enabled:focus {
+  box-shadow: none;
+}
+
+:host ::ng-deep .search-group .search-submit {
+  border-radius: 0;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  padding-inline: 1.5rem;
+  box-shadow: none;
+}
+
+:host ::ng-deep .search-group .search-submit:hover {
+  background: #de7b0d;
+  border: 0;
+  box-shadow: none;
+}
+
+:host ::ng-deep .search-group .search-submit:focus,
+:host ::ng-deep .search-group .search-submit:focus-visible,
+:host ::ng-deep .search-group .search-submit:active {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  .promo-band {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .hero-overlay h1 {
+    max-width: 10ch;
+    font-size: 2.8rem;
+  }
+
+  .hero-visual {
+    height: 22rem;
+  }
+
+  .promo-band {
+    padding: 1.2rem;
+  }
+
+  :host ::ng-deep .search-group.p-inputgroup {
+    border-radius: 1rem;
+  }
+
+  :host ::ng-deep .search-group .p-inputgroup-addon {
+    padding-left: 0.8rem;
+  }
+
+  :host ::ng-deep .search-group .search-submit {
+    padding-inline: 1.1rem;
+  }
+
+  :host ::ng-deep .hero-carousel .p-carousel-prev-button,
+  :host ::ng-deep .hero-carousel .p-carousel-next-button {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  :host ::ng-deep .hero-carousel .p-carousel-footer {
+    padding-inline: 0.6rem;
+  }
+}

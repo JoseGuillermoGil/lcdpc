@@ -60,9 +60,28 @@ public static class DependencyInjection
                 : configuration["Auth:Google:Scope"]!
         };
 
+        var jwtTokenOptions = new JwtTokenOptions
+        {
+            Issuer = string.IsNullOrWhiteSpace(configuration["Auth:Jwt:Issuer"])
+                ? "LCDPC.API"
+                : configuration["Auth:Jwt:Issuer"]!,
+            Audience = string.IsNullOrWhiteSpace(configuration["Auth:Jwt:Audience"])
+                ? "LCDPC.Web"
+                : configuration["Auth:Jwt:Audience"]!,
+            SigningKey = string.IsNullOrWhiteSpace(configuration["Auth:Jwt:SigningKey"])
+                ? "CHANGE-ME-WITH-AT-LEAST-32-CHARS-DEV-ONLY"
+                : configuration["Auth:Jwt:SigningKey"]!
+        };
+
+        if (jwtTokenOptions.SigningKey.Length < 32)
+        {
+            jwtTokenOptions.SigningKey = "CHANGE-ME-WITH-AT-LEAST-32-CHARS-DEV-ONLY";
+        }
+
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
         services.AddSingleton(authOptions);
         services.AddSingleton(googleOAuthOptions);
+        services.AddSingleton(jwtTokenOptions);
 
         services.AddHealthChecks().AddDbContextCheck<AppDbContext>("postgres");
         services.AddScoped<IRegistrationFlowService, RegistrationFlowService>();

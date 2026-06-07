@@ -1,0 +1,60 @@
+:host {
+  display: block;
+}
+
+.branches-section {
+  padding: 4rem 0 1rem;
+  text-align: center;
+}
+
+.branches-section h2 {
+  margin: 0 0 1.4rem;
+  font-family: 'Montserrat', sans-serif;
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-weight: 900;
+}
+
+.branch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.branch-card {
+  padding: 1.1rem;
+  border: 1px solid #dfc0b0;
+  border-radius: 1rem;
+  background: #fff;
+  text-align: left;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.branch-title {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+
+.branch-title h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.branch-card p {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0 0 0.45rem;
+  line-height: 1.55;
+  color: #584236;
+}
+
+@media (max-width: 1180px) {
+  .branch-grid {
+    grid-template-columns: 1fr;
+  }
+}

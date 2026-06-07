@@ -2,22 +2,22 @@
 
 ## Fase 1 - Dominio
 
-- [ ] Definir entidades y value objects: `Producto`, `Sede`, `PriceTier`, `Carrito`, `Orden`, `LineaCarrito`.
-- [ ] Definir invariantes:
-  - [ ] Carrito con sede única.
-  - [ ] Orden con sede obligatoria.
-  - [ ] Precio aplicado por sede + unidad comercial + cantidad.
-- [ ] Definir tabla de aplicación de `precio1..precio4`.
-- [ ] Formalizar regla de 4 niveles de precio:
-  - [ ] `precio1`: unidad o peso.
-  - [ ] `precio2`: 1 caja/bulto/pieza.
-  - [ ] `precio3`: más de 1 y hasta 50 cajas/bultos/piezas.
-  - [ ] `precio4`: más de 50 cajas/bultos/piezas.
-- [ ] Definir atributos de producto para medidas y empaque:
-  - [ ] `tipoMedidaBase` (`unidad`, `gramos`, `kilo`).
-  - [ ] `tipoComercialMayor` (`pieza`, `caja`, `bulto`).
-  - [ ] `unidadesPorCaja` y `unidadesPorBulto` cuando aplique.
-- [ ] Definir reglas para productos por peso (detal por peso, mayor por pieza).
+- [x] Definir entidades y value objects: `Producto`, `Sede`, `PriceTier`, `Carrito`, `Orden`, `LineaCarrito`.
+- [x] Definir invariantes:
+  - [x] Carrito con sede única.
+  - [x] Orden con sede obligatoria.
+  - [x] Precio aplicado por sede + unidad comercial + cantidad.
+- [x] Definir tabla de aplicación de `precio1..precio4`.
+- [x] Formalizar regla de 4 niveles de precio:
+  - [x] `precio1`: unidad o peso.
+  - [x] `precio2`: 1 caja/bulto/pieza.
+  - [x] `precio3`: más de 1 y hasta 50 cajas/bultos/piezas.
+  - [x] `precio4`: más de 50 cajas/bultos/piezas.
+- [x] Definir atributos de producto para medidas y empaque:
+  - [x] `tipoMedidaBase` (`unidad`, `gramos`, `kilo`).
+  - [x] `tipoComercialMayor` (`pieza`, `caja`, `bulto`).
+  - [x] `unidadesPorCaja` y `unidadesPorBulto` cuando aplique.
+- [x] Definir reglas para productos por peso (detal por peso, mayor por pieza).
 
 ## Fase 2 - Front cliente
 

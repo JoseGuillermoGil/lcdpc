@@ -1,0 +1,23 @@
+<section id="sucursales" class="branches-section">
+  <h2>Nuestras Sucursales</h2>
+
+  <div class="branch-grid">
+    @for (branch of branches; track branch.id) {
+      <p-card styleClass="branch-card">
+        <ng-template pTemplate="title">
+          <div class="branch-title">
+            <span class="pi pi-store"></span>
+            <h3>{{ branch.name }}</h3>
+          </div>
+        </ng-template>
+        <ng-template pTemplate="content">
+          <p><span class="pi pi-map-marker"></span>{{ branch.address }}</p>
+          <p><span class="pi pi-phone"></span>{{ branch.phone }}</p>
+        </ng-template>
+        <ng-template pTemplate="footer">
+          <p-tag value="Sucursal activa" severity="success"></p-tag>
+        </ng-template>
+      </p-card>
+    }
+  </div>
+</section>

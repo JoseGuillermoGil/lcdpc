@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "primeng": {
+      "source": "twhitehead-blackdog/People",
+      "sourceType": "github",
+      "skillPath": ".agent/skills/primeng/SKILL.md",
+      "computedHash": "27cf3ddbd7ef0cdbb915529bcf281dc24b27e333cab931003cabf202b04fe65e"
+    }
+  }
+}

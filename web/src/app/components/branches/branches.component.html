@@ -1,0 +1,16 @@
+<section id="sucursales" class="branches-section">
+  <h2>Nuestras Sucursales</h2>
+
+  <div class="branch-grid">
+    @for (branch of branches; track branch.id) {
+      <article class="branch-card">
+        <div class="branch-title">
+          <span class="pi pi-store"></span>
+          <h3>{{ branch.name }}</h3>
+        </div>
+        <p><span class="pi pi-map-marker"></span>{{ branch.address }}</p>
+        <p><span class="pi pi-phone"></span>{{ branch.phone }}</p>
+      </article>
+    }
+  </div>
+</section>

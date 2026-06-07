@@ -1,9 +1,12 @@
 using LCDPC.Application.Users.Auth;
 using LCDPC.Domain.Entities.Users;
 using LCDPC.Infrastructure.Persistence;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text;
 using System.Text.Json;
@@ -11,7 +14,11 @@ using System.Text.Json.Serialization;
 
 namespace LCDPC.Infrastructure.Users.Auth;
 
-public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurityOptions authOptions, GoogleOAuthOptions googleOAuthOptions) : IRegistrationFlowService
+public sealed class RegistrationFlowService(
+    AppDbContext dbContext,
+    AuthSecurityOptions authOptions,
+    GoogleOAuthOptions googleOAuthOptions,
+    JwtTokenOptions jwtTokenOptions) : IRegistrationFlowService
 {
     private int AccessTokenTtlMinutes => authOptions.AccessTokenTtlMinutes;
     private int RefreshTokenTtlDays => authOptions.RefreshTokenTtlDays;
@@ -202,15 +209,16 @@ public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurity
             throw new InvalidOperationException("INVALID_CREDENTIALS");
         }
 
-        var (accessToken, refreshToken) = GenerateTokenPair();
+        var sessionId = Guid.NewGuid();
         var nowUtc = DateTime.UtcNow;
+        var (accessToken, refreshToken) = GenerateTokenPair(user, sessionId, nowUtc);
 
         var session = new UserSession
         {
-            Id = Guid.NewGuid(),
+            Id = sessionId,
             UserId = user.Id,
-            AccessTokenHash = HashToken(accessToken),
-            RefreshTokenHash = HashToken(refreshToken),
+            AccessTokenHash = TokenHashing.Hash(accessToken),
+            RefreshTokenHash = TokenHashing.Hash(refreshToken),
             AccessTokenExpiresAtUtc = nowUtc.AddMinutes(AccessTokenTtlMinutes),
             RefreshTokenExpiresAtUtc = nowUtc.AddDays(RefreshTokenTtlDays),
             CreatedAtUtc = nowUtc
@@ -235,7 +243,7 @@ public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurity
             return new MeResponse(false, null, Array.Empty<ResourcePermissionResponse>(), null);
         }
 
-        var hashedAccessToken = HashToken(accessToken.Trim());
+        var hashedAccessToken = TokenHashing.Hash(accessToken.Trim());
 
         var session = await dbContext.UserSessions
             .AsNoTracking()
@@ -264,7 +272,7 @@ public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurity
             throw new InvalidOperationException("INVALID_SESSION");
         }
 
-        var hashedRefreshToken = HashToken(refreshToken.Trim());
+        var hashedRefreshToken = TokenHashing.Hash(refreshToken.Trim());
 
         var session = await dbContext.UserSessions
             .FirstOrDefaultAsync(
@@ -294,11 +302,11 @@ public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurity
             throw new InvalidOperationException("USER_NOT_ALLOWED");
         }
 
-        var (newAccessToken, newRefreshToken) = GenerateTokenPair();
+        var (newAccessToken, newRefreshToken) = GenerateTokenPair(user, session.Id, DateTime.UtcNow);
         var nowUtc = DateTime.UtcNow;
 
-        session.AccessTokenHash = HashToken(newAccessToken);
-        session.RefreshTokenHash = HashToken(newRefreshToken);
+        session.AccessTokenHash = TokenHashing.Hash(newAccessToken);
+        session.RefreshTokenHash = TokenHashing.Hash(newRefreshToken);
         session.AccessTokenExpiresAtUtc = nowUtc.AddMinutes(AccessTokenTtlMinutes);
         session.RefreshTokenExpiresAtUtc = nowUtc.AddDays(RefreshTokenTtlDays);
 
@@ -320,7 +328,7 @@ public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurity
             return;
         }
 
-        var hashedRefreshToken = HashToken(refreshToken.Trim());
+        var hashedRefreshToken = TokenHashing.Hash(refreshToken.Trim());
 
         var session = await dbContext.UserSessions
             .FirstOrDefaultAsync(x => x.RefreshTokenHash == hashedRefreshToken && x.RevokedAtUtc == null, cancellationToken);
@@ -364,7 +372,7 @@ public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurity
             {
                 Id = Guid.NewGuid(),
                 UserId = user.Id,
-                TokenHash = HashToken(resetToken),
+                TokenHash = TokenHashing.Hash(resetToken),
                 ExpiresAtUtc = nowUtc.AddMinutes(policy.PasswordResetTtlMinutes),
                 CreatedAtUtc = nowUtc
             });
@@ -401,7 +409,7 @@ public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurity
             throw new InvalidOperationException("INVALID_OR_EXPIRED_RESET_TOKEN");
         }
 
-        var tokenHash = HashToken(request.Token.Trim());
+        var tokenHash = TokenHashing.Hash(request.Token.Trim());
         var policy = await GetOrCreateSecurityPolicyAsync(cancellationToken);
 
         var resetToken = await dbContext.PasswordResetTokens
@@ -638,9 +646,33 @@ public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurity
         return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
     }
 
-    private static (string accessToken, string refreshToken) GenerateTokenPair()
+    private (string accessToken, string refreshToken) GenerateTokenPair(User user, Guid sessionId, DateTime nowUtc)
     {
-        return (GenerateOpaqueToken(), GenerateOpaqueToken());
+        return (GenerateAccessToken(user, sessionId, nowUtc), GenerateOpaqueToken());
+    }
+
+    private string GenerateAccessToken(User user, Guid sessionId, DateTime nowUtc)
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtTokenOptions.SigningKey));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email),
+            new("sid", sessionId.ToString()),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: jwtTokenOptions.Issuer,
+            audience: jwtTokenOptions.Audience,
+            claims: claims,
+            notBefore: nowUtc,
+            expires: nowUtc.AddMinutes(AccessTokenTtlMinutes),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     private static string GenerateOpaqueToken()
@@ -649,11 +681,6 @@ public sealed class RegistrationFlowService(AppDbContext dbContext, AuthSecurity
             .TrimEnd('=')
             .Replace('+', '-')
             .Replace('/', '_');
-    }
-
-    private static string HashToken(string token)
-    {
-        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     }
 
     private async Task<UserSummaryResponse> BuildUserSummaryAsync(Guid userId, CancellationToken cancellationToken)

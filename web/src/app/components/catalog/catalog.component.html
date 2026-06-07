@@ -1,0 +1,72 @@
+<section id="catalogo" class="catalog-section">
+  <div class="section-head">
+    <h2>Catálogo Mayorista</h2>
+
+    <div class="category-filters" aria-label="Filtros de categoría">
+      @for (category of categories; track category.id) {
+        <button
+          class="category-pill"
+          type="button"
+          [class.active]="selectedCategoryId === category.id"
+          (click)="categorySelect.emit(category.id)"
+        >
+          {{ category.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="product-grid">
+    @for (product of products; track product.id) {
+      <article class="product-card" [class.featured]="product.featured">
+        <div class="product-image-frame" [class.featured]="product.featured">
+          <img [src]="product.imageUrl" [alt]="product.alt" />
+
+          <div class="product-tags">
+            <span class="product-tag">{{ product.featured ? 'PROMO ESPECIAL' : product.category }}</span>
+            @if (product.badge) {
+              <span class="product-badge">{{ product.badge }}</span>
+            }
+          </div>
+
+          @if (product.featured) {
+            <div class="price-float">{{ product.price }}</div>
+          }
+        </div>
+
+        <div class="product-copy">
+          <div class="product-title-row">
+            <h3>{{ product.name }}</h3>
+            @if (!product.featured) {
+              <span class="product-price">{{ product.price }}</span>
+            }
+          </div>
+
+          @if (product.featured) {
+            <ul class="product-bullets">
+              <li>50 Panes Tradicionales</li>
+              <li>50 Salchichas Tipo Viena</li>
+              <li>1 Kg Papas Fritas</li>
+              <li>3 Salsas (Ketchup, Mayo, Mostaza)</li>
+            </ul>
+          } @else {
+            <p>{{ product.description }}</p>
+          }
+
+          <div class="product-actions">
+            <div class="quantity-control">
+              <button type="button" (click)="decrement.emit()">-</button>
+              <span>{{ product.quantity }}</span>
+              <button type="button" (click)="increment.emit()">+</button>
+            </div>
+            <p-button
+              [label]="product.featured ? 'Añadir al Carrito' : 'Agregar'"
+              icon="pi pi-shopping-cart"
+              [severity]="product.featured ? 'secondary' : 'primary'"
+            ></p-button>
+          </div>
+        </div>
+      </article>
+    }
+  </div>
+</section>

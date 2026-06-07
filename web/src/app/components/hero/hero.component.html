@@ -1,0 +1,58 @@
+<section class="hero-panel">
+  <button class="carousel-arrow left" type="button" (click)="previous.emit()" aria-label="Anterior">
+    <span class="pi pi-chevron-left"></span>
+  </button>
+
+  <div class="hero-visual">
+    @if (currentHero(); as hero) {
+      <img [src]="hero.imageUrl" [alt]="hero.alt" />
+      <div class="hero-overlay">
+        <h1>{{ hero.title }}</h1>
+      </div>
+    }
+  </div>
+
+  <button class="carousel-arrow right" type="button" (click)="next.emit()" aria-label="Siguiente">
+    <span class="pi pi-chevron-right"></span>
+  </button>
+
+  <div class="carousel-indicators" aria-label="Indicadores de carrusel">
+    @for (slide of heroSlides; track slide.title; let i = $index) {
+      <button
+        type="button"
+        class="indicator"
+        [class.active]="activeHeroIndex === i"
+        (click)="slideSelect.emit(i)"
+        [attr.aria-label]="'Ir a la diapositiva ' + (i + 1)"
+      ></button>
+    }
+  </div>
+</section>
+
+<section class="promo-band">
+  <div class="promo-copy">
+    <h2>Mayor y Detal.</h2>
+    <p>Abastecemos a emprendedores y hogares con los mejores precios del mercado.</p>
+  </div>
+
+  <div class="promo-delivery">
+    <div class="delivery-head">
+      <span class="pi pi-motorcycle"></span>
+      <h3>Delivery en todas las sucursales</h3>
+    </div>
+    <p>Llevamos tu pedido directamente a tu local o casa de forma rápida y segura.</p>
+  </div>
+</section>
+
+<section class="search-wrap" aria-label="Búsqueda de catálogo">
+  <div class="search-box">
+    <span class="pi pi-search search-icon"></span>
+    <input
+      pInputText
+      [value]="search"
+      (input)="searchChange.emit($any($event.target).value || '')"
+      placeholder="¿Qué buscas para tu negocio? Ej: Panes, Salchichas, Salsas..."
+    />
+    <p-button label="Buscar" severity="primary"></p-button>
+  </div>
+</section>

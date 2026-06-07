@@ -210,7 +210,7 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
     [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> Me(CancellationToken cancellationToken)
     {
-        var accessToken = Request.Cookies[AccessTokenCookieName];
+        var accessToken = AccessTokenResolver.Resolve(Request);
         var response = await registrationFlowService.MeAsync(accessToken, cancellationToken);
         return Ok(response);
     }
@@ -325,7 +325,7 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
         {
             HttpOnly = true,
             Secure = true,
-            SameSite = SameSiteMode.Strict,
+            SameSite = SameSiteMode.Lax,
             Expires = DateTimeOffset.UtcNow.AddSeconds(tokens.ExpiresInSeconds),
             Path = "/"
         };
@@ -336,7 +336,7 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
             Secure = true,
             SameSite = SameSiteMode.Strict,
             Expires = DateTimeOffset.UtcNow.AddDays(RefreshTokenTtlDays),
-            Path = "/"
+            Path = "/api/v1/auth"
         };
 
         Response.Cookies.Append(AccessTokenCookieName, tokens.AccessToken, accessCookieOptions);
@@ -346,7 +346,7 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
     private void ClearSessionCookies()
     {
         Response.Cookies.Delete(AccessTokenCookieName, new CookieOptions { Path = "/" });
-        Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions { Path = "/" });
+        Response.Cookies.Delete(RefreshTokenCookieName, new CookieOptions { Path = "/api/v1/auth" });
     }
 
     private static string GenerateOpaqueState()

@@ -1,0 +1,77 @@
+<section id="catalogo" class="catalog-section">
+  <div class="section-head">
+    <h2>Catálogo Mayorista</h2>
+
+    <div class="category-filters" aria-label="Filtros de categoría">
+      @for (category of categories; track category.id) {
+        <p-button
+          styleClass="category-pill"
+          [label]="category.label"
+          [severity]="selectedCategoryId === category.id ? 'primary' : 'secondary'"
+          [outlined]="selectedCategoryId !== category.id"
+          (onClick)="categorySelect.emit(category.id)"
+        ></p-button>
+      }
+    </div>
+  </div>
+
+  <div class="product-grid">
+    @for (product of products; track product.id) {
+      <p-card styleClass="product-card" [class.featured]="product.featured">
+        <ng-template pTemplate="content">
+          <div class="product-image-frame" [class.featured]="product.featured">
+            <img [src]="product.imageUrl" [alt]="product.alt" />
+
+            <div class="product-tags">
+              <p-tag
+                styleClass="product-tag"
+                [value]="product.featured ? 'PROMO ESPECIAL' : product.category"
+                [severity]="product.featured ? 'warn' : 'info'"
+              ></p-tag>
+              @if (product.badge) {
+                <p-tag styleClass="product-badge" [value]="product.badge" severity="success"></p-tag>
+              }
+            </div>
+
+            @if (product.featured) {
+              <div class="price-float">{{ product.price }}</div>
+            }
+          </div>
+
+          <div class="product-copy">
+            <div class="product-title-row">
+              <h3>{{ product.name }}</h3>
+              @if (!product.featured) {
+                <span class="product-price">{{ product.price }}</span>
+              }
+            </div>
+
+            @if (product.featured) {
+              <ul class="product-bullets">
+                <li>50 Panes Tradicionales</li>
+                <li>50 Salchichas Tipo Viena</li>
+                <li>1 Kg Papas Fritas</li>
+                <li>3 Salsas (Ketchup, Mayo, Mostaza)</li>
+              </ul>
+            } @else {
+              <p>{{ product.description }}</p>
+            }
+
+            <div class="product-actions">
+              <div class="quantity-control">
+                <p-button icon="pi pi-minus" [text]="true" (onClick)="decrement.emit()"></p-button>
+                <span>{{ product.quantity }}</span>
+                <p-button icon="pi pi-plus" [text]="true" (onClick)="increment.emit()"></p-button>
+              </div>
+              <p-button
+                [label]="product.featured ? 'Añadir al Carrito' : 'Agregar'"
+                icon="pi pi-shopping-cart"
+                [severity]="product.featured ? 'secondary' : 'primary'"
+              ></p-button>
+            </div>
+          </div>
+        </ng-template>
+      </p-card>
+    }
+  </div>
+</section>

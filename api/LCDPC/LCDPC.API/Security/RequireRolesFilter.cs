@@ -6,11 +6,9 @@ namespace LCDPC.API.Security;
 
 public sealed class RequireRolesFilter(IRegistrationFlowService registrationFlowService, string[] roles) : IAsyncActionFilter
 {
-    private const string AccessTokenCookieName = "lcdpc_at";
-
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        var accessToken = context.HttpContext.Request.Cookies[AccessTokenCookieName];
+        var accessToken = AccessTokenResolver.Resolve(context.HttpContext.Request);
         var me = await registrationFlowService.MeAsync(accessToken, context.HttpContext.RequestAborted);
 
         if (!me.Authenticated)

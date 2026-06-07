@@ -1,0 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@400;500;600;700;800&family=Pacifico&display=swap');
+@import 'primeicons/primeicons.css';
+
+:root {
+	color-scheme: light;
+	--page-bg: #e8e8e8;
+	--page-bg-alt: #efefef;
+	--surface: #fffdf3;
+	--surface-strong: #f5cb00;
+	--text-strong: #121212;
+	--text-soft: #2f2f2f;
+	--accent: #f7931a;
+	--accent-2: #f5cb00;
+	--border: #e2a94f;
+	--shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+	--font-body: 'Poppins', 'Segoe UI', sans-serif;
+	--font-display: 'Anton', 'Poppins', sans-serif;
+	--font-script: 'Pacifico', cursive;
+}
+
+html {
+	min-height: 100%;
+	background:
+		radial-gradient(circle at top left, rgba(247, 147, 26, 0.08), transparent 30%),
+		radial-gradient(circle at top right, rgba(245, 203, 0, 0.1), transparent 26%),
+		linear-gradient(180deg, var(--page-bg) 0%, #dedede 100%);
+}
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	color: var(--text-strong);
+	font-family: var(--font-body);
+	background: transparent;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+a {
+	color: inherit;
+}
+
+button,
+input {
+	font: inherit;
+}

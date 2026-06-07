@@ -25,6 +25,7 @@
 
 ## Fase 3 - Autorización
 
+- [x] Cierre backend Fase 3 (`guard` por rol, bloqueo de desactivados, permisos efectivos).
 - [x] Middleware/guard por rol.
 - [ ] (Diferido) Restricción por sedes para `admin_sede`.
 - [x] Política de bloqueo para usuarios desactivados.
@@ -36,11 +37,15 @@
 ## Fase 4 - Administración de usuarios
 
 - [x] Pantalla/endpoint para registrar y listar sedes.
-- [ ] Pantalla/endpoint para listar usuarios.
-- [ ] Activar/desactivar usuario.
-- [ ] Asignar/cambiar rol.
+- [x] Endpoint para listar usuarios.
+- [ ] Pantalla para listar usuarios.
+- [x] Endpoint para activar/desactivar usuario.
+- [ ] Pantalla para activar/desactivar usuario.
+- [x] Endpoint para asignar/cambiar rol.
+- [ ] Pantalla para asignar/cambiar rol.
 - [ ] (Diferido) Asignar sedes a `admin_sede`.
-- [ ] Módulo de refrescamiento de usuarios admin (force reset) habilitado por rol.
+- [x] Endpoint de refrescamiento admin (force reset) habilitado por rol.
+- [ ] Módulo/pantalla de refrescamiento de usuarios admin (force reset).
 
 ## Fase 4.1 - Configuración de seguridad (Dashboard)
 
@@ -51,20 +56,22 @@
 
 ## Fase 5 - Auditoría
 
+> Bloqueada por ahora: en este repo todavía no existen los módulos/endpoints de inventario, precios ni combos sobre los que aplicar auditoría.
+
 - [ ] Registrar auditoría en operaciones de inventario.
 - [ ] Registrar auditoría en operaciones de precios.
 - [ ] Registrar auditoría en operaciones de combos.
-- [ ] Registrar cambios de roles/permisos.
+- [x] Registrar cambios de roles/permisos.
 
 ## Fase 6 - QA
 
-- [ ] Tests de autorización por rol.
+- [x] Tests de autorización por rol.
 - [ ] (Diferido) Tests de restricción por sede.
-- [ ] Tests de login/logout/expiración.
-- [ ] Tests de auditoría obligatoria en operaciones admin.
-- [ ] Tests del flujo de alta por pasos.
+- [x] Tests de login/logout/expiración.
+- [x] Tests de auditoría obligatoria en operaciones admin.
+- [x] Tests del flujo de alta por pasos.
 - [x] Tests de onboarding con Google + prefill de paso 2.
-- [ ] Tests de olvido y reseteo de contraseña.
-- [ ] Tests de OTP (5 intentos / 10 min / cooldown 10 min).
-- [ ] Tests de reset forzado de admins por `admin_global`.
-- [ ] Tests de cambios de `auth-policy` en dashboard y su aplicación efectiva.
+- [x] Tests de olvido y reseteo de contraseña.
+- [x] Tests de OTP (5 intentos / 10 min / cooldown 10 min).
+- [x] Tests de reset forzado de admins por `admin_global`.
+- [x] Tests de cambios de `auth-policy` en dashboard y su aplicación efectiva.
