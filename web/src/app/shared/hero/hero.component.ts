@@ -1,11 +1,8 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ButtonModule } from 'primeng/button';
 import { CarouselModule } from 'primeng/carousel';
-import { InputGroupModule } from 'primeng/inputgroup';
-import { InputGroupAddonModule } from 'primeng/inputgroupaddon';
-import { InputTextModule } from 'primeng/inputtext';
 import { CarouselPageEvent } from 'primeng/types/carousel';
+import { CatalogSearchComponent } from '../catalog-search/catalog-search.component';
 
 type HeroSlide = {
   title: string;
@@ -16,7 +13,7 @@ type HeroSlide = {
 @Component({
   selector: 'app-hero',
   standalone: true,
-  imports: [CommonModule, ButtonModule, CarouselModule, InputGroupModule, InputGroupAddonModule, InputTextModule],
+  imports: [CommonModule, CarouselModule, CatalogSearchComponent],
   templateUrl: './hero.component.html',
   styleUrl: './hero.component.scss'
 })
@@ -29,6 +26,7 @@ export class HeroComponent {
   @Output() next = new EventEmitter<void>();
   @Output() slideSelect = new EventEmitter<number>();
   @Output() searchChange = new EventEmitter<string>();
+  @Output() searchSubmit = new EventEmitter<string>();
 
   protected onCarouselPage(event: CarouselPageEvent): void {
     this.slideSelect.emit(event.page ?? 0);
@@ -36,5 +34,9 @@ export class HeroComponent {
 
   protected selectSlide(index: number): void {
     this.slideSelect.emit(index);
+  }
+
+  protected submitSearch(query: string): void {
+    this.searchSubmit.emit(query);
   }
 }

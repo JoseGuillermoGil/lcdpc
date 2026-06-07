@@ -2,11 +2,6 @@
   display: block;
 }
 
-.search-icon {
-  color: var(--accent);
-  font-size: 0.9rem;
-}
-
 .indicator {
   border: 0;
   appearance: none;
@@ -186,74 +181,6 @@
   font-weight: 700;
 }
 
-.search-wrap {
-  display: flex;
-  justify-content: center;
-  margin: 2rem 0 1.6rem;
-}
-
-:host ::ng-deep .search-group.p-inputgroup {
-  width: min(860px, 100%);
-  background: #fffef7;
-  border: 1px solid var(--border);
-  border-radius: 9999px;
-  overflow: hidden;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
-}
-
-:host ::ng-deep .search-group.p-inputgroup > * {
-  border: 0 !important;
-  box-shadow: none !important;
-}
-
-:host ::ng-deep .search-group .p-inputgroup-addon {
-  border: 0 !important;
-  border-color: transparent !important;
-  background: transparent !important;
-  color: var(--accent);
-  padding-left: 1rem;
-  padding-right: 0.45rem;
-  box-shadow: none !important;
-}
-
-:host ::ng-deep .search-group .p-inputtext {
-  flex: 1;
-  border: 0 !important;
-  border-color: transparent !important;
-  background: transparent;
-  font: inherit;
-  color: var(--text-strong);
-  padding: 0.95rem 0.4rem 0.95rem 0;
-  box-shadow: none !important;
-}
-
-:host ::ng-deep .search-group .p-inputtext:enabled:focus {
-  box-shadow: none;
-}
-
-:host ::ng-deep .search-group .search-submit {
-  border-radius: 0;
-  border: 0;
-  background: var(--accent);
-  color: #fff;
-  padding-inline: 1.5rem;
-  box-shadow: none;
-}
-
-:host ::ng-deep .search-group .search-submit:hover {
-  background: #de7b0d;
-  border: 0;
-  box-shadow: none;
-}
-
-:host ::ng-deep .search-group .search-submit:focus,
-:host ::ng-deep .search-group .search-submit:focus-visible,
-:host ::ng-deep .search-group .search-submit:active {
-  border: 0;
-  outline: none;
-  box-shadow: none;
-}
-
 @media (max-width: 1180px) {
   .promo-band {
     grid-template-columns: 1fr;
@@ -272,18 +199,6 @@
 
   .promo-band {
     padding: 1.2rem;
-  }
-
-  :host ::ng-deep .search-group.p-inputgroup {
-    border-radius: 1rem;
-  }
-
-  :host ::ng-deep .search-group .p-inputgroup-addon {
-    padding-left: 0.8rem;
-  }
-
-  :host ::ng-deep .search-group .search-submit {
-    padding-inline: 1.1rem;
   }
 
   :host ::ng-deep .hero-carousel .p-carousel-prev-button,

@@ -1,0 +1,17 @@
+<app-hero
+  [heroSlides]="heroSlides"
+  [activeHeroIndex]="activeHeroIndex()"
+  [search]="search()"
+  (slideSelect)="activeHeroIndex.set($event)"
+  (searchChange)="search.set($event)"
+  (searchSubmit)="goToAdvancedSearch($event)"
+></app-hero>
+
+<app-catalog
+  [categories]="categories"
+  [selectedCategoryId]="selectedCategoryId()"
+  [products]="filteredProducts()"
+  (categorySelect)="selectCategory($event)"
+></app-catalog>
+
+<app-branches [branches]="branches"></app-branches>

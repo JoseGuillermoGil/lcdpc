@@ -53,17 +53,4 @@
   </div>
 </section>
 
-<section class="search-wrap" aria-label="Búsqueda de catálogo">
-  <p-inputgroup styleClass="search-group">
-    <p-inputgroup-addon>
-      <span class="pi pi-search search-icon"></span>
-    </p-inputgroup-addon>
-    <input
-      pInputText
-      [value]="search"
-      (input)="searchChange.emit($any($event.target).value || '')"
-      placeholder="¿Qué buscas para tu negocio? Ej: Panes, Salchichas, Salsas..."
-    />
-    <p-button label="Buscar" icon="pi pi-search" styleClass="search-submit"></p-button>
-  </p-inputgroup>
-</section>
+<app-catalog-search [search]="search" (searchChange)="searchChange.emit($event)" (searchSubmit)="submitSearch($event)"></app-catalog-search>

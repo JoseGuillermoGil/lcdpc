@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
 
@@ -12,7 +13,7 @@ export type HeaderBranch = {
 @Component({
   selector: 'app-header',
   standalone: true,
-  imports: [CommonModule, FormsModule, ButtonModule, SelectModule],
+  imports: [CommonModule, FormsModule, RouterLink, ButtonModule, SelectModule],
   templateUrl: './header.component.html',
   styleUrl: './header.component.scss'
 })

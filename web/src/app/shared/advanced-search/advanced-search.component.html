@@ -1,0 +1,96 @@
+<section class="advanced-search" id="catalogo">
+  <div class="search-head">
+    <div>
+      <span class="eyebrow">Búsqueda de Catálogo</span>
+      <h1>Resultados para "<span>{{ query }}</span>"</h1>
+      <p>Mostrando {{ results.length }} productos encontrados en el inventario mayorista.</p>
+    </div>
+
+    <div class="sort-box" aria-label="Ordenar resultados">
+      <span class="pi pi-sort-alt"></span>
+      <label for="sortSelect">Ordenar por:</label>
+      <select id="sortSelect">
+        <option>Relevancia</option>
+        <option>Precio (Menor a Mayor)</option>
+        <option>Precio (Mayor a Menor)</option>
+        <option>Más Populares</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="search-layout">
+    <aside class="filters">
+      <div class="filters-head">
+        <h2>Filtros</h2>
+        <button type="button">Limpiar</button>
+      </div>
+
+      <div class="filter-group">
+        <h3>Categoría</h3>
+        <label><input type="checkbox" /> Panes <span>12</span></label>
+        <label><input type="checkbox" checked /> Salchichas <span>48</span></label>
+        <label><input type="checkbox" /> Salsas <span>34</span></label>
+        <label><input type="checkbox" /> Combos <span>8</span></label>
+        <label><input type="checkbox" /> Bebidas <span>15</span></label>
+      </div>
+
+      <div class="filter-group">
+        <h3>Marca</h3>
+        <label><input type="checkbox" /> Plumrose</label>
+        <label><input type="checkbox" checked /> Oscar Mayer</label>
+        <label><input type="checkbox" /> Línea Artesanal LCP</label>
+      </div>
+
+      <div class="filter-group stock-only">
+        <h3>Disponibilidad</h3>
+        <label><input type="checkbox" checked /> Solo en stock</label>
+      </div>
+    </aside>
+
+    <div class="results-grid">
+      @for (item of results; track item.id) {
+        <p-card styleClass="result-card" [class.featured]="item.featured" [class.sold-out]="item.soldOut">
+          <ng-template pTemplate="content">
+            <div class="result-image">
+              <img [src]="item.imageUrl" [alt]="item.alt" />
+              @if (item.promo) {
+                <span class="promo-badge">{{ item.promo }}</span>
+              }
+              @if (item.soldOut) {
+                <span class="sold-out-badge">Agotado temporalmente</span>
+              }
+            </div>
+
+            <div class="result-copy">
+              <div class="tags">
+                @for (tag of item.tags; track tag) {
+                  <span>{{ tag }}</span>
+                }
+              </div>
+
+              <h3>{{ item.name }}</h3>
+              <p>{{ item.description }}</p>
+
+              <div class="result-footer">
+                <div>
+                  <small>{{ item.unitLabel }}</small>
+                  <div class="price-row">
+                    <strong>{{ item.price }}</strong>
+                    @if (item.oldPrice) {
+                      <em>{{ item.oldPrice }}</em>
+                    }
+                  </div>
+                </div>
+                <p-button icon="pi pi-shopping-cart" [rounded]="true" [text]="true"></p-button>
+              </div>
+            </div>
+          </ng-template>
+        </p-card>
+      }
+
+      <div class="load-more-wrap">
+        <p-button label="Cargar Más Resultados" icon="pi pi-angle-down" iconPos="right" styleClass="load-more" [outlined]="true"></p-button>
+      </div>
+    </div>
+  </div>
+</section>

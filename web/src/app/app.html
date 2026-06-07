@@ -7,27 +7,7 @@
 ></app-header>
 
 <main class="landing-shell">
-
-  <app-hero
-    [heroSlides]="heroSlides"
-    [activeHeroIndex]="activeHeroIndex()"
-    [search]="search()"
-    (previous)="previousSlide()"
-    (next)="nextSlide()"
-    (slideSelect)="activeHeroIndex.set($event)"
-    (searchChange)="search.set($event)"
-  ></app-hero>
-
-  <app-catalog
-    [categories]="categories"
-    [selectedCategoryId]="selectedCategoryId()"
-    [products]="filteredProducts()"
-    (categorySelect)="selectCategory($event)"
-    (increment)="incrementCart()"
-    (decrement)="decrementCart()"
-  ></app-catalog>
-
-  <app-branches [branches]="branches"></app-branches>
+  <router-outlet></router-outlet>
 </main>
 
 <nav class="mobile-nav" aria-label="Acceso rápido móvil">

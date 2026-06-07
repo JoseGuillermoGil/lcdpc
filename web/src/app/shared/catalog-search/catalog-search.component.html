@@ -1,0 +1,15 @@
+<section class="search-wrap" aria-label="Búsqueda de catálogo">
+  <p-inputgroup styleClass="search-group">
+    <p-inputgroup-addon>
+      <span class="pi pi-search search-icon"></span>
+    </p-inputgroup-addon>
+    <input
+      pInputText
+      [value]="search"
+      (input)="onInput($any($event.target).value || '')"
+      (keydown.enter)="onSubmit()"
+      placeholder="¿Qué buscas para tu negocio? Ej: Panes, Salchichas, Salsas..."
+    />
+    <p-button label="Buscar" icon="pi pi-search" styleClass="search-submit" (onClick)="onSubmit()"></p-button>
+  </p-inputgroup>
+</section>
