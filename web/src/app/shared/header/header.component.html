@@ -18,6 +18,16 @@
     </nav> -->
 
     <div class="topbar-actions">
+      <p-button
+        label="Buscar"
+        icon="pi pi-search"
+        styleClass="search-nav-button"
+        [text]="true"
+        severity="secondary"
+        ariaLabel="Ir a búsqueda"
+        routerLink="/busqueda"
+      ></p-button>
+
       <label class="branch-picker" aria-label="Seleccionar sucursal">
         <span class="pi pi-map-marker branch-icon"></span>
         <p-select
@@ -52,6 +62,7 @@
         [text]="true"
         severity="secondary"
         ariaLabel="Cuenta"
+        routerLink="/autenticacion"
       ></p-button>
     </div>
   </div>

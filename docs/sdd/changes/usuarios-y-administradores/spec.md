@@ -48,10 +48,18 @@ Definir autenticación, autorización y gestión de usuarios/roles para separar 
 - Iniciar sesión / cerrar sesión.
 - Recuperar acceso.
 - Mantener sesión segura con expiración configurable.
-- Web mantiene sesión con cookies `httpOnly` (`access` + `refresh`) para evitar exposición de tokens en JavaScript.
+- **OAuth 2.0 Authorization Code Flow con PKCE** para la web SPA (reemplaza cookies `httpOnly` con tokens OAuth 2.0).
+- **Authorization Code** (opaco, TTL 10 min, PKCE S256 binding) emitido por `/oauth2/authorize`.
+- **Access Token** (JWT RS256) intercambiado via `POST /oauth2/token`.
+- **Refresh Token** (opaco, rotación obligatoria, detección de token theft via family_id).
+- **Introspection** via `POST /oauth2/introspect` para validar tokens.
+- **Revocation** via `POST /oauth2/revoke` para cerrar sesión.
+- Web mantiene access token en memoria y refresh token en cookie `httpOnly` (`lcdpc_rt`).
 - Frontend hidrata estado de sesión mediante `GET /auth/me` con `UserSummary + permissions`.
 - Flujo de `olvido de contraseña` para clientes enviando enlace/código al correo afiliado de la cuenta.
 - Para administradores, el reinicio de credenciales se gestiona desde módulo administrativo de refrescamiento de admins (no autoservicio directo).
+- **Discovery endpoint** `GET /.well-known/openid-configuration` para metadata OAuth 2.0.
+- **JWKS endpoint** `GET /.well-known/jwks.json` para validación de access tokens RS256.
 
 ### Autorización
 

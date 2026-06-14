@@ -1,5 +1,7 @@
+using LCDPC.Infrastructure.OAuth2;
 using LCDPC.Infrastructure.Persistence;
 using LCDPC.Infrastructure.Users.Auth;
+using LCDPC.Application.OAuth2;
 using LCDPC.Application.Users.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -82,6 +84,42 @@ public static class DependencyInjection
         services.AddSingleton(authOptions);
         services.AddSingleton(googleOAuthOptions);
         services.AddSingleton(jwtTokenOptions);
+
+        // OAuth2 configuration
+        var oauth2Options = new OAuth2Options
+        {
+            Issuer = string.IsNullOrWhiteSpace(configuration["OAuth2:Issuer"])
+                ? "http://localhost:8080"
+                : configuration["OAuth2:Issuer"]!,
+            Audience = string.IsNullOrWhiteSpace(configuration["OAuth2:Audience"])
+                ? "lcdpc-api"
+                : configuration["OAuth2:Audience"]!,
+            AccessTokenTtlMinutes = int.TryParse(configuration["OAuth2:AccessTokenTtlMinutes"], out var atTtl) && atTtl > 0
+                ? atTtl
+                : 60,
+            RefreshTokenTtlDays = int.TryParse(configuration["OAuth2:RefreshTokenTtlDays"], out var rtTtl) && rtTtl > 0
+                ? rtTtl
+                : 30,
+            AuthorizationCodeTtlMinutes = int.TryParse(configuration["OAuth2:AuthorizationCodeTtlMinutes"], out var acTtl) && acTtl > 0
+                ? acTtl
+                : 10,
+            RsaKeyPath = configuration["OAuth2:RsaKeyPath"],
+            Clients = configuration.GetSection("OAuth2:Clients").Get<List<OAuth2ClientOptions>>() ?? []
+        };
+
+        services.AddSingleton(oauth2Options);
+        services.AddSingleton<IOAuth2KeyService, RsaKeyService>();
+
+        // OAuth2 Application Services (implemented in Infrastructure)
+        services.AddScoped<IOAuth2ClientService, OAuth2ClientService>();
+        services.AddScoped<IOAuth2TokenService, OAuth2TokenService>();
+        services.AddScoped<IOAuth2AuthorizationService, OAuth2AuthorizationService>();
+
+        // Google OAuth Service
+        services.AddHttpClient<IGoogleOAuthService, GoogleOAuthService>(client =>
+        {
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        });
 
         services.AddHealthChecks().AddDbContextCheck<AppDbContext>("postgres");
         services.AddScoped<IRegistrationFlowService, RegistrationFlowService>();

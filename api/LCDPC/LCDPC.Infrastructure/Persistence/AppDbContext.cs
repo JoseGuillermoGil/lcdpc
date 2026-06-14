@@ -1,3 +1,4 @@
+using LCDPC.Domain.Entities.OAuth2;
 using LCDPC.Domain.Entities.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -19,6 +20,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AuthSecurityPolicy> AuthSecurityPolicies => Set<AuthSecurityPolicy>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<RegistrationFlow> RegistrationFlows => Set<RegistrationFlow>();
+    public DbSet<OAuth2Client> OAuth2Clients => Set<OAuth2Client>();
+    public DbSet<OAuth2AuthorizationCode> OAuth2AuthorizationCodes => Set<OAuth2AuthorizationCode>();
+    public DbSet<OAuth2RefreshToken> OAuth2RefreshTokens => Set<OAuth2RefreshToken>();
 
     private static readonly Guid ClientRoleId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid AdminSedeRoleId = Guid.Parse("22222222-2222-2222-2222-222222222222");
@@ -412,6 +416,63 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.CreatedAtUtc).IsRequired();
             entity.Property(x => x.UpdatedAtUtc).IsRequired();
             entity.HasIndex(x => x.Email);
+        });
+
+        modelBuilder.Entity<OAuth2Client>(entity =>
+        {
+            entity.ToTable("oauth2_clients");
+            entity.HasKey(x => x.ClientId);
+            entity.Property(x => x.ClientId).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.ClientName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.RedirectUris)
+                .HasColumnType("jsonb")
+                .IsRequired();
+            entity.Property(x => x.GrantTypes)
+                .HasColumnType("jsonb")
+                .IsRequired();
+            entity.Property(x => x.RequirePkce).IsRequired();
+            entity.Property(x => x.AllowedScopes).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+        });
+
+        modelBuilder.Entity<OAuth2AuthorizationCode>(entity =>
+        {
+            entity.ToTable("oauth2_authorization_codes");
+            entity.HasKey(x => x.Code);
+            entity.Property(x => x.Code).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.ClientId).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.UserId).IsRequired();
+            entity.Property(x => x.RedirectUri).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.Scope).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.CodeChallenge).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.CodeChallengeMethod).HasMaxLength(10).IsRequired();
+            entity.Property(x => x.ExpiresAtUtc).IsRequired();
+            entity.Property(x => x.UsedAtUtc).IsRequired(false);
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+
+            entity.HasIndex(x => x.ClientId);
+            entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => x.ExpiresAtUtc);
+        });
+
+        modelBuilder.Entity<OAuth2RefreshToken>(entity =>
+        {
+            entity.ToTable("oauth2_refresh_tokens");
+            entity.HasKey(x => x.TokenHash);
+            entity.Property(x => x.TokenHash).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.ClientId).HasMaxLength(100).IsRequired();
+            entity.Property(x => x.UserId).IsRequired();
+            entity.Property(x => x.Scope).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.FamilyId).IsRequired();
+            entity.Property(x => x.PreviousTokenHash).HasMaxLength(128).IsRequired(false);
+            entity.Property(x => x.ExpiresAtUtc).IsRequired();
+            entity.Property(x => x.RevokedAtUtc).IsRequired(false);
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+
+            entity.HasIndex(x => x.ClientId);
+            entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => x.FamilyId);
+            entity.HasIndex(x => x.ExpiresAtUtc);
         });
     }
 }

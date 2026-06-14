@@ -3,8 +3,10 @@ using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using LCDPC.API.Security;
 using LCDPC.Application;
+using LCDPC.Application.OAuth2;
 using LCDPC.Domain.Entities.Users;
 using LCDPC.Infrastructure;
+using LCDPC.Infrastructure.OAuth2;
 using LCDPC.Infrastructure.Persistence;
 using LCDPC.Infrastructure.Users.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -35,6 +37,10 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
+
+// Register OAuth2JwtBearerEvents as singleton
+builder.Services.AddSingleton<OAuth2JwtBearerEvents>();
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -51,71 +57,8 @@ builder.Services
             ClockSkew = TimeSpan.FromSeconds(30)
         };
 
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                if (string.IsNullOrWhiteSpace(context.Token))
-                {
-                    context.Token = AccessTokenResolver.Resolve(context.HttpContext.Request);
-                }
-
-                return Task.CompletedTask;
-            },
-            OnTokenValidated = async context =>
-            {
-                var accessToken = AccessTokenResolver.Resolve(context.HttpContext.Request);
-                if (string.IsNullOrWhiteSpace(accessToken))
-                {
-                    context.Fail("MISSING_ACCESS_TOKEN");
-                    return;
-                }
-
-                var dbContext = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
-                var tokenHash = TokenHashing.Hash(accessToken);
-                var nowUtc = DateTime.UtcNow;
-
-                var session = await dbContext.UserSessions
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x =>
-                        x.AccessTokenHash == tokenHash
-                        && x.RevokedAtUtc == null
-                        && x.AccessTokenExpiresAtUtc > nowUtc,
-                        context.HttpContext.RequestAborted);
-
-                if (session is null)
-                {
-                    context.Fail("INVALID_SESSION");
-                    return;
-                }
-
-                var subject = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub)
-                              ?? context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
-                if (!Guid.TryParse(subject, out var subjectUserId) || subjectUserId != session.UserId)
-                {
-                    context.Fail("TOKEN_SUBJECT_MISMATCH");
-                    return;
-                }
-
-                var sessionClaim = context.Principal?.FindFirstValue("sid");
-                if (!Guid.TryParse(sessionClaim, out var tokenSessionId) || tokenSessionId != session.Id)
-                {
-                    context.Fail("TOKEN_SESSION_MISMATCH");
-                    return;
-                }
-
-                var userStatus = await dbContext.Users
-                    .AsNoTracking()
-                    .Where(x => x.Id == session.UserId)
-                    .Select(x => x.Status)
-                    .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
-
-                if (userStatus is UserStatus.Suspended or UserStatus.Deactivated)
-                {
-                    context.Fail("USER_NOT_ALLOWED");
-                }
-            }
-        };
+        // Use OAuth2JwtBearerEvents for message resolution and enhanced token validation
+        options.EventsType = typeof(OAuth2JwtBearerEvents);
     });
 builder.Services.AddAuthorization();
 
@@ -147,6 +90,7 @@ using (var scope = app.Services.CreateScope())
     }
 
     await SuperUserSeeder.SeedAsync(dbContext, superUserPassword);
+    await OAuth2ClientSeeder.SeedAsync(dbContext);
 }
 
 if (app.Environment.IsDevelopment())

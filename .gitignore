@@ -26,3 +26,5 @@ coverage/
 # Python (if present)
 __pycache__/
 *.pyc
+# Local AI runtime state
+.atl/

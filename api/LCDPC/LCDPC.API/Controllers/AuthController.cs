@@ -1,17 +1,60 @@
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using LCDPC.Application.OAuth2;
 using LCDPC.Application.Users.Auth;
 using LCDPC.API.Security;
+using LCDPC.Domain.Entities.OAuth2;
+using LCDPC.Domain.Entities.Users;
+using LCDPC.Infrastructure.OAuth2;
+using LCDPC.Infrastructure.Persistence;
+using LCDPC.Infrastructure.Users.Auth;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace LCDPC.API.Controllers;
 
+/// <summary>
+/// Legacy authentication endpoints — maintained as a compatibility layer during OAuth 2.0 migration.
+/// All endpoints return deprecation headers pointing clients toward the new /oauth2/* endpoints.
+/// </summary>
 [ApiController]
 [Route("api/v1/auth")]
-public class AuthController(IRegistrationFlowService registrationFlowService, IConfiguration configuration) : ControllerBase
+public class AuthController(
+    IRegistrationFlowService registrationFlowService,
+    IOAuth2AuthorizationService oauth2AuthorizationService,
+    IOAuth2TokenService oauth2TokenService,
+    IOAuth2ClientService oauth2ClientService,
+    AppDbContext dbContext,
+    OAuth2Options oauth2Options,
+    IConfiguration configuration) : ControllerBase
 {
     private const string AccessTokenCookieName = "lcdpc_at";
     private const string RefreshTokenCookieName = "lcdpc_rt";
     private const string GoogleStateCookieName = "lcdpc_google_state";
+    private const string LegacyClientId = "lcdpc-web";
+    private const string LegacyScope = "openid email profile";
     private int RefreshTokenTtlDays => int.TryParse(configuration["Auth:RefreshTokenTtlDays"], out var ttlDays) ? ttlDays : 30;
+
+    // ──────────────────────────────────────────────
+    // Deprecation helper
+    // ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Adds standard deprecation headers signaling the migration to OAuth 2.0.
+    /// Sunset date: 3 months from now (clients should migrate before this date).
+    /// </summary>
+    private void AddDeprecationHeaders()
+    {
+        Response.Headers["Deprecation"] = "true";
+        // Sunset: 2026-09-13 (3 months from spec date 2026-06-13)
+        Response.Headers["Sunset"] = "Sat, 13 Sep 2026 00:00:00 GMT";
+        Response.Headers["Link"] = "</oauth2/authorize>; rel=\"successor-version\"";
+    }
+
+    // ──────────────────────────────────────────────
+    // Registration endpoints (UNCHANGED — pre-auth, no OAuth 2.0 mapping needed)
+    // ──────────────────────────────────────────────
 
     [HttpPost("register/start")]
     [ProducesResponseType(typeof(StartRegistrationResponse), StatusCodes.Status202Accepted)]
@@ -109,10 +152,17 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
         }
     }
 
+    // ──────────────────────────────────────────────
+    // POST /api/v1/auth/login — OAuth 2.0 adapter
+    // Authenticates user, generates OAuth2 tokens internally, returns legacy format.
+    // ──────────────────────────────────────────────
+
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
+        AddDeprecationHeaders();
+
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
         {
             return BadRequest(new { code = "INVALID_REQUEST", message = "email and password are required" });
@@ -123,25 +173,92 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
             return BadRequest(new { code = "EMAIL_INVALID", message = "email format is invalid" });
         }
 
-        try
-        {
-            var response = await registrationFlowService.LoginAsync(request, cancellationToken);
-            SetSessionCookies(response.TokenPair);
-            return Ok(response);
-        }
-        catch (InvalidOperationException ex) when (ex.Message == "INVALID_CREDENTIALS")
+        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
+
+        var user = await dbContext.Users
+            .Include(u => u.Profile)
+            .Include(u => u.RoleAssignments)
+                .ThenInclude(ra => ra.Role)
+            .FirstOrDefaultAsync(u => u.Email == normalizedEmail, cancellationToken);
+
+        if (user is null)
         {
             return Unauthorized(new { code = "INVALID_CREDENTIALS", message = "invalid email or password" });
         }
-        catch (InvalidOperationException ex) when (ex.Message == "USER_NOT_ALLOWED")
+
+        if (user.Status is UserStatus.Suspended or UserStatus.Deactivated)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { code = "USER_NOT_ALLOWED", message = "user is not allowed to login" });
         }
-        catch (InvalidOperationException ex) when (ex.Message == "ONBOARDING_INCOMPLETE")
+
+        if (!string.Equals(user.OnboardingStatus, "active", StringComparison.OrdinalIgnoreCase) || user.EmailVerifiedAtUtc is null)
         {
             return StatusCode(StatusCodes.Status403Forbidden, new { code = "ONBOARDING_INCOMPLETE", message = "onboarding is not complete" });
         }
+
+        if (!VerifyPassword(request.Password, user.PasswordHash))
+        {
+            return Unauthorized(new { code = "INVALID_CREDENTIALS", message = "invalid email or password" });
+        }
+
+        // Validate the OAuth2 client exists (ensures the internal token generation target is valid)
+        var client = await oauth2ClientService.GetClientAsync(LegacyClientId, cancellationToken);
+        if (client is null)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new { code = "OAUTH_CLIENT_NOT_FOUND", message = "OAuth2 client is not configured" });
+        }
+
+        // Generate OAuth2 tokens internally (bypassing authorization code flow for legacy adapter)
+        var accessToken = await oauth2TokenService.GenerateAccessTokenAsync(user.Id, LegacyClientId, LegacyScope, cancellationToken);
+        var (refreshToken, refreshHash) = await oauth2TokenService.GenerateRefreshTokenAsync(cancellationToken);
+
+        var nowUtc = DateTime.UtcNow;
+        var familyId = Guid.NewGuid();
+
+        // Save OAuth2 refresh token
+        dbContext.OAuth2RefreshTokens.Add(new OAuth2RefreshToken
+        {
+            TokenHash = refreshHash,
+            ClientId = LegacyClientId,
+            UserId = user.Id,
+            Scope = LegacyScope,
+            FamilyId = familyId,
+            PreviousTokenHash = null,
+            ExpiresAtUtc = nowUtc.AddDays(oauth2Options.RefreshTokenTtlDays),
+            RevokedAtUtc = null,
+            CreatedAtUtc = nowUtc
+        });
+
+        // Save legacy UserSession for backward compatibility (legacy /me endpoint checks this table)
+        var sessionId = Guid.NewGuid();
+        dbContext.UserSessions.Add(new UserSession
+        {
+            Id = sessionId,
+            UserId = user.Id,
+            AccessTokenHash = TokenHashing.Hash(accessToken),
+            RefreshTokenHash = TokenHashing.Hash(refreshToken),
+            AccessTokenExpiresAtUtc = nowUtc.AddMinutes(oauth2Options.AccessTokenTtlMinutes),
+            RefreshTokenExpiresAtUtc = nowUtc.AddDays(RefreshTokenTtlDays),
+            CreatedAtUtc = nowUtc
+        });
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        // Build legacy response format
+        var userSummary = BuildUserSummaryResponse(user);
+        var permissions = await BuildPermissionsAsync(user.Id, cancellationToken);
+
+        SetOAuth2SessionCookies(accessToken, refreshToken);
+
+        return Ok(new LoginResponse(
+            new TokenPairResponse(accessToken, refreshToken, oauth2Options.AccessTokenTtlMinutes * 60),
+            userSummary,
+            permissions));
     }
+
+    // ──────────────────────────────────────────────
+    // Google OAuth registration (UNCHANGED — pre-auth flow)
+    // ──────────────────────────────────────────────
 
     [HttpGet("register/google")]
     [ProducesResponseType(StatusCodes.Status302Found)]
@@ -206,25 +323,155 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
         }
     }
 
+    // ──────────────────────────────────────────────
+    // GET /api/v1/auth/me — Already adapted in Fase 4 (verify deprecation headers present)
+    // ──────────────────────────────────────────────
+
     [HttpGet("me")]
     [ProducesResponseType(typeof(MeResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> Me(CancellationToken cancellationToken)
     {
+        AddDeprecationHeaders();
+
         var accessToken = AccessTokenResolver.Resolve(Request);
         var response = await registrationFlowService.MeAsync(accessToken, cancellationToken);
+
+        // If authenticated via OAuth2, extract scopes from JWT claims
+        if (response.Authenticated && User.Identity?.IsAuthenticated == true)
+        {
+            var scopes = ExtractScopesFromJwt();
+            if (scopes.Count > 0)
+            {
+                response = response with { Scopes = scopes };
+            }
+        }
+
         return Ok(response);
     }
+
+    /// <summary>
+    /// Extracts OAuth 2.0 scopes from the JWT token claims.
+    /// The scope claim is a space-separated string (OAuth 2.0 standard).
+    /// </summary>
+    private IReadOnlyList<string> ExtractScopesFromJwt()
+    {
+        var scopeClaim = User.FindFirst("scope");
+        if (scopeClaim is null || string.IsNullOrWhiteSpace(scopeClaim.Value))
+        {
+            return Array.Empty<string>();
+        }
+
+        return scopeClaim.Value
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+    }
+
+    // ──────────────────────────────────────────────
+    // POST /api/v1/auth/refresh — OAuth 2.0 adapter
+    // Maps internally to POST /oauth2/token with grant_type=refresh_token
+    // ──────────────────────────────────────────────
 
     [HttpPost("refresh")]
     [ProducesResponseType(typeof(RefreshSessionResponse), StatusCodes.Status200OK)]
     public async Task<IActionResult> Refresh(CancellationToken cancellationToken)
     {
+        AddDeprecationHeaders();
+
         try
         {
             var refreshToken = Request.Cookies[RefreshTokenCookieName];
-            var response = await registrationFlowService.RefreshAsync(refreshToken, cancellationToken);
-            SetSessionCookies(response.TokenPair);
-            return Ok(response);
+
+            if (string.IsNullOrWhiteSpace(refreshToken))
+            {
+                ClearSessionCookies();
+                return Unauthorized(new { code = "INVALID_SESSION", message = "invalid or expired session" });
+            }
+
+            // Map to OAuth2 refresh_token grant internally
+            var oauth2Response = await oauth2AuthorizationService.RefreshTokenAsync(refreshToken, LegacyClientId, cancellationToken);
+
+            if (oauth2Response is null)
+            {
+                ClearSessionCookies();
+                return Unauthorized(new { code = "INVALID_SESSION", message = "invalid or expired session" });
+            }
+
+            // Look up user to build legacy response
+            var userId = await ResolveUserIdFromTokenAsync(oauth2Response.AccessToken, cancellationToken);
+            if (!userId.HasValue)
+            {
+                ClearSessionCookies();
+                return Unauthorized(new { code = "INVALID_SESSION", message = "invalid or expired session" });
+            }
+
+            var user = await dbContext.Users
+                .Include(u => u.Profile)
+                .FirstOrDefaultAsync(u => u.Id == userId.Value, cancellationToken);
+
+            if (user is null || user.Status is UserStatus.Suspended or UserStatus.Deactivated)
+            {
+                ClearSessionCookies();
+                return StatusCode(StatusCodes.Status403Forbidden, new { code = "USER_NOT_ALLOWED", message = "user is not allowed" });
+            }
+
+            // Also update legacy UserSession for backward compatibility
+            var legacySession = await dbContext.UserSessions
+                .FirstOrDefaultAsync(s => s.UserId == userId.Value && s.RevokedAtUtc == null, cancellationToken);
+
+            if (legacySession is not null)
+            {
+                legacySession.AccessTokenHash = TokenHashing.Hash(oauth2Response.AccessToken);
+                legacySession.RefreshTokenHash = TokenHashing.Hash(oauth2Response.RefreshToken);
+                legacySession.AccessTokenExpiresAtUtc = DateTime.UtcNow.AddMinutes(oauth2Options.AccessTokenTtlMinutes);
+                legacySession.RefreshTokenExpiresAtUtc = DateTime.UtcNow.AddDays(RefreshTokenTtlDays);
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+
+            var userSummary = user.Profile is null
+                ? new UserSummaryResponse(
+                    user.Id,
+                    user.Email,
+                    user.Email,
+                    user.Status == UserStatus.Active ? "activo" : "suspendido",
+                    "cliente",
+                    user.OnboardingStatus,
+                    user.EmailVerifiedAtUtc,
+                    Array.Empty<string>())
+                : new UserSummaryResponse(
+                    user.Id,
+                    user.Email,
+                    $"{user.Profile.FirstName} {user.Profile.LastName}".Trim(),
+                    user.Status == UserStatus.Active ? "activo" : "suspendido",
+                    "cliente",
+                    user.OnboardingStatus,
+                    user.EmailVerifiedAtUtc,
+                    Array.Empty<string>());
+
+            // Resolve roles
+            var roles = await dbContext.UserRoleAssignments
+                .AsNoTracking()
+                .Where(ra => ra.UserId == userId.Value && ra.Active)
+                .Join(dbContext.Roles, ra => ra.RoleId, r => r.Id, (ra, r) => r.Code)
+                .Distinct()
+                .OrderBy(r => r)
+                .ToListAsync(cancellationToken);
+
+            userSummary = userSummary with { Roles = roles };
+
+            // Update tipoCuenta
+            var tipoCuenta = roles.Any(r => r.StartsWith("admin", StringComparison.OrdinalIgnoreCase))
+                ? "administrador"
+                : "cliente";
+            userSummary = userSummary with { TipoCuenta = tipoCuenta };
+
+            var permissions = await BuildPermissionsAsync(userId.Value, cancellationToken);
+
+            SetOAuth2SessionCookies(oauth2Response.AccessToken, oauth2Response.RefreshToken);
+
+            return Ok(new RefreshSessionResponse(
+                new TokenPairResponse(oauth2Response.AccessToken, oauth2Response.RefreshToken, oauth2Response.ExpiresIn),
+                userSummary,
+                permissions));
         }
         catch (InvalidOperationException ex) when (ex.Message == "INVALID_SESSION")
         {
@@ -238,15 +485,31 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
         }
     }
 
+    // ──────────────────────────────────────────────
+    // POST /api/v1/auth/logout — OAuth 2.0 adapter
+    // Maps internally to POST /oauth2/revoke
+    // ──────────────────────────────────────────────
+
     [HttpPost("logout")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
+        AddDeprecationHeaders();
+
         var refreshToken = Request.Cookies[RefreshTokenCookieName];
-        await registrationFlowService.LogoutAsync(refreshToken, cancellationToken);
+
+        // Revoke via OAuth2 revoke endpoint (RFC 7009: always succeeds even for unknown tokens)
+        await oauth2AuthorizationService.RevokeTokenAsync(refreshToken ?? string.Empty, cancellationToken);
+
+        // Clear legacy cookies
         ClearSessionCookies();
+
         return NoContent();
     }
+
+    // ──────────────────────────────────────────────
+    // Password management endpoints (UNCHANGED)
+    // ──────────────────────────────────────────────
 
     [HttpPost("forgot-password")]
     [ProducesResponseType(typeof(ForgotPasswordResponse), StatusCodes.Status202Accepted)]
@@ -306,6 +569,10 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
         }
     }
 
+    // ──────────────────────────────────────────────
+    // Private helpers
+    // ──────────────────────────────────────────────
+
     private static bool IsValidEmail(string email)
     {
         try
@@ -319,14 +586,18 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
         }
     }
 
-    private void SetSessionCookies(TokenPairResponse tokens)
+    /// <summary>
+    /// Sets cookies with OAuth2 tokens (JWT RS256 access token + opaque refresh token).
+    /// Uses the same cookie names as legacy system for seamless migration.
+    /// </summary>
+    private void SetOAuth2SessionCookies(string accessToken, string refreshToken)
     {
         var accessCookieOptions = new CookieOptions
         {
             HttpOnly = true,
             Secure = true,
             SameSite = SameSiteMode.Lax,
-            Expires = DateTimeOffset.UtcNow.AddSeconds(tokens.ExpiresInSeconds),
+            Expires = DateTimeOffset.UtcNow.AddSeconds(oauth2Options.AccessTokenTtlMinutes * 60),
             Path = "/"
         };
 
@@ -339,8 +610,8 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
             Path = "/api/v1/auth"
         };
 
-        Response.Cookies.Append(AccessTokenCookieName, tokens.AccessToken, accessCookieOptions);
-        Response.Cookies.Append(RefreshTokenCookieName, tokens.RefreshToken, refreshCookieOptions);
+        Response.Cookies.Append(AccessTokenCookieName, accessToken, accessCookieOptions);
+        Response.Cookies.Append(RefreshTokenCookieName, refreshToken, refreshCookieOptions);
     }
 
     private void ClearSessionCookies()
@@ -351,9 +622,129 @@ public class AuthController(IRegistrationFlowService registrationFlowService, IC
 
     private static string GenerateOpaqueState()
     {
-        return Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+        return Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))
             .TrimEnd('=')
             .Replace('+', '-')
             .Replace('/', '_');
+    }
+
+    /// <summary>
+    /// PBKDF2-SHA256 password verification (matches RegistrationFlowService implementation).
+    /// </summary>
+    private static bool VerifyPassword(string password, string storedHash)
+    {
+        var parts = storedHash.Split('$', 5, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 5 || parts[0] != "PBKDF2")
+        {
+            return false;
+        }
+
+        var iterations = int.Parse(parts[1]);
+        var salt = Convert.FromBase64String(parts[3]);
+        var expectedHash = Convert.FromBase64String(parts[4]);
+        var actualHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, expectedHash.Length);
+
+        return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
+    }
+
+    /// <summary>
+    /// Builds a UserSummaryResponse from a loaded User entity.
+    /// </summary>
+    private static UserSummaryResponse BuildUserSummaryResponse(User user)
+    {
+        var roles = user.RoleAssignments
+            .Where(ra => ra.Active)
+            .Select(ra => ra.Role.Code)
+            .Distinct()
+            .OrderBy(r => r)
+            .ToList();
+
+        var displayName = user.Profile is null
+            ? user.Email
+            : $"{user.Profile.FirstName} {user.Profile.LastName}".Trim();
+
+        var tipoCuenta = roles.Any(r => r.StartsWith("admin", StringComparison.OrdinalIgnoreCase))
+            ? "administrador"
+            : "cliente";
+
+        var estado = user.Status switch
+        {
+            UserStatus.Active => "activo",
+            UserStatus.Suspended => "suspendido",
+            UserStatus.Deactivated => "desactivado",
+            _ => "activo"
+        };
+
+        return new UserSummaryResponse(
+            user.Id,
+            user.Email,
+            displayName,
+            estado,
+            tipoCuenta,
+            user.OnboardingStatus,
+            user.EmailVerifiedAtUtc,
+            roles);
+    }
+
+    /// <summary>
+    /// Builds permissions list for a user by joining role assignments with resource permissions.
+    /// </summary>
+    private async Task<IReadOnlyList<ResourcePermissionResponse>> BuildPermissionsAsync(Guid userId, CancellationToken ct)
+    {
+        var rawPermissions = await dbContext.UserRoleAssignments
+            .AsNoTracking()
+            .Where(x => x.UserId == userId && x.Active)
+            .Join(dbContext.RoleResourcePermissions,
+                ura => ura.RoleId,
+                permission => permission.RoleId,
+                (ura, permission) => permission)
+            .Join(dbContext.ApiResources,
+                permission => permission.ResourceId,
+                resource => resource.Id,
+                (permission, resource) => new
+                {
+                    resource.Code,
+                    permission.CanView,
+                    permission.CanWrite,
+                    permission.CanUpdate,
+                    permission.CanDelete,
+                    permission.CanAll
+                })
+            .ToListAsync(ct);
+
+        return rawPermissions
+            .GroupBy(x => x.Code)
+            .Select(group => new ResourcePermissionResponse(
+                group.Key,
+                group.Any(x => x.CanView),
+                group.Any(x => x.CanWrite),
+                group.Any(x => x.CanUpdate),
+                group.Any(x => x.CanDelete),
+                group.Any(x => x.CanAll)))
+            .OrderBy(x => x.ResourceCode)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Resolves a user ID from an OAuth2 access token (JWT RS256) by reading the 'sub' claim.
+    /// </summary>
+    private static async Task<Guid?> ResolveUserIdFromTokenAsync(string accessToken, CancellationToken ct)
+    {
+        try
+        {
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            var jwt = handler.ReadJwtToken(accessToken);
+            var sub = jwt.Claims.FirstOrDefault(c => c.Type == "sub")?.Value;
+            if (!string.IsNullOrEmpty(sub) && Guid.TryParse(sub, out var userId))
+            {
+                return userId;
+            }
+        }
+        catch
+        {
+            // Invalid token — return null
+        }
+
+        return null;
     }
 }

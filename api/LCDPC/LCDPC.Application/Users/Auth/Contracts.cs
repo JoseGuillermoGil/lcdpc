@@ -78,7 +78,8 @@ public sealed record MeResponse(
     bool Authenticated,
     UserSummaryResponse? UserSummary,
     IReadOnlyList<ResourcePermissionResponse> Permissions,
-    int? ExpiresInSeconds);
+    int? ExpiresInSeconds,
+    IReadOnlyList<string>? Scopes = null);
 
 public sealed record RefreshSessionResponse(
     TokenPairResponse TokenPair,

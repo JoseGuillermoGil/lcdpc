@@ -1,81 +1,63 @@
 # AGENTS
 
-Project guidance for AI coding agents working in this repository.
+High-signal guidance for OpenCode sessions in this repo.
 
-## Scope
+## What is actually here
 
-- This repo is a monorepo with backend in .NET and docs-first workflow.
-- Main backend root: [api/LCDPC](api/LCDPC)
-- Architecture and product context live in [docs](docs)
+- Monorepo with three real work areas:
+  - `api/LCDPC/` — .NET 10 backend, Clean Architecture, EF Core + PostgreSQL.
+  - `web/` — Angular 20 standalone app with signals, PrimeNG 20, SCSS, pnpm.
+  - `docs/` — architecture + SDD artifacts that drive feature work.
+- There is **no committed** root `opencode.json`, `.github/copilot-instructions.md`, or tracked `.vscode/` workspace config. Root `.vscode/` is gitignored.
 
-## Fast Start
+## Fast commands
 
-- Prerequisites: .NET SDK 10, Docker/Compose (optional)
-- Run backend locally:
-  - `cd api/LCDPC`
-  - `dotnet run --project LCDPC.API/LCDPC.API.csproj`
-- Run with Docker:
-  - `cd api/LCDPC`
-  - `cp .env.example .env`
-  - `docker compose up --build`
-- Run tests:
+- Backend with Docker (recommended when auth/db matters):
+  - `cd api/LCDPC && cp .env.example .env && docker compose up --build`
+- Backend local:
+  - `cd api/LCDPC && dotnet run --project LCDPC.API/LCDPC.API.csproj`
+- Backend tests:
   - `dotnet test api/LCDPC/LCDPC.slnx`
+- Frontend:
+  - `cd web && pnpm install`
+  - `cd web && pnpm start`
+  - `cd web && pnpm test`
+  - `cd web && pnpm build`
 
-## Canonical Docs (Read Before Editing)
+## Read these before editing
 
-- Setup and repo overview: [README.md](README.md)
-- Backend architecture blueprint: [docs/backend/architecture/fase-1-blueprint.md](docs/backend/architecture/fase-1-blueprint.md)
-- SDD process overview: [docs/sdd/README.md](docs/sdd/README.md)
-- Active SDD changes:
-  - [docs/sdd/changes/usuarios-y-administradores/spec.md](docs/sdd/changes/usuarios-y-administradores/spec.md)
-  - [docs/sdd/changes/usuarios-y-administradores/tasks.md](docs/sdd/changes/usuarios-y-administradores/tasks.md)
-  - [docs/sdd/changes/pricing-sedes-y-mayor-detal/spec.md](docs/sdd/changes/pricing-sedes-y-mayor-detal/spec.md)
-  - [docs/sdd/changes/pricing-sedes-y-mayor-detal/tasks.md](docs/sdd/changes/pricing-sedes-y-mayor-detal/tasks.md)
+- `README.md` — repo entrypoint and env vars.
+- `docs/backend/architecture/fase-1-blueprint.md` — authoritative layer rules.
+- `docs/sdd/README.md` + matching `docs/sdd/changes/<change>/` artifacts — required before feature work; update the tasks checklist after implementation.
+- `/.agents/skills/primeng/SKILL.md` — load this before PrimeNG/UI work.
 
-## Architecture Boundaries (Strict)
+## Architecture rules you should not break
 
-- Allowed dependencies:
-  - `LCDPC.Application -> LCDPC.Domain`
-  - `LCDPC.Infrastructure -> LCDPC.Application, LCDPC.Domain`
-  - `LCDPC.API -> LCDPC.Application, LCDPC.Infrastructure, LCDPC.Domain`
-- Forbidden:
-  - `LCDPC.Domain` depending on any other project
-  - `LCDPC.Application` depending on `LCDPC.Infrastructure` or `LCDPC.API`
-  - Controllers directly depending on repositories
+- `LCDPC.Domain` must stay dependency-free.
+- `LCDPC.Application` may depend only on `LCDPC.Domain`.
+- `LCDPC.Infrastructure` may depend on `LCDPC.Application` + `LCDPC.Domain`.
+- `LCDPC.API` may depend on the other three.
+- Controllers must not talk to repositories directly.
+- DI entrypoints are `AddApplicationServices()` and `AddInfrastructureServices(configuration)`.
 
-Reference: [docs/backend/architecture/fase-1-blueprint.md](docs/backend/architecture/fase-1-blueprint.md)
+## Backend facts agents often guess wrong
 
-## Coding Conventions You Must Respect
+- Auth is cookie-based JWT: `lcdpc_at` and `lcdpc_rt` are HTTP-only cookies.
+- A valid JWT is **not enough**: each request also validates the access-token hash against `UserSessions` in the DB.
+- Role checks use `[RequireRoles(...)]`; preserve that flow when adding protected endpoints.
+- CORS must keep `AllowCredentials()` for auth to work cross-origin.
+- Startup uses `Database.EnsureCreated()` and seeds the superuser on boot. **Do not introduce EF migrations unless the user asks for that change.**
+- API responses already use `JSendResponse`; follow the existing response shape in the touched area.
 
-- Keep business logic out of controllers.
-- Package manager policy:
-  - Use `pnpm` only for JavaScript/TypeScript package operations.
-  - Do not use `npm` commands (install, run, exec, npx, global installs) unless the user explicitly approves in that conversation.
-  - When docs or examples show `npm`, translate them to `pnpm` equivalents before executing.
-- Use DI registrations through:
-  - [api/LCDPC/LCDPC.Application/DependencyInjection.cs](api/LCDPC/LCDPC.Application/DependencyInjection.cs)
-  - [api/LCDPC/LCDPC.Infrastructure/DependencyInjection.cs](api/LCDPC/LCDPC.Infrastructure/DependencyInjection.cs)
-- Auth uses secure HTTP-only cookies and role filter:
-  - [api/LCDPC/LCDPC.API/Controllers/AuthController.cs](api/LCDPC/LCDPC.API/Controllers/AuthController.cs)
-  - [api/LCDPC/LCDPC.API/Security/RequireRolesAttribute.cs](api/LCDPC/LCDPC.API/Security/RequireRolesAttribute.cs)
-  - [api/LCDPC/LCDPC.API/Security/RequireRolesFilter.cs](api/LCDPC/LCDPC.API/Security/RequireRolesFilter.cs)
-- Domain response wrapper exists in:
-  - [api/LCDPC/LCDPC.Domain/Common/JSendResponse.cs](api/LCDPC/LCDPC.Domain/Common/JSendResponse.cs)
-  - Follow existing API style in target area; do not force broad response-shape rewrites unless requested.
+## Frontend facts agents often guess wrong
 
-## Persistence and Seed Notes
+- The real frontend root is `web/`, not `api/LCDPC/web/`.
+- `web/` is not scaffold-only: it already has standalone components, route wiring, PrimeNG theme setup, and active auth/register flows.
+- Package-manager rule: use `pnpm` only for JS/TS work unless the user explicitly approves otherwise.
+- Existing route/UI language is Spanish (`/autenticacion`, `/registro`); extend the current app vocabulary instead of anglicizing it mid-feature.
 
-- EF Core context: [api/LCDPC/LCDPC.Infrastructure/Persistence/AppDbContext.cs](api/LCDPC/LCDPC.Infrastructure/Persistence/AppDbContext.cs)
-- Superuser seeding: [api/LCDPC/LCDPC.Infrastructure/Persistence/SuperUserSeeder.cs](api/LCDPC/LCDPC.Infrastructure/Persistence/SuperUserSeeder.cs)
-- Startup pipeline (db ensure + seed): [api/LCDPC/LCDPC.API/Program.cs](api/LCDPC/LCDPC.API/Program.cs)
+## Repo gotchas
 
-## SDD Workflow Rule
-
-- Before implementing a feature, read the matching spec/task docs in [docs/sdd/changes](docs/sdd/changes).
-- After implementing, update the corresponding tasks file checklist.
-
-## Practical Pitfalls
-
-- Do not assume the frontend stack yet; [web](web) is currently scaffold-level.
-- Be careful with cookie-based auth flows when adding endpoints (`lcdpc_at`, `lcdpc_rt`).
-- Keep changes focused; avoid cross-layer refactors unless explicitly requested.
+- `api/LCDPC/web/` is a duplicate copy of the frontend; edit `web/` unless the user explicitly says otherwise.
+- `web_backup_before_move/` is vestigial; ignore it.
+- No `.github/` workflows are present; do not invent CI expectations.

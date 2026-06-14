@@ -76,6 +76,16 @@
   gap: 0.7rem;
 }
 
+:host ::ng-deep .search-nav-button {
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+:host ::ng-deep .search-nav-button:hover {
+  color: var(--accent);
+  background: rgba(247, 147, 26, 0.14);
+}
+
 .branch-picker {
   display: flex;
   align-items: center;
