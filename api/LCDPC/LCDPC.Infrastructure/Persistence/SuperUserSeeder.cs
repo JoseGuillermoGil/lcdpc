@@ -6,15 +6,33 @@ namespace LCDPC.Infrastructure.Persistence;
 
 public static class SuperUserSeeder
 {
-    private const string SuperUserAlias = "superperro";
-    private const string SuperUserEmail = "nemoxgil@gmail.com";
-    private const string SuperUserFirstName = "Jose Guillermo";
-    private const string SuperUserLastName = "Gil Valderrama";
-    private const string SuperUserIdentityDocument = "V24276018";
-
-    public static async Task SeedAsync(AppDbContext dbContext, string superUserPassword, CancellationToken cancellationToken = default)
+    public sealed record SuperUserSeedOptions(
+        string Alias,
+        string Email,
+        string FirstName,
+        string LastName,
+        string IdentityDocument,
+        string WhatsAppPhone,
+        string FullAddress)
     {
-        var normalizedEmail = SuperUserEmail.Trim().ToLowerInvariant();
+        public static SuperUserSeedOptions Default { get; } = new(
+            Alias: "superperro",
+            Email: "nemoxgil@gmail.com",
+            FirstName: "Jose Guillermo",
+            LastName: "Gil Valderrama",
+            IdentityDocument: "V24276018",
+            WhatsAppPhone: "0000000000",
+            FullAddress: "Usuario administrador inicial");
+    }
+
+    public static async Task SeedAsync(
+        AppDbContext dbContext,
+        string superUserPassword,
+        SuperUserSeedOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        var seed = options ?? SuperUserSeedOptions.Default;
+        var normalizedEmail = seed.Email.Trim().ToLowerInvariant();
 
         var existingUser = await dbContext.Users
             .AsNoTracking()
@@ -52,12 +70,12 @@ public static class SuperUserSeeder
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            FirstName = SuperUserFirstName,
-            LastName = SuperUserLastName,
-            IdentityDocument = SuperUserIdentityDocument,
+            FirstName = seed.FirstName,
+            LastName = seed.LastName,
+            IdentityDocument = seed.IdentityDocument,
             Rif = null,
-            WhatsAppPhone = "0000000000",
-            FullAddress = $"Usuario de prueba: {SuperUserAlias}",
+            WhatsAppPhone = seed.WhatsAppPhone,
+            FullAddress = seed.FullAddress,
             CreatedAtUtc = nowUtc,
             UpdatedAtUtc = nowUtc
         };
@@ -82,7 +100,7 @@ public static class SuperUserSeeder
             UserId = userId,
             Area = "auth",
             ActionCode = "auth.superuser.seeded",
-            MetadataJson = $"{{\"alias\":\"{SuperUserAlias}\",\"email\":\"{normalizedEmail}\"}}",
+            MetadataJson = $"{{\"alias\":\"{seed.Alias}\",\"email\":\"{normalizedEmail}\"}}",
             CreatedAtUtc = nowUtc
         });
 

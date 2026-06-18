@@ -301,7 +301,8 @@ namespace LCDPC.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Email");
+                    b.HasIndex("Email")
+                        .IsUnique();
 
                     b.ToTable("registration_flows", (string)null);
                 });

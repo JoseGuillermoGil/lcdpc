@@ -73,7 +73,17 @@
           <label for="remember">Recordar mi sesión</label>
         </div>
 
-        <p-button type="submit" label="Iniciar Sesión" styleClass="submit-btn"></p-button>
+        <p-button
+          type="submit"
+          label="Iniciar Sesión"
+          styleClass="submit-btn"
+          [loading]="isSubmitting()"
+          [disabled]="!canSubmit() || isSubmitting()"
+        ></p-button>
+
+        @if (submitError()) {
+          <p class="submit-error" role="alert">{{ submitError() }}</p>
+        }
 
         <div class="divider">
           <span>o ingresa con</span>

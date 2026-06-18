@@ -51,29 +51,29 @@
 
 ## Fase 6 - Configuración y seed
 
-- [ ] Agregar configuración OAuth2 a `.env.example`
-- [ ] Seed del cliente `lcdpc-web` en el bootstrap de la app
-- [ ] Generar par de claves RSA en startup (o cargar desde config)
-- [ ] Actualizar `docker-compose.yml` si es necesario (no debería necesitar cambios)
+- [x] Agregar configuración OAuth2 a `.env.example`
+- [x] Seed del cliente `lcdpc-web` en el bootstrap de la app
+- [x] Generar par de claves RSA en startup (o cargar desde config)
+- [x] Actualizar `docker-compose.yml` si es necesario (no debería necesitar cambios)
 
 ## Fase 7 - Tests
 
-- [ ] Tests unitarios para `OAuth2AuthorizationService` (authorize, exchange, refresh, revoke)
-- [ ] Tests unitarios para `OAuth2TokenService` (JWT RS256 generation, validation)
-- [ ] Tests unitarios para `RsaKeyService` (key generation, JWKS export)
-- [ ] Tests unitarios para refresh token rotation y family revocation
-- [ ] Tests de PKCE S256 validation (correcto e incorrecto)
-- [ ] Tests de integración: flujo completo authorize → token → introspect → revoke
-- [ ] Tests de integración: refresh token rotation con detección de theft
-- [ ] Tests de compatibilidad: endpoints `/api/v1/auth/*` siguen funcionando
-- [ ] Tests de seguridad: code reuse attack, PKCE mismatch, token family revocation
+- [x] Tests unitarios para `OAuth2AuthorizationService` (authorize, exchange, refresh, revoke)
+- [x] Tests unitarios para `OAuth2TokenService` (JWT RS256 generation, validation)
+- [x] Tests unitarios para `RsaKeyService` (key generation, JWKS export)
+- [x] Tests unitarios para refresh token rotation y family revocation
+- [x] Tests de PKCE S256 validation (correcto e incorrecto)
+- [x] Tests de integración: flujo completo authorize → token → introspect → revoke
+- [x] Tests de integración: refresh token rotation con detección de theft
+- [x] Tests de compatibilidad: endpoints `/api/v1/auth/*` siguen funcionando
+- [x] Tests de seguridad: code reuse attack, PKCE mismatch, token family revocation
 
 ## Fase 8 - Documentación y limpieza
 
-- [ ] Actualizar `README.md` del proyecto con nueva info de OAuth 2.0
-- [ ] Actualizar spec de `usuarios-y-administradores` para reflejar el cambio de tokens
-- [ ] Agregar OpenAPI/Swagger docs para los nuevos endpoints OAuth 2.0
-- [ ] Eliminar código dead del sistema de tokens antiguo (una vez el frontend migre)
+- [x] Actualizar `README.md` del proyecto con nueva info de OAuth 2.0
+- [x] Actualizar spec de `usuarios-y-administradores` para reflejar el cambio de tokens
+- [x] Agregar OpenAPI/Swagger docs para los nuevos endpoints OAuth 2.0
+- [ ] Eliminar código dead del sistema de tokens antiguo (bloqueado hasta que frontend deje de depender de `/api/v1/auth/*` y `UserSessions`)
 
 ## Dependencias
 

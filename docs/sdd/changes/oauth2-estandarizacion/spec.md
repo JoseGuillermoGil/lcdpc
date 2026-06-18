@@ -2,7 +2,7 @@
 
 ## Estado
 
-- Propuesto: 2026-06-13
+- Implementación backend completada hasta Fase 7: 2026-06-14
 - Prioridad: Alta
 - Dependencia: `usuarios-y-administradores` (usa las mismas entidades base)
 

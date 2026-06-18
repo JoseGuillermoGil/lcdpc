@@ -11,7 +11,6 @@ using LCDPC.Infrastructure.Users.Auth;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace LCDPC.Architecture.Tests;
 
@@ -131,9 +130,7 @@ public class AuthControllerSessionCookieTests
         var controller = CreateController(ctx);
 
         // Seed an OAuth2 refresh token for the test user
-        var (refreshToken, refreshHash) = await ctx.GetService<IOAuth2TokenService>() is IOAuth2TokenService ts
-            ? await ts.GenerateRefreshTokenAsync()
-            : GenerateTestRefreshToken();
+        var (refreshToken, refreshHash) = GenerateTestRefreshToken();
 
         ctx.OAuth2RefreshTokens.Add(new OAuth2RefreshToken
         {
@@ -254,16 +251,14 @@ public class AuthControllerSessionCookieTests
             Id = Guid.NewGuid(),
             Code = "admin_global",
             Name = "Administrador Global",
-            Description = "Full admin access",
-            CreatedAtUtc = DateTime.UtcNow
+            Description = "Full admin access"
         };
         var clientRole = new Role
         {
             Id = Guid.NewGuid(),
             Code = "cliente",
             Name = "Cliente",
-            Description = "Standard customer",
-            CreatedAtUtc = DateTime.UtcNow
+            Description = "Standard customer"
         };
         ctx.Roles.AddRange(adminRole, clientRole);
 
@@ -272,12 +267,10 @@ public class AuthControllerSessionCookieTests
         {
             ClientId = "lcdpc-web",
             ClientName = "LCDPC Web SPA",
-            RedirectUrisJson = "[\"http://localhost:4200\",\"http://localhost:4200/auth/callback\"]",
-            GrantTypesJson = "[\"authorization_code\",\"refresh_token\"]",
-            ResponseTypesJson = "[\"code\"]",
-            Scope = "openid email profile admin admin:sedes admin:users",
+            RedirectUris = ["http://localhost:4200", "http://localhost:4200/auth/callback"],
+            GrantTypes = ["authorization_code", "refresh_token"],
+            AllowedScopes = "openid email profile admin admin:sedes admin:users",
             RequirePkce = true,
-            TokenEndpointAuthMethod = "none",
             CreatedAtUtc = DateTime.UtcNow
         };
         ctx.OAuth2Clients.Add(oauth2Client);
@@ -352,13 +345,6 @@ public class AuthControllerSessionCookieTests
 
     private static AuthController CreateController(AppDbContext dbContext)
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Auth:RefreshTokenTtlDays"] = "30"
-            })
-            .Build();
-
         var oauth2Options = new OAuth2Options
         {
             Issuer = "http://localhost:8080",
@@ -381,8 +367,7 @@ public class AuthControllerSessionCookieTests
             tokenService,
             clientService,
             dbContext,
-            oauth2Options,
-            configuration)
+            oauth2Options)
         {
             ControllerContext = new ControllerContext
             {
@@ -433,12 +418,10 @@ public class AuthControllerSessionCookieTests
                 {
                     ClientId = "lcdpc-web",
                     ClientName = "LCDPC Web SPA",
-                    RedirectUrisJson = "[\"http://localhost:4200\"]",
-                    GrantTypesJson = "[\"authorization_code\",\"refresh_token\"]",
-                    ResponseTypesJson = "[\"code\"]",
-                    Scope = "openid email profile admin admin:sedes admin:users",
+                    RedirectUris = ["http://localhost:4200"],
+                    GrantTypes = ["authorization_code", "refresh_token"],
+                    AllowedScopes = "openid email profile admin admin:sedes admin:users",
                     RequirePkce = true,
-                    TokenEndpointAuthMethod = "none",
                     CreatedAtUtc = DateTime.UtcNow
                 });
             }
@@ -449,14 +432,17 @@ public class AuthControllerSessionCookieTests
         public bool ValidateScopes(OAuth2Client client, string requestedScopes) => true;
     }
 
-    private sealed class FakeOAuth2AuthorizationService : IOAuth2AuthorizationService
+    private sealed class FakeOAuth2AuthorizationService(
+        FakeOAuth2TokenService tokenService,
+        AppDbContext dbContext,
+        OAuth2Options options) : IOAuth2AuthorizationService
     {
         public Task<OAuth2AuthorizeResult> AuthorizeAsync(OAuth2AuthorizeRequest request, Guid? userId, CancellationToken ct = default)
         {
             throw new NotImplementedException();
         }
 
-        public async Task<OAuth2TokenResponse?> ExchangeCodeAsync(string code, string codeVerifier, string redirectUri, string clientId, CancellationToken ct = default)
+        public Task<OAuth2TokenResponse?> ExchangeCodeAsync(string code, string codeVerifier, string redirectUri, string clientId, CancellationToken ct = default)
         {
             throw new NotImplementedException();
         }
@@ -465,8 +451,6 @@ public class AuthControllerSessionCookieTests
         {
             var hash = TokenHashing.Hash(refreshToken);
             var existingToken = await dbContext.OAuth2RefreshTokens
-                .Include(rt => rt.User)
-                    .ThenInclude(u => u.Profile)
                 .FirstOrDefaultAsync(rt => rt.TokenHash == hash, ct);
 
             if (existingToken is null || existingToken.ExpiresAtUtc <= DateTime.UtcNow || existingToken.RevokedAtUtc.HasValue)

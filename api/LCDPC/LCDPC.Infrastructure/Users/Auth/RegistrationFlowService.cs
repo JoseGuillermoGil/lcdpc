@@ -1,14 +1,13 @@
 using LCDPC.Application.Users.Auth;
+using LCDPC.Application.OAuth2;
 using LCDPC.Domain.Entities.Users;
+using LCDPC.Infrastructure.OAuth2;
 using LCDPC.Infrastructure.Persistence;
-using System.IdentityModel.Tokens.Jwt;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using System.Security.Cryptography;
 using System.Net.Http.Json;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -17,15 +16,17 @@ namespace LCDPC.Infrastructure.Users.Auth;
 public sealed class RegistrationFlowService(
     AppDbContext dbContext,
     AuthSecurityOptions authOptions,
-    GoogleOAuthOptions googleOAuthOptions,
-    JwtTokenOptions jwtTokenOptions) : IRegistrationFlowService
+    GoogleOAuthOptions googleOAuthOptions) : IRegistrationFlowService
 {
-    private int AccessTokenTtlMinutes => authOptions.AccessTokenTtlMinutes;
-    private int RefreshTokenTtlDays => authOptions.RefreshTokenTtlDays;
+    private const string PendingEmailVerificationStatus = "pending_email_verification";
+    private const string PendingProfileStatus = "pending_profile";
+    private const string OtpAttemptsExceededStatus = "otp_attempts_exceeded";
+    private const string ActiveStatus = "active";
 
     public async Task<StartRegistrationResponse> StartAsync(string email, CancellationToken cancellationToken = default)
     {
         var normalizedEmail = email.Trim().ToLowerInvariant();
+        var nowUtc = DateTime.UtcNow;
 
         var existingUser = await dbContext.Users
             .AsNoTracking()
@@ -36,22 +37,40 @@ public sealed class RegistrationFlowService(
             throw new InvalidOperationException("EMAIL_ALREADY_REGISTERED");
         }
 
-        var otpCode = CreateOtp();
+        var flow = await dbContext.RegistrationFlows
+            .OrderByDescending(x => x.UpdatedAtUtc)
+            .ThenByDescending(x => x.CreatedAtUtc)
+            .FirstOrDefaultAsync(x => x.Email == normalizedEmail, cancellationToken);
 
-        var flow = new RegistrationFlow
+        if (flow is null)
         {
-            Id = Guid.NewGuid(),
-            Email = normalizedEmail,
-            Status = "pending_email_verification",
-            OtpCode = otpCode,
-            OtpHash = HashOtp(otpCode),
-            OtpExpiresAtUtc = DateTime.UtcNow.AddMinutes(RegistrationFlowDefaults.OtpTtlMinutes),
-            OtpAttempts = 0,
-            CreatedAtUtc = DateTime.UtcNow,
-            UpdatedAtUtc = DateTime.UtcNow
-        };
+            flow = new RegistrationFlow
+            {
+                Id = Guid.NewGuid(),
+                Email = normalizedEmail,
+                CreatedAtUtc = nowUtc
+            };
 
-        dbContext.RegistrationFlows.Add(flow);
+            ResetEmailVerificationFlow(flow, nowUtc);
+            dbContext.RegistrationFlows.Add(flow);
+        }
+        else if (flow.Status == PendingProfileStatus)
+        {
+            ResetEmailVerificationFlow(flow, nowUtc);
+        }
+        else if (flow.Status == OtpAttemptsExceededStatus && flow.OtpBlockedUntilUtc > nowUtc)
+        {
+            throw new InvalidOperationException("OTP_COOLDOWN_ACTIVE");
+        }
+        else if (flow.Status == ActiveStatus)
+        {
+            throw new InvalidOperationException("EMAIL_ALREADY_REGISTERED");
+        }
+        else
+        {
+            ResetEmailVerificationFlow(flow, nowUtc);
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return new StartRegistrationResponse(
@@ -66,19 +85,30 @@ public sealed class RegistrationFlowService(
     public async Task<VerifyEmailRegistrationResponse> VerifyEmailAsync(Guid flowId, string otp, CancellationToken cancellationToken = default)
     {
         var flow = await dbContext.RegistrationFlows.FirstOrDefaultAsync(x => x.Id == flowId, cancellationToken);
+        var nowUtc = DateTime.UtcNow;
 
         if (flow is null)
         {
             throw new InvalidOperationException("FLOW_NOT_FOUND");
         }
 
-        if (flow.Status != "pending_email_verification")
+        if (flow.Status == PendingProfileStatus)
+        {
+            ResetEmailVerificationFlow(flow, nowUtc);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            throw new InvalidOperationException("OTP_EXPIRED");
+        }
+
+        if (flow.Status != PendingEmailVerificationStatus)
         {
             throw new InvalidOperationException("FLOW_INVALID_STATUS");
         }
 
-        if (flow.OtpExpiresAtUtc < DateTime.UtcNow)
+        if (flow.OtpExpiresAtUtc < nowUtc)
         {
+            ResetEmailVerificationFlow(flow, nowUtc);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
             throw new InvalidOperationException("OTP_EXPIRED");
         }
 
@@ -88,7 +118,7 @@ public sealed class RegistrationFlowService(
             if (flow.OtpAttempts >= RegistrationFlowDefaults.OtpMaxAttempts)
             {
                 flow.OtpBlockedUntilUtc = DateTime.UtcNow.AddMinutes(RegistrationFlowDefaults.OtpCooldownMinutes);
-                flow.Status = "otp_attempts_exceeded";
+                flow.Status = OtpAttemptsExceededStatus;
                 await dbContext.SaveChangesAsync(cancellationToken);
                 throw new InvalidOperationException("OTP_ATTEMPTS_EXCEEDED");
             }
@@ -97,7 +127,7 @@ public sealed class RegistrationFlowService(
             throw new InvalidOperationException("OTP_INVALID");
         }
 
-        flow.Status = "pending_profile";
+        flow.Status = PendingProfileStatus;
         flow.VerifiedAtUtc = DateTime.UtcNow;
         flow.UpdatedAtUtc = DateTime.UtcNow;
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -115,7 +145,7 @@ public sealed class RegistrationFlowService(
             throw new InvalidOperationException("FLOW_NOT_FOUND");
         }
 
-        if (flow.Status != "pending_profile")
+        if (flow.Status != PendingProfileStatus)
         {
             throw new InvalidOperationException("FLOW_INVALID_STATUS");
         }
@@ -171,7 +201,7 @@ public sealed class RegistrationFlowService(
             dbContext.UserRoleAssignments.Add(assignment);
         }
 
-        flow.Status = "active";
+        flow.Status = ActiveStatus;
         flow.UpdatedAtUtc = DateTime.UtcNow;
 
         dbContext.Users.Add(user);
@@ -179,61 +209,6 @@ public sealed class RegistrationFlowService(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return new CompleteProfileRegistrationResponse(user.Id, "activo", "cliente");
-    }
-
-    public async Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default)
-    {
-        var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-
-        var user = await dbContext.Users
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Email == normalizedEmail, cancellationToken);
-
-        if (user is null)
-        {
-            throw new InvalidOperationException("INVALID_CREDENTIALS");
-        }
-
-        if (user.Status is UserStatus.Suspended or UserStatus.Deactivated)
-        {
-            throw new InvalidOperationException("USER_NOT_ALLOWED");
-        }
-
-        if (!string.Equals(user.OnboardingStatus, "active", StringComparison.OrdinalIgnoreCase) || user.EmailVerifiedAtUtc is null)
-        {
-            throw new InvalidOperationException("ONBOARDING_INCOMPLETE");
-        }
-
-        if (!VerifyPassword(request.Password, user.PasswordHash))
-        {
-            throw new InvalidOperationException("INVALID_CREDENTIALS");
-        }
-
-        var sessionId = Guid.NewGuid();
-        var nowUtc = DateTime.UtcNow;
-        var (accessToken, refreshToken) = GenerateTokenPair(user, sessionId, nowUtc);
-
-        var session = new UserSession
-        {
-            Id = sessionId,
-            UserId = user.Id,
-            AccessTokenHash = TokenHashing.Hash(accessToken),
-            RefreshTokenHash = TokenHashing.Hash(refreshToken),
-            AccessTokenExpiresAtUtc = nowUtc.AddMinutes(AccessTokenTtlMinutes),
-            RefreshTokenExpiresAtUtc = nowUtc.AddDays(RefreshTokenTtlDays),
-            CreatedAtUtc = nowUtc
-        };
-
-        dbContext.UserSessions.Add(session);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        var userSummary = await BuildUserSummaryAsync(user.Id, cancellationToken);
-        var permissions = await BuildPermissionsAsync(user.Id, cancellationToken);
-
-        return new LoginResponse(
-            new TokenPairResponse(accessToken, refreshToken, AccessTokenTtlMinutes * 60),
-            userSummary,
-            permissions);
     }
 
     public async Task<MeResponse> MeAsync(string? accessToken, CancellationToken cancellationToken = default)
@@ -263,83 +238,6 @@ public sealed class RegistrationFlowService(
         var expiresInSeconds = Math.Max(0, (int)(session.AccessTokenExpiresAtUtc - DateTime.UtcNow).TotalSeconds);
 
         return new MeResponse(true, userSummary, permissions, expiresInSeconds);
-    }
-
-    public async Task<RefreshSessionResponse> RefreshAsync(string? refreshToken, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(refreshToken))
-        {
-            throw new InvalidOperationException("INVALID_SESSION");
-        }
-
-        var hashedRefreshToken = TokenHashing.Hash(refreshToken.Trim());
-
-        var session = await dbContext.UserSessions
-            .FirstOrDefaultAsync(
-                x => x.RefreshTokenHash == hashedRefreshToken
-                     && x.RevokedAtUtc == null
-                     && x.RefreshTokenExpiresAtUtc > DateTime.UtcNow,
-                cancellationToken);
-
-        if (session is null)
-        {
-            throw new InvalidOperationException("INVALID_SESSION");
-        }
-
-        var user = await dbContext.Users
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == session.UserId, cancellationToken);
-
-        if (user is null)
-        {
-            throw new InvalidOperationException("INVALID_SESSION");
-        }
-
-        if (user.Status is UserStatus.Suspended or UserStatus.Deactivated)
-        {
-            session.RevokedAtUtc = DateTime.UtcNow;
-            await dbContext.SaveChangesAsync(cancellationToken);
-            throw new InvalidOperationException("USER_NOT_ALLOWED");
-        }
-
-        var (newAccessToken, newRefreshToken) = GenerateTokenPair(user, session.Id, DateTime.UtcNow);
-        var nowUtc = DateTime.UtcNow;
-
-        session.AccessTokenHash = TokenHashing.Hash(newAccessToken);
-        session.RefreshTokenHash = TokenHashing.Hash(newRefreshToken);
-        session.AccessTokenExpiresAtUtc = nowUtc.AddMinutes(AccessTokenTtlMinutes);
-        session.RefreshTokenExpiresAtUtc = nowUtc.AddDays(RefreshTokenTtlDays);
-
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        var userSummary = await BuildUserSummaryAsync(user.Id, cancellationToken);
-        var permissions = await BuildPermissionsAsync(user.Id, cancellationToken);
-
-        return new RefreshSessionResponse(
-            new TokenPairResponse(newAccessToken, newRefreshToken, AccessTokenTtlMinutes * 60),
-            userSummary,
-            permissions);
-    }
-
-    public async Task LogoutAsync(string? refreshToken, CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(refreshToken))
-        {
-            return;
-        }
-
-        var hashedRefreshToken = TokenHashing.Hash(refreshToken.Trim());
-
-        var session = await dbContext.UserSessions
-            .FirstOrDefaultAsync(x => x.RefreshTokenHash == hashedRefreshToken && x.RevokedAtUtc == null, cancellationToken);
-
-        if (session is null)
-        {
-            return;
-        }
-
-        session.RevokedAtUtc = DateTime.UtcNow;
-        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request, string? ipAddress, CancellationToken cancellationToken = default)
@@ -535,9 +433,19 @@ public sealed class RegistrationFlowService(
         }
 
         var normalizedEmail = userInfo.Email.Trim().ToLowerInvariant();
+        var existingUser = await dbContext.Users
+            .AsNoTracking()
+            .AnyAsync(user => user.Email == normalizedEmail, cancellationToken);
+
+        if (existingUser)
+        {
+            throw new InvalidOperationException("EMAIL_ALREADY_REGISTERED");
+        }
+
+        var nowUtc = DateTime.UtcNow;
         var existingFlow = await dbContext.RegistrationFlows
             .FirstOrDefaultAsync(
-                x => x.Email == normalizedEmail && x.Status == "pending_profile",
+                x => x.Email == normalizedEmail,
                 cancellationToken);
 
         if (existingFlow is null)
@@ -546,21 +454,32 @@ public sealed class RegistrationFlowService(
             {
                 Id = Guid.NewGuid(),
                 Email = normalizedEmail,
-                Status = "pending_profile",
+                Status = PendingProfileStatus,
                 OtpCode = "000000",
                 OtpHash = HashOtp("000000"),
-                OtpExpiresAtUtc = DateTime.UtcNow,
+                OtpExpiresAtUtc = nowUtc,
                 OtpAttempts = 0,
-                VerifiedAtUtc = DateTime.UtcNow,
-                CreatedAtUtc = DateTime.UtcNow,
-                UpdatedAtUtc = DateTime.UtcNow
+                VerifiedAtUtc = nowUtc,
+                CreatedAtUtc = nowUtc,
+                UpdatedAtUtc = nowUtc
             };
 
             dbContext.RegistrationFlows.Add(existingFlow);
         }
+        else if (existingFlow.Status == ActiveStatus)
+        {
+            throw new InvalidOperationException("EMAIL_ALREADY_REGISTERED");
+        }
         else
         {
-            existingFlow.UpdatedAtUtc = DateTime.UtcNow;
+            existingFlow.Status = PendingProfileStatus;
+            existingFlow.OtpCode = "000000";
+            existingFlow.OtpHash = HashOtp("000000");
+            existingFlow.OtpExpiresAtUtc = nowUtc;
+            existingFlow.OtpAttempts = 0;
+            existingFlow.OtpBlockedUntilUtc = null;
+            existingFlow.VerifiedAtUtc = nowUtc;
+            existingFlow.UpdatedAtUtc = nowUtc;
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -576,6 +495,19 @@ public sealed class RegistrationFlowService(
                 userInfo.FamilyName,
                 userInfo.Picture,
                 userInfo.Locale));
+    }
+
+    private static void ResetEmailVerificationFlow(RegistrationFlow flow, DateTime nowUtc)
+    {
+        var otpCode = CreateOtp();
+        flow.Status = PendingEmailVerificationStatus;
+        flow.OtpCode = otpCode;
+        flow.OtpHash = HashOtp(otpCode);
+        flow.OtpExpiresAtUtc = nowUtc.AddMinutes(RegistrationFlowDefaults.OtpTtlMinutes);
+        flow.OtpAttempts = 0;
+        flow.OtpBlockedUntilUtc = null;
+        flow.VerifiedAtUtc = null;
+        flow.UpdatedAtUtc = nowUtc;
     }
 
     private async Task<AuthSecurityPolicy> GetOrCreateSecurityPolicyAsync(CancellationToken cancellationToken)
@@ -644,35 +576,6 @@ public sealed class RegistrationFlowService(
         var actualHash = Rfc2898DeriveBytes.Pbkdf2(password, salt, iterations, HashAlgorithmName.SHA256, expectedHash.Length);
 
         return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
-    }
-
-    private (string accessToken, string refreshToken) GenerateTokenPair(User user, Guid sessionId, DateTime nowUtc)
-    {
-        return (GenerateAccessToken(user, sessionId, nowUtc), GenerateOpaqueToken());
-    }
-
-    private string GenerateAccessToken(User user, Guid sessionId, DateTime nowUtc)
-    {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtTokenOptions.SigningKey));
-        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var claims = new List<Claim>
-        {
-            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new(JwtRegisteredClaimNames.Email, user.Email),
-            new("sid", sessionId.ToString()),
-            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
-
-        var token = new JwtSecurityToken(
-            issuer: jwtTokenOptions.Issuer,
-            audience: jwtTokenOptions.Audience,
-            claims: claims,
-            notBefore: nowUtc,
-            expires: nowUtc.AddMinutes(AccessTokenTtlMinutes),
-            signingCredentials: credentials);
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
     private static string GenerateOpaqueToken()

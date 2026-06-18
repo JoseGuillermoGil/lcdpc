@@ -7,7 +7,6 @@ using LCDPC.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace LCDPC.Architecture.Tests;
 
@@ -47,6 +46,21 @@ public class AuthControllerRegistrationFlowTests
 
         var conflict = Assert.IsType<ConflictObjectResult>(result);
         Assert.Equal(StatusCodes.Status409Conflict, conflict.StatusCode);
+    }
+
+    [Fact]
+    public async Task StartRegistration_ReturnsTooManyRequests_WhenOtpCooldownIsActive()
+    {
+        var fakeService = new FakeRegistrationFlowService
+        {
+            OnStartAsync = _ => throw new InvalidOperationException("OTP_COOLDOWN_ACTIVE")
+        };
+        var controller = CreateController(fakeService);
+
+        var result = await controller.StartRegistration(new StartRegistrationRequest("cliente@example.com"), CancellationToken.None);
+
+        var tooManyRequests = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, tooManyRequests.StatusCode);
     }
 
     [Fact]
@@ -120,13 +134,6 @@ public class AuthControllerRegistrationFlowTests
 
     private static AuthController CreateController(IRegistrationFlowService service)
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Auth:RefreshTokenTtlDays"] = "30"
-            })
-            .Build();
-
         var oauth2Options = new OAuth2Options
         {
             Issuer = "http://localhost:8080",
@@ -152,8 +159,7 @@ public class AuthControllerRegistrationFlowTests
             tokenService,
             clientService,
             dbContext,
-            oauth2Options,
-            configuration)
+            oauth2Options)
         {
             ControllerContext = new ControllerContext
             {

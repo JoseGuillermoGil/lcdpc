@@ -152,6 +152,22 @@
   gap: 1rem;
 }
 
+.register-actions {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+
+.login-link {
+  color: #994700;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.login-link:hover {
+  text-decoration: underline;
+}
+
 .field-grid {
   display: grid;
   gap: 0.9rem;
@@ -178,6 +194,27 @@
   font-size: 0.9rem;
   font-weight: 600;
   color: #584236;
+}
+
+.required-label::after {
+  content: ' *';
+  color: #ba1a1a;
+  font-weight: 800;
+}
+
+.required-inline {
+  margin-left: 0.3rem;
+  color: #ba1a1a;
+  font-size: 0.9rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.required-note {
+  margin: 0.25rem 0 0;
+  color: #6f6058;
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 :host ::ng-deep .field-wrap.float-over .p-floatlabel {
@@ -233,6 +270,11 @@
   overflow: visible;
 }
 
+:host ::ng-deep .field-wrap .icon-inputgroup.p-inputgroup {
+  min-height: 2.8rem;
+  align-items: stretch;
+}
+
 :host ::ng-deep .field-wrap .icon-inputgroup.p-inputgroup > .p-component,
 :host ::ng-deep .field-wrap .icon-inputgroup.p-inputgroup > .p-inputwrapper,
 :host ::ng-deep .field-wrap .document-inputgroup.p-inputgroup > .p-component,
@@ -259,10 +301,35 @@
   color: #8b7264;
 }
 
+:host ::ng-deep .field-wrap .icon-inputgroup .p-inputgroupaddon:has(.pi-whatsapp),
+:host ::ng-deep .field-wrap .icon-inputgroup .p-inputgroup-addon:has(.pi-whatsapp) {
+  width: 2.8rem;
+  min-width: 2.8rem;
+}
+
+:host ::ng-deep .field-wrap .icon-inputgroup .p-inputgroupaddon,
+:host ::ng-deep .field-wrap .icon-inputgroup .p-inputgroup-addon,
+:host ::ng-deep .field-wrap .document-inputgroup .p-inputgroupaddon,
+:host ::ng-deep .field-wrap .document-inputgroup .p-inputgroup-addon {
+  border-inline-end: 1px solid var(--border) !important;
+}
+
 :host ::ng-deep .field-wrap .icon-inputgroup .p-inputgroupaddon:has(.doc-prefix-select),
 :host ::ng-deep .field-wrap .icon-inputgroup .p-inputgroup-addon:has(.doc-prefix-select) {
   width: auto;
   min-width: 3.4rem;
+}
+
+:host ::ng-deep .field-wrap .icon-inputgroup .p-inputgroupaddon:has(.phone-prefix-select),
+:host ::ng-deep .field-wrap .icon-inputgroup .p-inputgroup-addon:has(.phone-prefix-select) {
+  width: auto;
+  min-width: 5.5rem;
+  padding: 0 0.15rem;
+}
+
+:host ::ng-deep .field-wrap .phone-prefix-addon {
+  min-width: 5.5rem;
+  padding: 0 0.15rem;
 }
 
 :host ::ng-deep .field-wrap .icon-inputgroup .p-floatlabel {
@@ -334,6 +401,11 @@
   min-width: 3.4rem;
 }
 
+:host ::ng-deep .field-wrap .document-inputgroup.p-inputgroup {
+  min-height: 2.8rem;
+  align-items: stretch;
+}
+
 :host ::ng-deep .field-wrap .document-inputgroup .p-inputtext {
   border: 0;
   box-shadow: none;
@@ -375,9 +447,33 @@
   color: #8b7264;
 }
 
+:host ::ng-deep .field-wrap .phone-prefix-select.p-select {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  min-width: 5.2rem;
+  border-radius: 0;
+}
+
+:host ::ng-deep .field-wrap .phone-prefix-select .p-select-label {
+  font-weight: 800;
+  color: #584236;
+  text-align: center;
+  padding: 0.65rem 0.2rem;
+}
+
+:host ::ng-deep .field-wrap .phone-prefix-select .p-select-dropdown {
+  width: 1.5rem;
+  color: #8b7264;
+}
+
 .field-wrap textarea {
   resize: vertical;
+  height: 5.2rem;
+  max-height: 5.2rem;
   min-height: 5.2rem;
+  resize: none;
+  overflow-y: auto;
   padding-top: 0.8rem;
   font: inherit;
 }

@@ -6,6 +6,7 @@ Este directorio guarda artefactos de especificación (Spec-Driven Development) p
 
 - `changes/pricing-sedes-y-mayor-detal/` — Precios por sede, restricción de carrito, niveles de precio mayor/detal
 - `changes/usuarios-y-administradores/` — Autenticación, autorización, gestión de usuarios/roles (RBAC)
+	- `tasks.front-back-auth-integration.md` — Plan operativo de integración login + registro front-back
 - `changes/oauth2-estandarizacion/` — Migrar autenticación a OAuth 2.0 estándar (RFC 6749) con PKCE, refresh token rotation, introspection, revocation
 
 ## Objetivo

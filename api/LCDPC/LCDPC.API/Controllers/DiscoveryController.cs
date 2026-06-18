@@ -17,6 +17,9 @@ public class DiscoveryController(IOAuth2KeyService keyService, OAuth2Options opt
     // GET /.well-known/openid-configuration — OIDC Discovery (RFC 8414)
     // ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Returns the OpenID Connect discovery document for this authorization server.
+    /// </summary>
     [HttpGet("openid-configuration")]
     [ProducesResponseType(typeof(OpenIdConfigurationResponse), StatusCodes.Status200OK)]
     [Produces("application/json")]
@@ -48,6 +51,9 @@ public class DiscoveryController(IOAuth2KeyService keyService, OAuth2Options opt
     // GET /.well-known/jwks.json — JWKS Endpoint (RFC 7517)
     // ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Returns the JSON Web Key Set used to validate RS256 access tokens.
+    /// </summary>
     [HttpGet("jwks.json")]
     [ProducesResponseType(typeof(OAuth2JwksResponse), StatusCodes.Status200OK)]
     [Produces("application/json")]

@@ -26,15 +26,14 @@ public class AuthController(
     IOAuth2TokenService oauth2TokenService,
     IOAuth2ClientService oauth2ClientService,
     AppDbContext dbContext,
-    OAuth2Options oauth2Options,
-    IConfiguration configuration) : ControllerBase
+    OAuth2Options oauth2Options) : ControllerBase
 {
     private const string AccessTokenCookieName = "lcdpc_at";
     private const string RefreshTokenCookieName = "lcdpc_rt";
     private const string GoogleStateCookieName = "lcdpc_google_state";
     private const string LegacyClientId = "lcdpc-web";
     private const string LegacyScope = "openid email profile";
-    private int RefreshTokenTtlDays => int.TryParse(configuration["Auth:RefreshTokenTtlDays"], out var ttlDays) ? ttlDays : 30;
+    private int RefreshTokenTtlDays => oauth2Options.RefreshTokenTtlDays;
 
     // ──────────────────────────────────────────────
     // Deprecation helper
@@ -89,6 +88,14 @@ public class AuthController(
             {
                 code = "EMAIL_ALREADY_REGISTERED",
                 message = "email already exists"
+            });
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "OTP_COOLDOWN_ACTIVE")
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                code = "OTP_COOLDOWN_ACTIVE",
+                message = "otp cooldown is active"
             });
         }
     }
@@ -320,6 +327,10 @@ public class AuthController(
         catch (InvalidOperationException ex) when (ex.Message == "GOOGLE_OAUTH_CODE_INVALID")
         {
             return Unauthorized(new { code = "GOOGLE_OAUTH_CODE_INVALID", message = "oauth code is invalid" });
+        }
+        catch (InvalidOperationException ex) when (ex.Message == "EMAIL_ALREADY_REGISTERED")
+        {
+            return Conflict(new { code = "EMAIL_ALREADY_REGISTERED", message = "email already exists" });
         }
     }
 

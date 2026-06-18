@@ -1,8 +1,10 @@
 using LCDPC.Application.Users.Auth;
+using LCDPC.Infrastructure.OAuth2;
 using LCDPC.Domain.Entities.Users;
 using LCDPC.Infrastructure.Persistence;
 using LCDPC.Infrastructure.Users.Auth;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LCDPC.Architecture.Tests;
 
@@ -113,18 +115,10 @@ public class RegistrationFlowServiceSecurityPolicyTests
             dbContext,
             new AuthSecurityOptions
             {
-                AccessTokenTtlMinutes = 60,
-                RefreshTokenTtlDays = 30,
                 PasswordResetTtlMinutes = 30,
                 RevokeSessionsOnPasswordReset = true
             },
-            new GoogleOAuthOptions(),
-            new JwtTokenOptions
-            {
-                Issuer = "LCDPC.API",
-                Audience = "LCDPC.Web",
-                SigningKey = "CHANGE-ME-WITH-AT-LEAST-32-CHARS-DEV-ONLY"
-            });
+            new GoogleOAuthOptions());
     }
 
     private static AppDbContext BuildDbContext()

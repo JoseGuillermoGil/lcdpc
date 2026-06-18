@@ -16,12 +16,6 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("LCDPC")
                                ?? "Host=postgres;Port=5432;Database=lcdpc_db;Username=lcdpc;Password=lcdpc123";
 
-        var accessTokenTtlMinutes = int.TryParse(configuration["Auth:AccessTokenTtlMinutes"], out var configuredAccessTokenTtlMinutes)
-            ? configuredAccessTokenTtlMinutes
-            : 60;
-        var refreshTokenTtlDays = int.TryParse(configuration["Auth:RefreshTokenTtlDays"], out var configuredRefreshTokenTtlDays)
-            ? configuredRefreshTokenTtlDays
-            : 30;
         var passwordResetTtlMinutes = int.TryParse(configuration["Auth:PasswordResetTtlMinutes"], out var configuredPasswordResetTtlMinutes)
             ? configuredPasswordResetTtlMinutes
             : 30;
@@ -31,21 +25,9 @@ public static class DependencyInjection
 
         var authOptions = new AuthSecurityOptions
         {
-            AccessTokenTtlMinutes = accessTokenTtlMinutes,
-            RefreshTokenTtlDays = refreshTokenTtlDays,
             PasswordResetTtlMinutes = passwordResetTtlMinutes,
             RevokeSessionsOnPasswordReset = revokeSessionsOnPasswordReset
         };
-
-        if (authOptions.AccessTokenTtlMinutes <= 0)
-        {
-            authOptions.AccessTokenTtlMinutes = 60;
-        }
-
-        if (authOptions.RefreshTokenTtlDays <= 0)
-        {
-            authOptions.RefreshTokenTtlDays = 30;
-        }
 
         if (authOptions.PasswordResetTtlMinutes <= 0)
         {
@@ -62,30 +44,28 @@ public static class DependencyInjection
                 : configuration["Auth:Google:Scope"]!
         };
 
-        var jwtTokenOptions = new JwtTokenOptions
-        {
-            Issuer = string.IsNullOrWhiteSpace(configuration["Auth:Jwt:Issuer"])
-                ? "LCDPC.API"
-                : configuration["Auth:Jwt:Issuer"]!,
-            Audience = string.IsNullOrWhiteSpace(configuration["Auth:Jwt:Audience"])
-                ? "LCDPC.Web"
-                : configuration["Auth:Jwt:Audience"]!,
-            SigningKey = string.IsNullOrWhiteSpace(configuration["Auth:Jwt:SigningKey"])
-                ? "CHANGE-ME-WITH-AT-LEAST-32-CHARS-DEV-ONLY"
-                : configuration["Auth:Jwt:SigningKey"]!
-        };
-
-        if (jwtTokenOptions.SigningKey.Length < 32)
-        {
-            jwtTokenOptions.SigningKey = "CHANGE-ME-WITH-AT-LEAST-32-CHARS-DEV-ONLY";
-        }
-
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
         services.AddSingleton(authOptions);
         services.AddSingleton(googleOAuthOptions);
-        services.AddSingleton(jwtTokenOptions);
 
         // OAuth2 configuration
+        var configuredOAuth2Clients = configuration.GetSection("OAuth2:Clients").Get<List<OAuth2ClientOptions>>() ?? [];
+        if (configuredOAuth2Clients.Count == 0)
+        {
+            configuredOAuth2Clients =
+            [
+                new OAuth2ClientOptions
+                {
+                    ClientId = "lcdpc-web",
+                    ClientName = "LCDPC Web SPA",
+                    RedirectUris = ["http://localhost:4200", "http://localhost:4200/auth/callback"],
+                    GrantTypes = ["authorization_code", "refresh_token"],
+                    RequirePkce = true,
+                    AllowedScopes = "openid email profile admin admin:sedes admin:users"
+                }
+            ];
+        }
+
         var oauth2Options = new OAuth2Options
         {
             Issuer = string.IsNullOrWhiteSpace(configuration["OAuth2:Issuer"])
@@ -104,7 +84,7 @@ public static class DependencyInjection
                 ? acTtl
                 : 10,
             RsaKeyPath = configuration["OAuth2:RsaKeyPath"],
-            Clients = configuration.GetSection("OAuth2:Clients").Get<List<OAuth2ClientOptions>>() ?? []
+            Clients = configuredOAuth2Clients
         };
 
         services.AddSingleton(oauth2Options);

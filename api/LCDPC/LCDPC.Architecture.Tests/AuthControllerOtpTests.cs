@@ -7,21 +7,20 @@ using LCDPC.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace LCDPC.Architecture.Tests;
 
 public class AuthControllerOtpTests
 {
     [Fact]
-    public async Task StartRegistration_ReturnsOtpPolicy_5Attempts_10MinutesTtl_10MinutesCooldown()
+    public async Task StartRegistration_ReturnsOtpPolicy_5Attempts_2MinutesTtl_10MinutesCooldown()
     {
         var fakeService = new FakeRegistrationFlowService
         {
             OnStartAsync = _ => Task.FromResult(new StartRegistrationResponse(
                 Guid.NewGuid(),
                 "pending_email_verification",
-                new OtpPolicyResponse(10, 5, 10)))
+                new OtpPolicyResponse(2, 5, 10)))
         };
         var controller = CreateController(fakeService);
 
@@ -29,7 +28,7 @@ public class AuthControllerOtpTests
 
         var accepted = Assert.IsType<AcceptedResult>(result);
         var payload = Assert.IsType<StartRegistrationResponse>(accepted.Value);
-        Assert.Equal(10, payload.OtpPolicy.TtlMinutes);
+        Assert.Equal(2, payload.OtpPolicy.TtlMinutes);
         Assert.Equal(5, payload.OtpPolicy.MaxAttempts);
         Assert.Equal(10, payload.OtpPolicy.CooldownMinutes);
     }
@@ -87,13 +86,6 @@ public class AuthControllerOtpTests
 
     private static AuthController CreateController(IRegistrationFlowService service)
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Auth:RefreshTokenTtlDays"] = "30"
-            })
-            .Build();
-
         var oauth2Options = new OAuth2Options
         {
             Issuer = "http://localhost:8080",
@@ -119,8 +111,7 @@ public class AuthControllerOtpTests
             tokenService,
             clientService,
             dbContext,
-            oauth2Options,
-            configuration)
+            oauth2Options)
         {
             ControllerContext = new ControllerContext
             {

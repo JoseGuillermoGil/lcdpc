@@ -415,7 +415,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(x => x.OtpAttempts).IsRequired();
             entity.Property(x => x.CreatedAtUtc).IsRequired();
             entity.Property(x => x.UpdatedAtUtc).IsRequired();
-            entity.HasIndex(x => x.Email);
+            entity.HasIndex(x => x.Email).IsUnique();
         });
 
         modelBuilder.Entity<OAuth2Client>(entity =>

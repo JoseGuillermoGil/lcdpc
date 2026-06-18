@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text;
 using System.IdentityModel.Tokens.Jwt;
 using LCDPC.API.Security;
 using LCDPC.Application;
@@ -11,27 +10,16 @@ using LCDPC.Infrastructure.Persistence;
 using LCDPC.Infrastructure.Users.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 var allowedCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-var jwtIssuer = string.IsNullOrWhiteSpace(builder.Configuration["Auth:Jwt:Issuer"])
-    ? "LCDPC.API"
-    : builder.Configuration["Auth:Jwt:Issuer"]!;
-var jwtAudience = string.IsNullOrWhiteSpace(builder.Configuration["Auth:Jwt:Audience"])
-    ? "LCDPC.Web"
-    : builder.Configuration["Auth:Jwt:Audience"]!;
-var jwtSigningKey = string.IsNullOrWhiteSpace(builder.Configuration["Auth:Jwt:SigningKey"])
-    ? "CHANGE-ME-WITH-AT-LEAST-32-CHARS-DEV-ONLY"
-    : builder.Configuration["Auth:Jwt:SigningKey"]!;
-
-if (jwtSigningKey.Length < 32)
-{
-    jwtSigningKey = "CHANGE-ME-WITH-AT-LEAST-32-CHARS-DEV-ONLY";
-}
-
-var jwtSecurityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey));
+var oauth2Issuer = string.IsNullOrWhiteSpace(builder.Configuration["OAuth2:Issuer"])
+    ? "http://localhost:8080"
+    : builder.Configuration["OAuth2:Issuer"]!;
+var oauth2Audience = string.IsNullOrWhiteSpace(builder.Configuration["OAuth2:Audience"])
+    ? "lcdpc-api"
+    : builder.Configuration["OAuth2:Audience"]!;
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
@@ -45,14 +33,14 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.TokenValidationParameters = new TokenValidationParameters
+        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = jwtIssuer,
+            ValidIssuer = oauth2Issuer,
             ValidateAudience = true,
-            ValidAudience = jwtAudience,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = jwtSecurityKey,
+            ValidAudience = oauth2Audience,
+            // Signature validation is handled in OAuth2JwtBearerEvents via IOAuth2TokenService (RS256/JWKS).
+            ValidateIssuerSigningKey = false,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30)
         };
@@ -89,13 +77,24 @@ using (var scope = app.Services.CreateScope())
         superUserPassword = "SuperPerro123!";
     }
 
-    await SuperUserSeeder.SeedAsync(dbContext, superUserPassword);
+    var superUserSeed = new SuperUserSeeder.SuperUserSeedOptions(
+        Alias: app.Configuration["Auth:SuperUserAlias"] ?? "admin_inicial",
+        Email: app.Configuration["Auth:SuperUserEmail"] ?? "admin@lcdpc.local",
+        FirstName: app.Configuration["Auth:SuperUserFirstName"] ?? "Admin",
+        LastName: app.Configuration["Auth:SuperUserLastName"] ?? "Inicial",
+        IdentityDocument: app.Configuration["Auth:SuperUserIdentityDocument"] ?? "V00000001",
+        WhatsAppPhone: app.Configuration["Auth:SuperUserWhatsAppPhone"] ?? "0000000000",
+        FullAddress: app.Configuration["Auth:SuperUserFullAddress"] ?? "Usuario administrador inicial");
+
+    await SuperUserSeeder.SeedAsync(dbContext, superUserPassword, superUserSeed);
     await OAuth2ClientSeeder.SeedAsync(dbContext);
+
+    var keyService = scope.ServiceProvider.GetRequiredService<IOAuth2KeyService>();
+    _ = keyService.GetJwks();
 }
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
     app.MapScalarApiReference();
 }
 
@@ -114,5 +113,10 @@ app.MapGet("/", () => Results.Ok(new
     service = "LCDPC.API",
     status = "ok"
 }));
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
 
 app.Run();

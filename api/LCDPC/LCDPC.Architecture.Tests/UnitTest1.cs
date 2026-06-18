@@ -1,8 +1,12 @@
 ﻿using LCDPC.API.Controllers;
+using LCDPC.Application.OAuth2;
 using LCDPC.Application.Users.Auth;
+using LCDPC.Domain.Entities.OAuth2;
+using LCDPC.Infrastructure.OAuth2;
+using LCDPC.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 
 namespace LCDPC.Architecture.Tests;
 
@@ -71,14 +75,28 @@ public class AuthControllerGoogleTests
 
     private static AuthController CreateController(IRegistrationFlowService service)
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Auth:RefreshTokenTtlDays"] = "30"
-            })
-            .Build();
+        var oauth2Options = new OAuth2Options
+        {
+            Issuer = "http://localhost:8080",
+            Audience = "lcdpc-api",
+            AccessTokenTtlMinutes = 60,
+            RefreshTokenTtlDays = 30,
+            AuthorizationCodeTtlMinutes = 10,
+            Clients = []
+        };
 
-        return new AuthController(service, configuration)
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseInMemoryDatabase(databaseName: $"lcdpc_google_test_{Guid.NewGuid()}")
+            .Options;
+        var dbContext = new AppDbContext(options);
+
+        return new AuthController(
+            service,
+            new FakeOAuth2AuthorizationService(),
+            new FakeOAuth2TokenService(),
+            new FakeOAuth2ClientService(),
+            dbContext,
+            oauth2Options)
         {
             ControllerContext = new ControllerContext
             {
@@ -123,5 +141,37 @@ public class AuthControllerGoogleTests
 
             return OnCompleteGoogleRegistrationAsync(code);
         }
+    }
+
+    private sealed class FakeOAuth2TokenService : IOAuth2TokenService
+    {
+        public Task<string> GenerateAccessTokenAsync(Guid userId, string clientId, string scope, CancellationToken ct = default)
+            => Task.FromResult("fake-access-token");
+        public Task<(string token, string hash)> GenerateRefreshTokenAsync(CancellationToken ct = default)
+            => Task.FromResult(("fake-refresh-token", "fake-hash"));
+        public Task<bool> ValidateAccessTokenAsync(string token, CancellationToken ct = default)
+            => Task.FromResult(true);
+    }
+
+    private sealed class FakeOAuth2ClientService : IOAuth2ClientService
+    {
+        public Task<OAuth2Client?> GetClientAsync(string clientId, CancellationToken ct = default)
+            => Task.FromResult<OAuth2Client?>(null);
+        public bool ValidateRedirectUri(OAuth2Client client, string redirectUri) => true;
+        public bool ValidateScopes(OAuth2Client client, string requestedScopes) => true;
+    }
+
+    private sealed class FakeOAuth2AuthorizationService : IOAuth2AuthorizationService
+    {
+        public Task<OAuth2AuthorizeResult> AuthorizeAsync(OAuth2AuthorizeRequest request, Guid? userId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+        public Task<OAuth2TokenResponse?> ExchangeCodeAsync(string code, string codeVerifier, string redirectUri, string clientId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+        public Task<OAuth2TokenResponse?> RefreshTokenAsync(string refreshToken, string clientId, CancellationToken ct = default)
+            => throw new NotImplementedException();
+        public Task<OAuth2RevokeResponse> RevokeTokenAsync(string token, CancellationToken ct = default)
+            => Task.FromResult(new OAuth2RevokeResponse(true));
+        public Task<OAuth2IntrospectResponse> IntrospectTokenAsync(string token, CancellationToken ct = default)
+            => throw new NotImplementedException();
     }
 }

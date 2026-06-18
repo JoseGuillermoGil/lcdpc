@@ -91,10 +91,7 @@ public interface IRegistrationFlowService
     Task<StartRegistrationResponse> StartAsync(string email, CancellationToken cancellationToken = default);
     Task<VerifyEmailRegistrationResponse> VerifyEmailAsync(Guid flowId, string otp, CancellationToken cancellationToken = default);
     Task<CompleteProfileRegistrationResponse> CompleteProfileAsync(CompleteProfileRegistrationRequest request, CancellationToken cancellationToken = default);
-    Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken cancellationToken = default);
     Task<MeResponse> MeAsync(string? accessToken, CancellationToken cancellationToken = default);
-    Task<RefreshSessionResponse> RefreshAsync(string? refreshToken, CancellationToken cancellationToken = default);
-    Task LogoutAsync(string? refreshToken, CancellationToken cancellationToken = default);
     Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request, string? ipAddress, CancellationToken cancellationToken = default);
     Task<ResetPasswordResponse> ResetPasswordAsync(ResetPasswordRequest request, string? ipAddress, CancellationToken cancellationToken = default);
     Task<AuthSecurityPolicyResponse> GetSecurityPolicyAsync(CancellationToken cancellationToken = default);

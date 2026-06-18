@@ -48,13 +48,15 @@ Definir autenticación, autorización y gestión de usuarios/roles para separar 
 - Iniciar sesión / cerrar sesión.
 - Recuperar acceso.
 - Mantener sesión segura con expiración configurable.
-- **OAuth 2.0 Authorization Code Flow con PKCE** para la web SPA (reemplaza cookies `httpOnly` con tokens OAuth 2.0).
+- **OAuth 2.0 Authorization Code Flow con PKCE** como modelo canónico para la web SPA.
 - **Authorization Code** (opaco, TTL 10 min, PKCE S256 binding) emitido por `/oauth2/authorize`.
 - **Access Token** (JWT RS256) intercambiado via `POST /oauth2/token`.
 - **Refresh Token** (opaco, rotación obligatoria, detección de token theft via family_id).
 - **Introspection** via `POST /oauth2/introspect` para validar tokens.
 - **Revocation** via `POST /oauth2/revoke` para cerrar sesión.
-- Web mantiene access token en memoria y refresh token en cookie `httpOnly` (`lcdpc_rt`).
+- Durante la transición, los endpoints `/api/v1/auth/*` siguen funcionando como capa de compatibilidad para el frontend actual.
+- El frontend objetivo mantiene access token en memoria y refresh token en cookie `httpOnly` (`lcdpc_rt`).
+- Mientras exista la capa de compatibilidad, `/api/v1/auth/login`, `/api/v1/auth/refresh` y `/api/v1/auth/logout` siguen pudiendo emitir/rotar cookies `lcdpc_at` y `lcdpc_rt`.
 - Frontend hidrata estado de sesión mediante `GET /auth/me` con `UserSummary + permissions`.
 - Flujo de `olvido de contraseña` para clientes enviando enlace/código al correo afiliado de la cuenta.
 - Para administradores, el reinicio de credenciales se gestiona desde módulo administrativo de refrescamiento de admins (no autoservicio directo).
@@ -120,7 +122,7 @@ Definir autenticación, autorización y gestión de usuarios/roles para separar 
 ## No funcionales
 
 - Contraseñas cifradas con algoritmo robusto.
-- Tokens con expiración y rotación.
+- Tokens con expiración, rotación y revocación por familia.
 - Logs de seguridad para intentos fallidos y cambios de privilegios.
 - Preparado para 2FA en roadmap.
 

@@ -31,6 +31,18 @@ public class OAuth2Controller(
     // GET /oauth2/authorize — Authorization Endpoint (RFC 6749 §4.1.1)
     // ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Starts the OAuth 2.0 authorization flow and returns a redirect with an authorization code when the request is valid.
+    /// </summary>
+    /// <param name="client_id">Registered OAuth2 client identifier.</param>
+    /// <param name="redirect_uri">Allowed callback URI for the client.</param>
+    /// <param name="response_type">OAuth2 response type. Only <c>code</c> is supported.</param>
+    /// <param name="scope">Requested scopes separated by spaces.</param>
+    /// <param name="state">Opaque client state echoed back on redirect.</param>
+    /// <param name="code_challenge">PKCE code challenge for public clients.</param>
+    /// <param name="code_challenge_method">PKCE method. Only <c>S256</c> is supported.</param>
+    /// <param name="provider">Optional upstream provider. Use <c>google</c> to start with Google OAuth.</param>
+    /// <param name="ct">Request cancellation token.</param>
     [HttpGet("authorize")]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -190,6 +202,16 @@ public class OAuth2Controller(
     // Content-Type: application/x-www-form-urlencoded
     // ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Exchanges an authorization code or refresh token for an OAuth2 token pair.
+    /// </summary>
+    /// <param name="grant_type">OAuth2 grant type. Supported values: <c>authorization_code</c>, <c>refresh_token</c>.</param>
+    /// <param name="code">Opaque authorization code returned by <c>/oauth2/authorize</c>.</param>
+    /// <param name="redirect_uri">Redirect URI used in the authorization request.</param>
+    /// <param name="code_verifier">PKCE verifier paired with the original code challenge.</param>
+    /// <param name="refresh_token">Opaque refresh token for rotation.</param>
+    /// <param name="client_id">Registered OAuth2 client identifier.</param>
+    /// <param name="ct">Request cancellation token.</param>
     [HttpPost("token")]
     [Consumes("application/x-www-form-urlencoded")]
     [ProducesResponseType(typeof(OAuth2TokenResponse), StatusCodes.Status200OK)]
@@ -247,6 +269,12 @@ public class OAuth2Controller(
     // Content-Type: application/x-www-form-urlencoded
     // ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Returns the active state and metadata of an access token or refresh token.
+    /// </summary>
+    /// <param name="token">Access token or refresh token to inspect.</param>
+    /// <param name="token_type_hint">Optional token type hint: <c>access_token</c> or <c>refresh_token</c>.</param>
+    /// <param name="ct">Request cancellation token.</param>
     [HttpPost("introspect")]
     [Consumes("application/x-www-form-urlencoded")]
     [ProducesResponseType(typeof(OAuth2IntrospectResponse), StatusCodes.Status200OK)]
@@ -274,6 +302,12 @@ public class OAuth2Controller(
     // Content-Type: application/x-www-form-urlencoded
     // ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Revokes a refresh token and its token family.
+    /// </summary>
+    /// <param name="token">Refresh token to revoke.</param>
+    /// <param name="token_type_hint">Optional token type hint.</param>
+    /// <param name="ct">Request cancellation token.</param>
     [HttpPost("revoke")]
     [Consumes("application/x-www-form-urlencoded")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -302,6 +336,12 @@ public class OAuth2Controller(
     // Handles the redirect from Google after user authorization.
     // ──────────────────────────────────────────────
 
+    /// <summary>
+    /// Handles the Google OAuth callback and resumes the local OAuth2 authorization flow.
+    /// </summary>
+    /// <param name="code">Authorization code returned by Google.</param>
+    /// <param name="state">Opaque state value used to protect the upstream flow.</param>
+    /// <param name="ct">Request cancellation token.</param>
     [HttpGet("callback/google")]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
