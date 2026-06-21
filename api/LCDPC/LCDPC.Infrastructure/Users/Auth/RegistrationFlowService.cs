@@ -16,7 +16,8 @@ namespace LCDPC.Infrastructure.Users.Auth;
 public sealed class RegistrationFlowService(
     AppDbContext dbContext,
     AuthSecurityOptions authOptions,
-    GoogleOAuthOptions googleOAuthOptions) : IRegistrationFlowService
+    GoogleOAuthOptions googleOAuthOptions,
+    IEmailService emailService) : IRegistrationFlowService
 {
     private const string PendingEmailVerificationStatus = "pending_email_verification";
     private const string PendingProfileStatus = "pending_profile";
@@ -72,6 +73,8 @@ public sealed class RegistrationFlowService(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        await emailService.SendOtpAsync(normalizedEmail, flow.OtpCode, cancellationToken);
 
         return new StartRegistrationResponse(
             flow.Id,
@@ -282,6 +285,8 @@ public sealed class RegistrationFlowService(
                 new { normalizedEmail }));
 
             await dbContext.SaveChangesAsync(cancellationToken);
+
+            await emailService.SendPasswordResetAsync(normalizedEmail, resetToken, cancellationToken);
         }
         else
         {
@@ -297,7 +302,7 @@ public sealed class RegistrationFlowService(
         return new ForgotPasswordResponse(
             "accepted",
             "if the account exists, a reset instruction has been generated",
-            resetToken);
+            null);
     }
 
     public async Task<ResetPasswordResponse> ResetPasswordAsync(ResetPasswordRequest request, string? ipAddress, CancellationToken cancellationToken = default)

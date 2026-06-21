@@ -10,6 +10,7 @@ using LCDPC.Infrastructure.Persistence;
 using LCDPC.Infrastructure.Users.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Resend;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +24,10 @@ var oauth2Audience = string.IsNullOrWhiteSpace(builder.Configuration["OAuth2:Aud
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddResend(options =>
+{
+    options.ApiToken = Environment.GetEnvironmentVariable("RESEND_APITOKEN")!;
+});
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 

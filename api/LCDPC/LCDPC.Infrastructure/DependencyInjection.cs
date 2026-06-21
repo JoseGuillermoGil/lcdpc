@@ -1,3 +1,4 @@
+using LCDPC.Infrastructure.Email;
 using LCDPC.Infrastructure.OAuth2;
 using LCDPC.Infrastructure.Persistence;
 using LCDPC.Infrastructure.Users.Auth;
@@ -103,6 +104,7 @@ public static class DependencyInjection
 
         services.AddHealthChecks().AddDbContextCheck<AppDbContext>("postgres");
         services.AddScoped<IRegistrationFlowService, RegistrationFlowService>();
+        services.AddScoped<IEmailService, ResendEmailService>();
 
         return services;
     }

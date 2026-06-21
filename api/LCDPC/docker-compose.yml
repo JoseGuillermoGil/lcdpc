@@ -52,6 +52,8 @@ services:
       OAuth2__RefreshTokenTtlDays: ${OAUTH2_REFRESH_TOKEN_TTL_DAYS:-30}
       OAuth2__AuthorizationCodeTtlMinutes: ${OAUTH2_AUTHORIZATION_CODE_TTL_MINUTES:-10}
       OAuth2__RsaKeyPath: ${OAUTH2_RSA_KEY_PATH:-}
+      RESEND_APITOKEN: ${RESEND_APITOKEN}
+      RESEND_FROM_ADDRESS: ${RESEND_FROM_ADDRESS:-LCDPC <onboarding@resend.dev>}
     ports:
       - "8080:8080"
 
