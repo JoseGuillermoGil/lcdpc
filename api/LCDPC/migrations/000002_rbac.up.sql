@@ -21,7 +21,8 @@ CREATE TABLE profile_role_assignments (
     profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
     role_id UUID NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
     active BOOLEAN NOT NULL DEFAULT true,
-    created_at_utc TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at_utc TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(profile_id, role_id)
 );
 CREATE INDEX idx_profile_role_assignments_profile_active ON profile_role_assignments (profile_id, active);
 
@@ -57,11 +58,13 @@ INSERT INTO resources (id, code) VALUES
     ('66666666-0000-0000-0000-000000000028', 'rbac:profile:view'),
     ('66666666-0000-0000-0000-000000000029', 'rbac:profile:update'),
     ('66666666-0000-0000-0000-000000000030', 'rbac:profile:delete'),
-    ('66666666-0000-0000-0000-000000000031', 'rbac:user:update');
+    ('66666666-0000-0000-0000-000000000031', 'rbac:user:update')
+ON CONFLICT (id) DO NOTHING;
 
 -- Seed role_resources: admin_global gets ALL resources
 INSERT INTO role_resources (role_id, resource_id)
-SELECT '33333333-3333-3333-3333-333333333333', id FROM resources;
+SELECT '33333333-3333-3333-3333-333333333333', id FROM resources
+ON CONFLICT (role_id, resource_id) DO NOTHING;
 
 -- Seed role_resources: admin_sede gets product/combo/price/sede CRUD (no rbac, no security-policy)
 INSERT INTO role_resources (role_id, resource_id)
@@ -71,19 +74,18 @@ WHERE code IN (
     'combo:create', 'combo:view', 'combo:update', 'combo:delete', 'combo:publish', 'combo:pause',
     'price:create', 'price:view', 'price:update', 'price:delete',
     'sede:create', 'sede:view'
-);
+)
+ON CONFLICT (role_id, resource_id) DO NOTHING;
 
 -- Seed role_resources: cliente gets view-only
 INSERT INTO role_resources (role_id, resource_id)
 SELECT '11111111-1111-1111-1111-111111111111', id FROM resources
-WHERE code IN ('product:view', 'combo:view', 'price:view', 'sede:view');
+WHERE code IN ('product:view', 'combo:view', 'price:view', 'sede:view')
+ON CONFLICT (role_id, resource_id) DO NOTHING;
 
 -- Migrate user_role_assignments → profile_role_assignments
 INSERT INTO profile_role_assignments (profile_id, role_id, active, created_at_utc)
 SELECT p.id, ura.role_id, ura.active, ura.created_at_utc
 FROM user_role_assignments ura
 JOIN profiles p ON p.user_id = ura.user_id
-WHERE NOT EXISTS (
-    SELECT 1 FROM profile_role_assignments pra
-    WHERE pra.profile_id = p.id AND pra.role_id = ura.role_id
-);
+ON CONFLICT (profile_id, role_id) DO NOTHING;

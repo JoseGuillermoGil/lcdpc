@@ -306,7 +306,7 @@ func (s *Service) AssignRoleToProfile(ctx context.Context, profileID uuid.UUID, 
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO profile_role_assignments (id, profile_id, role_id, active, created_at_utc)
 		VALUES ($1, $2, $3, true, now())
-		ON CONFLICT DO NOTHING
+		ON CONFLICT (profile_id, role_id) DO NOTHING
 	`, uuid.New(), profileID, req.RoleID)
 	if err != nil {
 		return fmt.Errorf("assign role: %w", err)
