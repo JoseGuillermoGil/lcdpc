@@ -8,7 +8,7 @@ import (
 
 type Order struct {
 	ID           uuid.UUID     `json:"id"`
-	SedeID       uuid.UUID     `json:"sede_id"`
+	BranchID     uuid.UUID     `json:"branch_id"`
 	ClientUserID uuid.UUID     `json:"client_user_id"`
 	Status       string        `json:"status"`
 	PriceTotal   float64       `json:"price_total"`
@@ -24,8 +24,8 @@ type OrderItem struct {
 	ID          uuid.UUID  `json:"id"`
 	OrderID     uuid.UUID  `json:"order_id"`
 	ItemType    string     `json:"item_type"`
-	ProductoID  *uuid.UUID `json:"producto_id"`
-	ComboID     *uuid.UUID `json:"combo_id"`
+	ProductID   *uuid.UUID `json:"product_id"`
+	BundleID    *uuid.UUID `json:"bundle_id"`
 	Quantity    float64    `json:"quantity"`
 	UnitPrice   float64    `json:"unit_price"`
 	Subtotal    float64    `json:"subtotal"`
@@ -33,7 +33,7 @@ type OrderItem struct {
 }
 
 type CreateOrderRequest struct {
-	SedeID       uuid.UUID          `json:"sede_id"`
+	BranchID     uuid.UUID          `json:"branch_id"`
 	ClientUserID uuid.UUID          `json:"client_user_id"`
 	Notes        string             `json:"notes"`
 	Items        []CreateOrderItem  `json:"items"`
@@ -41,8 +41,8 @@ type CreateOrderRequest struct {
 
 type CreateOrderItem struct {
 	ItemType   string    `json:"item_type"`
-	ProductoID uuid.UUID `json:"producto_id"`
-	ComboID    uuid.UUID `json:"combo_id"`
+	ProductID  uuid.UUID `json:"product_id"`
+	BundleID   uuid.UUID `json:"bundle_id"`
 	Quantity   float64   `json:"quantity"`
 	UnitPrice  float64   `json:"unit_price"`
 }
@@ -68,7 +68,9 @@ type StatusHistoryEntry struct {
 }
 
 type OrderFilter struct {
-	SedeID       *uuid.UUID
+	BranchID     *uuid.UUID
 	ClientUserID *uuid.UUID
 	Status       *string
+	Limit        *int
+	Offset       *int
 }

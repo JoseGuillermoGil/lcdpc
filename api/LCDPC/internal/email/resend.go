@@ -24,8 +24,8 @@ func (s *ResendSender) SendOtpAsync(ctx context.Context, to, otpCode string) err
 	params := &resend.SendEmailRequest{
 		From:    s.from,
 		To:      []string{to},
-		Subject: "Código de verificación LCDPC",
-		Html:    fmt.Sprintf("<p>Tu código de verificación es: <strong>%s</strong></p><p>Este código expira en 10 minutos.</p>", otpCode),
+		Subject: "LCDPC Verification Code",
+		Html:    fmt.Sprintf("<p>Your verification code is: <strong>%s</strong></p><p>This code expires in 10 minutes.</p>", otpCode),
 	}
 
 	_, err := s.client.Emails.SendWithContext(ctx, params)
@@ -42,8 +42,8 @@ func (s *ResendSender) SendPasswordResetAsync(ctx context.Context, to, resetToke
 	params := &resend.SendEmailRequest{
 		From:    s.from,
 		To:      []string{to},
-		Subject: "Restablecimiento de contraseña LCDPC",
-		Html:    fmt.Sprintf("<p>Usa este token para restablecer tu contraseña: <strong>%s</strong></p><p>Este token expira pronto.</p>", resetToken),
+		Subject: "LCDPC Password Reset",
+		Html:    fmt.Sprintf("<p>Use this token to reset your password: <strong>%s</strong></p><p>This token expires soon.</p>", resetToken),
 	}
 
 	_, err := s.client.Emails.SendWithContext(ctx, params)

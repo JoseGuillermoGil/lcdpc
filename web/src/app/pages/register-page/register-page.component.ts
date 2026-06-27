@@ -355,12 +355,12 @@ export class RegisterPageComponent {
     try {
       await firstValueFrom(this.authApi.completeProfile({
         flowId: this.flowId(),
-        nombres: this.firstName().trim(),
-        apellidos: this.lastName().trim(),
-        documentoIdentidad: `${this.cedulaType()}${this.cedula()}`,
-        rif: this.rif().trim().length > 0 ? `${this.rifType()}${this.rif()}` : null,
-        telefonoWhatsApp: `${this.whatsappPrefix()}${this.whatsapp()}`,
-        direccionCompleta: this.address().trim(),
+        firstName: this.firstName().trim(),
+        lastName: this.lastName().trim(),
+        identityDocument: `${this.cedulaType()}${this.cedula()}`,
+        taxId: this.rif().trim().length > 0 ? `${this.rifType()}${this.rif()}` : null,
+        whatsappPhone: `${this.whatsappPrefix()}${this.whatsapp()}`,
+        fullAddress: this.address().trim(),
         password: this.password()
       }));
 

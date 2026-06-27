@@ -255,19 +255,19 @@ func (s *Service) VerifyEmail(ctx context.Context, flowID uuid.UUID, otp string)
 
 type CompleteProfileRequest struct {
 	FlowID             uuid.UUID `json:"flow_id"`
-	Nombres            string    `json:"nombres"`
-	Apellidos          string    `json:"apellidos"`
-	DocumentoIdentidad string   `json:"documento_identidad"`
-	Rif                string    `json:"rif"`
-	TelefonoWhatsApp   string    `json:"telefono_whatsapp"`
-	DireccionCompleta  string    `json:"direccion_completa"`
+	FirstName          string    `json:"first_name"`
+	LastName           string    `json:"last_name"`
+	IdentityDocument   string    `json:"identity_document"`
+	TaxID              string    `json:"tax_id"`
+	WhatsAppPhone      string    `json:"whatsapp_phone"`
+	FullAddress        string    `json:"full_address"`
 	Password           string    `json:"password"`
 }
 
 type CompleteProfileResponse struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Status   string    `json:"status"`
-	TipoCuenta string  `json:"tipo_cuenta"`
+	UserID      uuid.UUID `json:"user_id"`
+	Status      string    `json:"status"`
+	AccountType string    `json:"account_type"`
 }
 
 func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileRequest) (*CompleteProfileResponse, error) {
@@ -325,16 +325,16 @@ func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileReques
 
 	profileID := uuid.New()
 	_, err = tx.Exec(ctx, `
-		INSERT INTO profiles (id, user_id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
+		INSERT INTO profiles (id, user_id, first_name, last_name, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
-	`, profileID, userID, req.Nombres, req.Apellidos, req.DocumentoIdentidad,
-		nullString(req.Rif), req.TelefonoWhatsApp, req.DireccionCompleta)
+	`, profileID, userID, req.FirstName, req.LastName, req.IdentityDocument,
+		nullString(req.TaxID), req.WhatsAppPhone, req.FullAddress)
 	if err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
 	}
 
 	var clientRoleID uuid.UUID
-	err = tx.QueryRow(ctx, `SELECT id FROM roles WHERE code = 'cliente'`).Scan(&clientRoleID)
+	err = tx.QueryRow(ctx, `SELECT id FROM roles WHERE code = 'client'`).Scan(&clientRoleID)
 	if err != nil {
 		return nil, fmt.Errorf("get client role: %w", err)
 	}
@@ -358,7 +358,7 @@ func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileReques
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
-	return &CompleteProfileResponse{UserID: userID, Status: "activo", TipoCuenta: "cliente"}, nil
+	return &CompleteProfileResponse{UserID: userID, Status: "active", AccountType: "client"}, nil
 }
 
 // Login
@@ -474,8 +474,8 @@ type UserSummary struct {
 	ID               uuid.UUID `json:"id"`
 	Email            string    `json:"email"`
 	DisplayName      string    `json:"display_name"`
-	Estado           string    `json:"estado"`
-	TipoCuenta       string    `json:"tipo_cuenta"`
+	Status           string    `json:"status"`
+	AccountType      string    `json:"account_type"`
 	OnboardingStatus string    `json:"onboarding_status"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
 	ProfileID        string    `json:"profile_id"`
@@ -533,12 +533,12 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 		displayName = *user.FirstName + " * " + *user.LastName
 	}
 
-	estado := "activo"
+	userStatus := "active"
 	switch user.Status {
 	case "Suspended":
-		estado = "suspendido"
+		userStatus = "suspended"
 	case "Deactivated":
-		estado = "desactivado"
+		userStatus = "deactivated"
 	}
 
 	// Get permissions from store
@@ -547,10 +547,10 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 		permissions = []string{}
 	}
 
-	tipoCuenta := "cliente"
+	accountType := "client"
 	for _, code := range permissions {
 		if code == "rbac:resource:create" || code == "rbac:role:create" {
-			tipoCuenta = "administrador"
+			accountType = "administrator"
 			break
 		}
 	}
@@ -566,8 +566,8 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 			ID:               user.ID,
 			Email:            user.Email,
 			DisplayName:      displayName,
-			Estado:           estado,
-			TipoCuenta:       tipoCuenta,
+			Status:           userStatus,
+			AccountType:      accountType,
 			OnboardingStatus: user.OnboardingStatus,
 			EmailVerifiedAt:  user.EmailVerifiedAt,
 			ProfileID:        user.ProfileID.String(),

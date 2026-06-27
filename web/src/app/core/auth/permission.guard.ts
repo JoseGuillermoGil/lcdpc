@@ -8,7 +8,7 @@ export function permissionGuard(...requiredPermissions: string[]): CanActivateFn
     const router = inject(Router);
 
     if (!store.isAuthenticated()) {
-      return router.createUrlTree(['/autenticacion']);
+      return router.createUrlTree(['/login']);
     }
 
     if (store.hasAnyPermission(...requiredPermissions)) {

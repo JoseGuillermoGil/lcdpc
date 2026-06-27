@@ -23,10 +23,10 @@ func APIKeyAuth(pool *pgxpool.Pool) func(http.Handler) http.Handler {
 			hash := sha256.Sum256([]byte(apiKey))
 			tokenHash := hex.EncodeToString(hash[:])
 
-			var exists bool
-			err := pool.QueryRow(r.Context(), `
-				SELECT EXISTS(SELECT 1 FROM api_tokens WHERE token_hash = $1 AND activo = true)
-			`, tokenHash).Scan(&exists)
+		var exists bool
+		err := pool.QueryRow(r.Context(), `
+			SELECT EXISTS(SELECT 1 FROM api_tokens WHERE token_hash = $1 AND is_active = true)
+		`, tokenHash).Scan(&exists)
 			if err != nil || !exists {
 				http.Error(w, `{"status":"error","message":"invalid api key"}`, http.StatusUnauthorized)
 				return

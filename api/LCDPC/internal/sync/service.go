@@ -16,33 +16,33 @@ func NewService(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool}
 }
 
-type SyncProductoRequest struct {
-	ProductoID         uuid.UUID `json:"producto_id"`
-	Nombre             string    `json:"nombre"`
-	Sku                string    `json:"sku"`
-	TipoMedidaBase     string    `json:"tipo_medida_base"`
-	TipoComercialMayor string    `json:"tipo_comercial_mayor"`
-	UnidadesPorCaja    *int      `json:"unidades_por_caja"`
-	UnidadesPorBulto   *int      `json:"unidades_por_bulto"`
-	Activo             bool      `json:"activo"`
+type SyncProductRequest struct {
+	ProductID            uuid.UUID `json:"product_id"`
+	Name                 string    `json:"name"`
+	Sku                  string    `json:"sku"`
+	BaseMeasureType      string    `json:"base_measure_type"`
+	WholesaleCommercialType string `json:"wholesale_commercial_type"`
+	UnitsPerBox          *int      `json:"units_per_box"`
+	UnitsPerBundle       *int      `json:"units_per_bundle"`
+	IsActive             bool      `json:"is_active"`
 }
 
-type SyncComboRequest struct {
-	ComboID            uuid.UUID   `json:"combo_id"`
-	Codigo             string      `json:"codigo"`
-	Nombre             string      `json:"nombre"`
-	Estado             string      `json:"estado"`
-	SedeIdsHabilitadas []uuid.UUID `json:"sede_ids_habilitadas"`
-	PrecioTotal        float64     `json:"precio_total"`
-	PrecioTotalMoneda  string      `json:"precio_total_moneda"`
-	PrecioPromocional  *float64    `json:"precio_promocional"`
-	PrecioPromocionalMoneda *string `json:"precio_promocional_moneda"`
-	Items              []SyncComboItem `json:"items"`
+type SyncBundleRequest struct {
+	BundleID                uuid.UUID      `json:"bundle_id"`
+	Code                    string         `json:"code"`
+	Name                    string         `json:"name"`
+	Status                  string         `json:"status"`
+	EnabledBranchIDs        []uuid.UUID    `json:"enabled_branch_ids"`
+	TotalPrice              float64        `json:"total_price"`
+	TotalPriceCurrency      string         `json:"total_price_currency"`
+	PromotionalPrice        *float64       `json:"promotional_price"`
+	PromotionalPriceCurrency *string       `json:"promotional_price_currency"`
+	Items                   []SyncBundleItem `json:"items"`
 }
 
-type SyncComboItem struct {
-	ProductoID uuid.UUID `json:"producto_id"`
-	Cantidad   float64   `json:"cantidad"`
+type SyncBundleItem struct {
+	ProductID uuid.UUID `json:"product_id"`
+	Quantity  float64   `json:"quantity"`
 }
 
 type SyncResult struct {
@@ -50,7 +50,7 @@ type SyncResult struct {
 	Errors    int `json:"errors"`
 }
 
-func (s *Service) SyncProductos(ctx context.Context, productos []SyncProductoRequest) (*SyncResult, error) {
+func (s *Service) SyncProducts(ctx context.Context, products []SyncProductRequest) (*SyncResult, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
@@ -58,18 +58,18 @@ func (s *Service) SyncProductos(ctx context.Context, productos []SyncProductoReq
 	defer tx.Rollback(ctx)
 
 	result := &SyncResult{}
-	for _, p := range productos {
+	for _, p := range products {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO productos (producto_id, nombre, sku, tipo_medida_base, tipo_comercial_mayor, unidades_por_caja, unidades_por_bulto, activo)
+			INSERT INTO products (product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (sku) DO UPDATE SET
-				nombre = EXCLUDED.nombre,
-				tipo_medida_base = EXCLUDED.tipo_medida_base,
-				tipo_comercial_mayor = EXCLUDED.tipo_comercial_mayor,
-				unidades_por_caja = EXCLUDED.unidades_por_caja,
-				unidades_por_bulto = EXCLUDED.unidades_por_bulto,
-				activo = EXCLUDED.activo
-		`, p.ProductoID, p.Nombre, p.Sku, p.TipoMedidaBase, p.TipoComercialMayor, p.UnidadesPorCaja, p.UnidadesPorBulto, p.Activo)
+				name = EXCLUDED.name,
+				base_measure_type = EXCLUDED.base_measure_type,
+				wholesale_commercial_type = EXCLUDED.wholesale_commercial_type,
+				units_per_box = EXCLUDED.units_per_box,
+				units_per_bundle = EXCLUDED.units_per_bundle,
+				is_active = EXCLUDED.is_active
+		`, p.ProductID, p.Name, p.Sku, p.BaseMeasureType, p.WholesaleCommercialType, p.UnitsPerBox, p.UnitsPerBundle, p.IsActive)
 		if err != nil {
 			result.Errors++
 			continue
@@ -84,7 +84,7 @@ func (s *Service) SyncProductos(ctx context.Context, productos []SyncProductoReq
 	return result, nil
 }
 
-func (s *Service) SyncCombos(ctx context.Context, combos []SyncComboRequest) (*SyncResult, error) {
+func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) (*SyncResult, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
@@ -92,32 +92,32 @@ func (s *Service) SyncCombos(ctx context.Context, combos []SyncComboRequest) (*S
 	defer tx.Rollback(ctx)
 
 	result := &SyncResult{}
-	for _, c := range combos {
+	for _, b := range bundles {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO combos (combo_id, codigo, nombre, estado, sede_ids_habilitadas, precio_total, precio_total_moneda, precio_promocional, precio_promocional_moneda)
+			INSERT INTO bundles (bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			ON CONFLICT (codigo) DO UPDATE SET
-				nombre = EXCLUDED.nombre,
-				estado = EXCLUDED.estado,
-				sede_ids_habilitadas = EXCLUDED.sede_ids_habilitadas,
-				precio_total = EXCLUDED.precio_total,
-				precio_total_moneda = EXCLUDED.precio_total_moneda,
-				precio_promocional = EXCLUDED.precio_promocional,
-				precio_promocional_moneda = EXCLUDED.precio_promocional_moneda
-		`, c.ComboID, c.Codigo, c.Nombre, c.Estado, c.SedeIdsHabilitadas,
-			c.PrecioTotal, c.PrecioTotalMoneda, c.PrecioPromocional, c.PrecioPromocionalMoneda)
+			ON CONFLICT (code) DO UPDATE SET
+				name = EXCLUDED.name,
+				status = EXCLUDED.status,
+				enabled_branch_ids = EXCLUDED.enabled_branch_ids,
+				total_price = EXCLUDED.total_price,
+				total_price_currency = EXCLUDED.total_price_currency,
+				promotional_price = EXCLUDED.promotional_price,
+				promotional_price_currency = EXCLUDED.promotional_price_currency
+		`, b.BundleID, b.Code, b.Name, b.Status, b.EnabledBranchIDs,
+			b.TotalPrice, b.TotalPriceCurrency, b.PromotionalPrice, b.PromotionalPriceCurrency)
 		if err != nil {
 			result.Errors++
 			continue
 		}
 
-		// Replace combo items
-		tx.Exec(ctx, `DELETE FROM combo_items WHERE combo_id = $1`, c.ComboID)
-		for _, item := range c.Items {
+		// Replace bundle items
+		tx.Exec(ctx, `DELETE FROM bundle_items WHERE bundle_id = $1`, b.BundleID)
+		for _, item := range b.Items {
 			_, err := tx.Exec(ctx, `
-				INSERT INTO combo_items (id, combo_id, producto_id, cantidad)
+				INSERT INTO bundle_items (id, bundle_id, product_id, quantity)
 				VALUES ($1, $2, $3, $4)
-			`, uuid.New(), c.ComboID, item.ProductoID, item.Cantidad)
+			`, uuid.New(), b.BundleID, item.ProductID, item.Quantity)
 			if err != nil {
 				result.Errors++
 			}

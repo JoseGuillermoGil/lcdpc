@@ -6,8 +6,8 @@ export interface UserSummary {
   id: string;
   email: string;
   displayName: string;
-  estado: string;
-  tipoCuenta: string;
+  status: string;
+  accountType: string;
   onboardingStatus: string;
   emailVerifiedAt: string | null;
   profileId: string;
@@ -19,8 +19,8 @@ interface MeGoData {
     id: string;
     email: string;
     display_name: string;
-    estado: string;
-    tipo_cuenta: string;
+    status: string;
+    account_type: string;
     onboarding_status: string;
     email_verified_at: string | null;
     profile_id: string;
@@ -130,8 +130,8 @@ export class AuthStore {
       id: data.user.id,
       email: data.user.email,
       displayName: data.user.display_name,
-      estado: data.user.estado,
-      tipoCuenta: data.user.tipo_cuenta,
+      status: data.user.status,
+      accountType: data.user.account_type,
       onboardingStatus: data.user.onboarding_status,
       emailVerifiedAt: data.user.email_verified_at,
       profileId: data.user.profile_id,

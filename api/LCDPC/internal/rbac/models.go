@@ -49,7 +49,7 @@ type ProfileResponse struct {
 	FirstName        string      `json:"first_name"`
 	LastName         string      `json:"last_name"`
 	IdentityDocument string      `json:"identity_document"`
-	Rif              *string     `json:"rif"`
+	TaxID            *string     `json:"tax_id"`
 	WhatsAppPhone    string      `json:"whatsapp_phone"`
 	FullAddress      string      `json:"full_address"`
 	Roles            []RoleEntry `json:"roles"`
@@ -61,7 +61,7 @@ type CreateProfileRequest struct {
 	FirstName        string  `json:"first_name"`
 	LastName         string  `json:"last_name"`
 	IdentityDocument string  `json:"identity_document"`
-	Rif              *string `json:"rif"`
+	TaxID            *string `json:"tax_id"`
 	WhatsAppPhone    string  `json:"whatsapp_phone"`
 	FullAddress      string  `json:"full_address"`
 }
@@ -70,7 +70,7 @@ type UpdateProfileRequest struct {
 	FirstName        string  `json:"first_name"`
 	LastName         string  `json:"last_name"`
 	IdentityDocument string  `json:"identity_document"`
-	Rif              *string `json:"rif"`
+	TaxID            *string `json:"tax_id"`
 	WhatsAppPhone    string  `json:"whatsapp_phone"`
 	FullAddress      string  `json:"full_address"`
 }

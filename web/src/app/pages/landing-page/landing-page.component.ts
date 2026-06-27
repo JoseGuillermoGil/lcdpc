@@ -163,7 +163,7 @@ export class LandingPageComponent {
   }
 
   protected goToAdvancedSearch(query: string): void {
-    this.router.navigate(['/busqueda'], {
+    this.router.navigate(['/search'], {
       queryParams: query ? { q: query } : {}
     });
   }

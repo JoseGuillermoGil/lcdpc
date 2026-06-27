@@ -212,7 +212,7 @@ func (s *Service) RemoveResourceFromRole(ctx context.Context, roleID, resourceID
 
 func (s *Service) ListProfiles(ctx context.Context) ([]ProfileResponse, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, user_id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc
+		SELECT id, user_id, first_name, last_name, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc, updated_at_utc
 		FROM profiles ORDER BY created_at_utc DESC
 	`)
 	if err != nil {
@@ -224,7 +224,7 @@ func (s *Service) ListProfiles(ctx context.Context) ([]ProfileResponse, error) {
 	for rows.Next() {
 		var p ProfileResponse
 		if err := rows.Scan(&p.ID, &p.UserID, &p.FirstName, &p.LastName, &p.IdentityDocument,
-			&p.Rif, &p.WhatsAppPhone, &p.FullAddress, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			&p.TaxID, &p.WhatsAppPhone, &p.FullAddress, &p.CreatedAt, &p.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan profile: %w", err)
 		}
 		p.Roles, _ = s.getRolesForProfile(ctx, p.ID)
@@ -236,10 +236,10 @@ func (s *Service) ListProfiles(ctx context.Context) ([]ProfileResponse, error) {
 func (s *Service) GetProfile(ctx context.Context, id uuid.UUID) (*ProfileResponse, error) {
 	var p ProfileResponse
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, user_id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc
+		SELECT id, user_id, first_name, last_name, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc, updated_at_utc
 		FROM profiles WHERE id = $1
 	`, id).Scan(&p.ID, &p.UserID, &p.FirstName, &p.LastName, &p.IdentityDocument,
-		&p.Rif, &p.WhatsAppPhone, &p.FullAddress, &p.CreatedAt, &p.UpdatedAt)
+		&p.TaxID, &p.WhatsAppPhone, &p.FullAddress, &p.CreatedAt, &p.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("PROFILE_NOT_FOUND")
 	}
@@ -253,12 +253,12 @@ func (s *Service) GetProfile(ctx context.Context, id uuid.UUID) (*ProfileRespons
 func (s *Service) CreateProfile(ctx context.Context, req CreateProfileRequest) (*ProfileResponse, error) {
 	var p ProfileResponse
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO profiles (id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
+		INSERT INTO profiles (id, first_name, last_name, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())
-		RETURNING id, user_id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc
-	`, uuid.New(), req.FirstName, req.LastName, req.IdentityDocument, req.Rif, req.WhatsAppPhone, req.FullAddress).Scan(
+		RETURNING id, user_id, first_name, last_name, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc, updated_at_utc
+	`, uuid.New(), req.FirstName, req.LastName, req.IdentityDocument, req.TaxID, req.WhatsAppPhone, req.FullAddress).Scan(
 		&p.ID, &p.UserID, &p.FirstName, &p.LastName, &p.IdentityDocument,
-		&p.Rif, &p.WhatsAppPhone, &p.FullAddress, &p.CreatedAt, &p.UpdatedAt,
+		&p.TaxID, &p.WhatsAppPhone, &p.FullAddress, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
@@ -270,13 +270,13 @@ func (s *Service) CreateProfile(ctx context.Context, req CreateProfileRequest) (
 func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, req UpdateProfileRequest) (*ProfileResponse, error) {
 	var p ProfileResponse
 	err := s.pool.QueryRow(ctx, `
-		UPDATE profiles SET first_name = $2, last_name = $3, identity_document = $4, rif = $5,
+		UPDATE profiles SET first_name = $2, last_name = $3, identity_document = $4, tax_id = $5,
 		whatsapp_phone = $6, full_address = $7, updated_at_utc = now()
 		WHERE id = $1
-		RETURNING id, user_id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc
-	`, id, req.FirstName, req.LastName, req.IdentityDocument, req.Rif, req.WhatsAppPhone, req.FullAddress).Scan(
+		RETURNING id, user_id, first_name, last_name, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc, updated_at_utc
+	`, id, req.FirstName, req.LastName, req.IdentityDocument, req.TaxID, req.WhatsAppPhone, req.FullAddress).Scan(
 		&p.ID, &p.UserID, &p.FirstName, &p.LastName, &p.IdentityDocument,
-		&p.Rif, &p.WhatsAppPhone, &p.FullAddress, &p.CreatedAt, &p.UpdatedAt,
+		&p.TaxID, &p.WhatsAppPhone, &p.FullAddress, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("PROFILE_NOT_FOUND")

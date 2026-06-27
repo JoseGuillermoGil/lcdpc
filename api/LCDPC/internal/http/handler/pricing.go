@@ -9,22 +9,22 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
 )
 
-type ProductoHandler struct {
+type ProductHandler struct {
 	svc *pricing.Service
 }
 
-func NewProductoHandler(svc *pricing.Service) *ProductoHandler {
-	return &ProductoHandler{svc: svc}
+func NewProductHandler(svc *pricing.Service) *ProductHandler {
+	return &ProductHandler{svc: svc}
 }
 
-func (h *ProductoHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req pricing.CreateProductoRequest
+func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req pricing.CreateProductRequest
 	if err := response.Decode(r, &req); err != nil {
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
 		return
 	}
 
-	result, err := h.svc.CreateProducto(r.Context(), req)
+	result, err := h.svc.CreateProduct(r.Context(), req)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -33,7 +33,7 @@ func (h *ProductoHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, result)
 }
 
-func (h *ProductoHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -41,7 +41,7 @@ func (h *ProductoHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.GetProductoByID(r.Context(), id)
+	result, err := h.svc.GetProductByID(r.Context(), id)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
@@ -50,8 +50,8 @@ func (h *ProductoHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *ProductoHandler) List(w http.ResponseWriter, r *http.Request) {
-	result, err := h.svc.ListProductos(r.Context())
+func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
+	result, err := h.svc.ListProducts(r.Context())
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -60,7 +60,7 @@ func (h *ProductoHandler) List(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *ProductoHandler) Update(w http.ResponseWriter, r *http.Request) {
+func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -68,13 +68,13 @@ func (h *ProductoHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req pricing.CreateProductoRequest
+	var req pricing.CreateProductRequest
 	if err := response.Decode(r, &req); err != nil {
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
 		return
 	}
 
-	result, err := h.svc.UpdateProducto(r.Context(), id, req)
+	result, err := h.svc.UpdateProduct(r.Context(), id, req)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -83,7 +83,7 @@ func (h *ProductoHandler) Update(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *ProductoHandler) Delete(w http.ResponseWriter, r *http.Request) {
+func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -91,7 +91,7 @@ func (h *ProductoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.DeleteProducto(r.Context(), id); err != nil {
+	if err := h.svc.DeleteProduct(r.Context(), id); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -99,24 +99,24 @@ func (h *ProductoHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, map[string]string{"status": "deleted"})
 }
 
-// Combo Handler
+// Bundle Handler
 
-type ComboHandler struct {
+type BundleHandler struct {
 	svc *pricing.Service
 }
 
-func NewComboHandler(svc *pricing.Service) *ComboHandler {
-	return &ComboHandler{svc: svc}
+func NewBundleHandler(svc *pricing.Service) *BundleHandler {
+	return &BundleHandler{svc: svc}
 }
 
-func (h *ComboHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req pricing.CreateComboRequest
+func (h *BundleHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req pricing.CreateBundleRequest
 	if err := response.Decode(r, &req); err != nil {
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
 		return
 	}
 
-	result, err := h.svc.CreateCombo(r.Context(), req)
+	result, err := h.svc.CreateBundle(r.Context(), req)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -125,7 +125,7 @@ func (h *ComboHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, result)
 }
 
-func (h *ComboHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+func (h *BundleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -133,7 +133,7 @@ func (h *ComboHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.GetComboByID(r.Context(), id)
+	result, err := h.svc.GetBundleByID(r.Context(), id)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
@@ -142,8 +142,8 @@ func (h *ComboHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *ComboHandler) List(w http.ResponseWriter, r *http.Request) {
-	result, err := h.svc.ListCombos(r.Context())
+func (h *BundleHandler) List(w http.ResponseWriter, r *http.Request) {
+	result, err := h.svc.ListBundles(r.Context())
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -152,7 +152,7 @@ func (h *ComboHandler) List(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *ComboHandler) Update(w http.ResponseWriter, r *http.Request) {
+func (h *BundleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -160,13 +160,13 @@ func (h *ComboHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req pricing.CreateComboRequest
+	var req pricing.CreateBundleRequest
 	if err := response.Decode(r, &req); err != nil {
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
 		return
 	}
 
-	result, err := h.svc.UpdateCombo(r.Context(), id, req)
+	result, err := h.svc.UpdateBundle(r.Context(), id, req)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -175,7 +175,7 @@ func (h *ComboHandler) Update(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *ComboHandler) Delete(w http.ResponseWriter, r *http.Request) {
+func (h *BundleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -183,7 +183,7 @@ func (h *ComboHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.DeleteCombo(r.Context(), id); err != nil {
+	if err := h.svc.DeleteBundle(r.Context(), id); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -191,7 +191,7 @@ func (h *ComboHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, map[string]string{"status": "deleted"})
 }
 
-func (h *ComboHandler) Publicar(w http.ResponseWriter, r *http.Request) {
+func (h *BundleHandler) Publish(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -199,15 +199,15 @@ func (h *ComboHandler) Publicar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.UpdateComboEstado(r.Context(), id, "Publicado"); err != nil {
+	if err := h.svc.UpdateBundleStatus(r.Context(), id, "Published"); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.Success(w, map[string]string{"status": "Publicado"})
+	response.Success(w, map[string]string{"status": "Published"})
 }
 
-func (h *ComboHandler) Pausar(w http.ResponseWriter, r *http.Request) {
+func (h *BundleHandler) Pause(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -215,32 +215,32 @@ func (h *ComboHandler) Pausar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.UpdateComboEstado(r.Context(), id, "Pausado"); err != nil {
+	if err := h.svc.UpdateBundleStatus(r.Context(), id, "Paused"); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.Success(w, map[string]string{"status": "Pausado"})
+	response.Success(w, map[string]string{"status": "Paused"})
 }
 
-// Precio Handler
+// Price Handler
 
-type PrecioHandler struct {
+type PriceHandler struct {
 	svc *pricing.Service
 }
 
-func NewPrecioHandler(svc *pricing.Service) *PrecioHandler {
-	return &PrecioHandler{svc: svc}
+func NewPriceHandler(svc *pricing.Service) *PriceHandler {
+	return &PriceHandler{svc: svc}
 }
 
-func (h *PrecioHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req pricing.CreatePrecioRequest
+func (h *PriceHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req pricing.CreatePriceRequest
 	if err := response.Decode(r, &req); err != nil {
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
 		return
 	}
 
-	result, err := h.svc.CreatePrecio(r.Context(), req)
+	result, err := h.svc.CreatePrice(r.Context(), req)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -249,7 +249,7 @@ func (h *PrecioHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, result)
 }
 
-func (h *PrecioHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+func (h *PriceHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -257,7 +257,7 @@ func (h *PrecioHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.GetPrecioByID(r.Context(), id)
+	result, err := h.svc.GetPriceByID(r.Context(), id)
 	if err != nil {
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
@@ -266,7 +266,7 @@ func (h *PrecioHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *PrecioHandler) ListByProductoID(w http.ResponseWriter, r *http.Request) {
+func (h *PriceHandler) ListByProductID(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -274,7 +274,7 @@ func (h *PrecioHandler) ListByProductoID(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result, err := h.svc.ListPreciosByProductoID(r.Context(), id)
+	result, err := h.svc.ListPricesByProductID(r.Context(), id)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -283,7 +283,7 @@ func (h *PrecioHandler) ListByProductoID(w http.ResponseWriter, r *http.Request)
 	response.Success(w, result)
 }
 
-func (h *PrecioHandler) ListBySedeID(w http.ResponseWriter, r *http.Request) {
+func (h *PriceHandler) ListByBranchID(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -291,7 +291,7 @@ func (h *PrecioHandler) ListBySedeID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.ListPreciosBySedeID(r.Context(), id)
+	result, err := h.svc.ListPricesByBranchID(r.Context(), id)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -300,7 +300,7 @@ func (h *PrecioHandler) ListBySedeID(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *PrecioHandler) Update(w http.ResponseWriter, r *http.Request) {
+func (h *PriceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -308,13 +308,13 @@ func (h *PrecioHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req pricing.CreatePrecioRequest
+	var req pricing.CreatePriceRequest
 	if err := response.Decode(r, &req); err != nil {
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
 		return
 	}
 
-	result, err := h.svc.UpdatePrecio(r.Context(), id, req)
+	result, err := h.svc.UpdatePrice(r.Context(), id, req)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -323,7 +323,7 @@ func (h *PrecioHandler) Update(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *PrecioHandler) Delete(w http.ResponseWriter, r *http.Request) {
+func (h *PriceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -331,7 +331,7 @@ func (h *PrecioHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.DeletePrecio(r.Context(), id); err != nil {
+	if err := h.svc.DeletePrice(r.Context(), id); err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}

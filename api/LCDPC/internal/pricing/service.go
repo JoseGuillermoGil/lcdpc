@@ -18,445 +18,445 @@ func NewService(pool *pgxpool.Pool) *Service {
 	return &Service{pool: pool}
 }
 
-// Producto
+// Product
 
-type Producto struct {
-	ProductoID         uuid.UUID `json:"producto_id"`
-	Nombre             string    `json:"nombre"`
-	Sku                string    `json:"sku"`
-	TipoMedidaBase     string    `json:"tipo_medida_base"`
-	TipoComercialMayor string    `json:"tipo_comercial_mayor"`
-	UnidadesPorCaja    *int      `json:"unidades_por_caja"`
-	UnidadesPorBulto   *int      `json:"unidades_por_bulto"`
-	Activo             bool      `json:"activo"`
+type Product struct {
+	ProductID            uuid.UUID `json:"product_id"`
+	Name                 string    `json:"name"`
+	Sku                  string    `json:"sku"`
+	BaseMeasureType      string    `json:"base_measure_type"`
+	WholesaleCommercialType string `json:"wholesale_commercial_type"`
+	UnitsPerBox          *int      `json:"units_per_box"`
+	UnitsPerBundle       *int      `json:"units_per_bundle"`
+	IsActive             bool      `json:"is_active"`
 }
 
-type CreateProductoRequest struct {
-	Nombre             string `json:"nombre" validate:"required"`
-	Sku                string `json:"sku" validate:"required"`
-	TipoMedidaBase     string `json:"tipo_medida_base" validate:"required"`
-	TipoComercialMayor string `json:"tipo_comercial_mayor" validate:"required"`
-	UnidadesPorCaja    *int   `json:"unidades_por_caja"`
-	UnidadesPorBulto   *int   `json:"unidades_por_bulto"`
+type CreateProductRequest struct {
+	Name                 string `json:"name" validate:"required"`
+	Sku                  string `json:"sku" validate:"required"`
+	BaseMeasureType      string `json:"base_measure_type" validate:"required"`
+	WholesaleCommercialType string `json:"wholesale_commercial_type" validate:"required"`
+	UnitsPerBox          *int   `json:"units_per_box"`
+	UnitsPerBundle       *int   `json:"units_per_bundle"`
 }
 
-func (s *Service) CreateProducto(ctx context.Context, req CreateProductoRequest) (*Producto, error) {
-	if req.TipoMedidaBase == "Unidad" {
-		if req.UnidadesPorCaja == nil || *req.UnidadesPorCaja <= 0 {
-			return nil, fmt.Errorf("unidadesPorCaja is required for unit-based products")
+func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (*Product, error) {
+	if req.BaseMeasureType == "Unidad" {
+		if req.UnitsPerBox == nil || *req.UnitsPerBox <= 0 {
+			return nil, fmt.Errorf("units_per_box is required for unit-based products")
 		}
-		if req.UnidadesPorBulto == nil || *req.UnidadesPorBulto <= 0 {
-			return nil, fmt.Errorf("unidadesPorBulto is required for unit-based products")
+		if req.UnitsPerBundle == nil || *req.UnitsPerBundle <= 0 {
+			return nil, fmt.Errorf("units_per_bundle is required for unit-based products")
 		}
-		if *req.UnidadesPorBulto < *req.UnidadesPorCaja {
-			return nil, fmt.Errorf("unidadesPorBulto must be >= unidadesPorCaja")
+		if *req.UnitsPerBundle < *req.UnitsPerBox {
+			return nil, fmt.Errorf("units_per_bundle must be >= units_per_box")
 		}
 	}
 
-	p := &Producto{}
+	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO productos (producto_id, nombre, sku, tipo_medida_base, tipo_comercial_mayor, unidades_por_caja, unidades_por_bulto, activo)
+		INSERT INTO products (product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-		RETURNING producto_id, nombre, sku, tipo_medida_base, tipo_comercial_mayor, unidades_por_caja, unidades_por_bulto, activo
-	`, uuid.New(), req.Nombre, req.Sku, req.TipoMedidaBase, req.TipoComercialMayor, req.UnidadesPorCaja, req.UnidadesPorBulto).Scan(
-		&p.ProductoID, &p.Nombre, &p.Sku, &p.TipoMedidaBase, &p.TipoComercialMayor, &p.UnidadesPorCaja, &p.UnidadesPorBulto, &p.Activo,
+		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active
+	`, uuid.New(), req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle).Scan(
+		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create producto: %w", err)
+		return nil, fmt.Errorf("create product: %w", err)
 	}
 	return p, nil
 }
 
-func (s *Service) GetProductoByID(ctx context.Context, id uuid.UUID) (*Producto, error) {
-	p := &Producto{}
+func (s *Service) GetProductByID(ctx context.Context, id uuid.UUID) (*Product, error) {
+	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT producto_id, nombre, sku, tipo_medida_base, tipo_comercial_mayor, unidades_por_caja, unidades_por_bulto, activo
-		FROM productos WHERE producto_id = $1
-	`, id).Scan(&p.ProductoID, &p.Nombre, &p.Sku, &p.TipoMedidaBase, &p.TipoComercialMayor, &p.UnidadesPorCaja, &p.UnidadesPorBulto, &p.Activo)
+		SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active
+		FROM products WHERE product_id = $1
+	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("get producto: %w", err)
+		return nil, fmt.Errorf("get product: %w", err)
 	}
 	return p, nil
 }
 
-func (s *Service) ListProductos(ctx context.Context) ([]Producto, error) {
+func (s *Service) ListProducts(ctx context.Context) ([]Product, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT producto_id, nombre, sku, tipo_medida_base, tipo_comercial_mayor, unidades_por_caja, unidades_por_bulto, activo
-		FROM productos ORDER BY nombre
+		SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active
+		FROM products ORDER BY name
 	`)
 	if err != nil {
-		return nil, fmt.Errorf("list productos: %w", err)
+		return nil, fmt.Errorf("list products: %w", err)
 	}
 	defer rows.Close()
 
-	var productos []Producto
+	products := make([]Product, 0)
 	for rows.Next() {
-		var p Producto
-		if err := rows.Scan(&p.ProductoID, &p.Nombre, &p.Sku, &p.TipoMedidaBase, &p.TipoComercialMayor, &p.UnidadesPorCaja, &p.UnidadesPorBulto, &p.Activo); err != nil {
-			return nil, fmt.Errorf("scan producto: %w", err)
+		var p Product
+		if err := rows.Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive); err != nil {
+			return nil, fmt.Errorf("scan product: %w", err)
 		}
-		productos = append(productos, p)
+		products = append(products, p)
 	}
-	return productos, nil
+	return products, nil
 }
 
-func (s *Service) UpdateProducto(ctx context.Context, id uuid.UUID, req CreateProductoRequest) (*Producto, error) {
-	p := &Producto{}
+func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreateProductRequest) (*Product, error) {
+	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		UPDATE productos SET nombre = $2, sku = $3, tipo_medida_base = $4, tipo_comercial_mayor = $5, unidades_por_caja = $6, unidades_por_bulto = $7
-		WHERE producto_id = $1
-		RETURNING producto_id, nombre, sku, tipo_medida_base, tipo_comercial_mayor, unidades_por_caja, unidades_por_bulto, activo
-	`, id, req.Nombre, req.Sku, req.TipoMedidaBase, req.TipoComercialMayor, req.UnidadesPorCaja, req.UnidadesPorBulto).Scan(
-		&p.ProductoID, &p.Nombre, &p.Sku, &p.TipoMedidaBase, &p.TipoComercialMayor, &p.UnidadesPorCaja, &p.UnidadesPorBulto, &p.Activo,
+		UPDATE products SET name = $2, sku = $3, base_measure_type = $4, wholesale_commercial_type = $5, units_per_box = $6, units_per_bundle = $7
+		WHERE product_id = $1
+		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active
+	`, id, req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle).Scan(
+		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("update producto: %w", err)
+		return nil, fmt.Errorf("update product: %w", err)
 	}
 	return p, nil
 }
 
-func (s *Service) DeleteProducto(ctx context.Context, id uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM productos WHERE producto_id = $1`, id)
+func (s *Service) DeleteProduct(ctx context.Context, id uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM products WHERE product_id = $1`, id)
 	if err != nil {
-		return fmt.Errorf("delete producto: %w", err)
+		return fmt.Errorf("delete product: %w", err)
 	}
 	return nil
 }
 
-// Combo
+// Bundle
 
-type Combo struct {
-	ComboID              uuid.UUID   `json:"combo_id"`
-	Codigo               string      `json:"codigo"`
-	Nombre               string      `json:"nombre"`
-	Estado               string      `json:"estado"`
-	SedeIdsHabilitadas   []uuid.UUID `json:"sede_ids_habilitadas"`
-	PrecioTotal          float64     `json:"precio_total"`
-	PrecioTotalMoneda    string      `json:"precio_total_moneda"`
-	PrecioPromocional    *float64    `json:"precio_promocional"`
-	PrecioPromocionalMoneda *string  `json:"precio_promocional_moneda"`
-	Items                []ComboItem `json:"items"`
+type Bundle struct {
+	BundleID                uuid.UUID   `json:"bundle_id"`
+	Code                    string      `json:"code"`
+	Name                    string      `json:"name"`
+	Status                  string      `json:"status"`
+	EnabledBranchIDs        []uuid.UUID `json:"enabled_branch_ids"`
+	TotalPrice              float64     `json:"total_price"`
+	TotalPriceCurrency      string      `json:"total_price_currency"`
+	PromotionalPrice        *float64    `json:"promotional_price"`
+	PromotionalPriceCurrency *string   `json:"promotional_price_currency"`
+	Items                   []BundleItem `json:"items"`
 }
 
-type ComboItem struct {
-	ID         uuid.UUID `json:"id"`
-	ComboID    uuid.UUID `json:"combo_id"`
-	ProductoID uuid.UUID `json:"producto_id"`
-	Cantidad   float64   `json:"cantidad"`
+type BundleItem struct {
+	ID        uuid.UUID `json:"id"`
+	BundleID  uuid.UUID `json:"bundle_id"`
+	ProductID uuid.UUID `json:"product_id"`
+	Quantity  float64   `json:"quantity"`
 }
 
-type CreateComboRequest struct {
-	Codigo             string      `json:"codigo" validate:"required"`
-	Nombre             string      `json:"nombre" validate:"required"`
-	Items              []ComboItemReq `json:"items" validate:"required"`
-	SedeIdsHabilitadas []uuid.UUID `json:"sede_ids_habilitadas"`
+type CreateBundleRequest struct {
+	Code             string          `json:"code" validate:"required"`
+	Name             string          `json:"name" validate:"required"`
+	Items            []BundleItemReq `json:"items" validate:"required"`
+	EnabledBranchIDs []uuid.UUID     `json:"enabled_branch_ids"`
 }
 
-type ComboItemReq struct {
-	ProductoID uuid.UUID `json:"producto_id" validate:"required"`
-	Cantidad   float64   `json:"cantidad" validate:"required,gt=0"`
+type BundleItemReq struct {
+	ProductID uuid.UUID `json:"product_id" validate:"required"`
+	Quantity  float64   `json:"quantity" validate:"required,gt=0"`
 }
 
-func (s *Service) CreateCombo(ctx context.Context, req CreateComboRequest) (*Combo, error) {
+func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*Bundle, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	combo := &Combo{}
+	bundle := &Bundle{}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO combos (combo_id, codigo, nombre, estado, sede_ids_habilitadas, precio_total, precio_total_moneda)
-		VALUES ($1, $2, $3, 'Borrador', $4, 0, 'USD')
-		RETURNING combo_id, codigo, nombre, estado, sede_ids_habilitadas, precio_total, precio_total_moneda, precio_promocional, precio_promocional_moneda
-	`, uuid.New(), req.Codigo, req.Nombre, req.SedeIdsHabilitadas).Scan(
-		&combo.ComboID, &combo.Codigo, &combo.Nombre, &combo.Estado, &combo.SedeIdsHabilitadas,
-		&combo.PrecioTotal, &combo.PrecioTotalMoneda, &combo.PrecioPromocional, &combo.PrecioPromocionalMoneda,
+		INSERT INTO bundles (bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency)
+		VALUES ($1, $2, $3, 'Draft', $4, 0, 'USD')
+		RETURNING bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency
+	`, uuid.New(), req.Code, req.Name, req.EnabledBranchIDs).Scan(
+		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.EnabledBranchIDs,
+		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create combo: %w", err)
+		return nil, fmt.Errorf("create bundle: %w", err)
 	}
 
 	for _, item := range req.Items {
-		var ci ComboItem
+		var bi BundleItem
 		err = tx.QueryRow(ctx, `
-			INSERT INTO combo_items (id, combo_id, producto_id, cantidad)
+			INSERT INTO bundle_items (id, bundle_id, product_id, quantity)
 			VALUES ($1, $2, $3, $4)
-			RETURNING id, combo_id, producto_id, cantidad
-		`, uuid.New(), combo.ComboID, item.ProductoID, item.Cantidad).Scan(
-			&ci.ID, &ci.ComboID, &ci.ProductoID, &ci.Cantidad,
+			RETURNING id, bundle_id, product_id, quantity
+		`, uuid.New(), bundle.BundleID, item.ProductID, item.Quantity).Scan(
+			&bi.ID, &bi.BundleID, &bi.ProductID, &bi.Quantity,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("create combo item: %w", err)
+			return nil, fmt.Errorf("create bundle item: %w", err)
 		}
-		combo.Items = append(combo.Items, ci)
+		bundle.Items = append(bundle.Items, bi)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
-	return combo, nil
+	return bundle, nil
 }
 
-func (s *Service) GetComboByID(ctx context.Context, id uuid.UUID) (*Combo, error) {
-	combo := &Combo{}
+func (s *Service) GetBundleByID(ctx context.Context, id uuid.UUID) (*Bundle, error) {
+	bundle := &Bundle{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT combo_id, codigo, nombre, estado, sede_ids_habilitadas, precio_total, precio_total_moneda, precio_promocional, precio_promocional_moneda
-		FROM combos WHERE combo_id = $1
+		SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency
+		FROM bundles WHERE bundle_id = $1
 	`, id).Scan(
-		&combo.ComboID, &combo.Codigo, &combo.Nombre, &combo.Estado, &combo.SedeIdsHabilitadas,
-		&combo.PrecioTotal, &combo.PrecioTotalMoneda, &combo.PrecioPromocional, &combo.PrecioPromocionalMoneda,
+		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.EnabledBranchIDs,
+		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("get combo: %w", err)
+		return nil, fmt.Errorf("get bundle: %w", err)
 	}
 
 	// Load items
-	rows, err := s.pool.Query(ctx, `SELECT id, combo_id, producto_id, cantidad FROM combo_items WHERE combo_id = $1`, id)
+	rows, err := s.pool.Query(ctx, `SELECT id, bundle_id, product_id, quantity FROM bundle_items WHERE bundle_id = $1`, id)
 	if err != nil {
-		return nil, fmt.Errorf("get combo items: %w", err)
+		return nil, fmt.Errorf("get bundle items: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var ci ComboItem
-		if err := rows.Scan(&ci.ID, &ci.ComboID, &ci.ProductoID, &ci.Cantidad); err != nil {
-			return nil, fmt.Errorf("scan combo item: %w", err)
+		var bi BundleItem
+		if err := rows.Scan(&bi.ID, &bi.BundleID, &bi.ProductID, &bi.Quantity); err != nil {
+			return nil, fmt.Errorf("scan bundle item: %w", err)
 		}
-		combo.Items = append(combo.Items, ci)
+		bundle.Items = append(bundle.Items, bi)
 	}
 
-	return combo, nil
+	return bundle, nil
 }
 
-func (s *Service) ListCombos(ctx context.Context) ([]Combo, error) {
+func (s *Service) ListBundles(ctx context.Context) ([]Bundle, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT combo_id, codigo, nombre, estado, sede_ids_habilitadas, precio_total, precio_total_moneda, precio_promocional, precio_promocional_moneda
-		FROM combos ORDER BY nombre
+		SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency
+		FROM bundles ORDER BY name
 	`)
 	if err != nil {
-		return nil, fmt.Errorf("list combos: %w", err)
+		return nil, fmt.Errorf("list bundles: %w", err)
 	}
 	defer rows.Close()
 
-	var combos []Combo
+	bundles := make([]Bundle, 0)
 	for rows.Next() {
-		var c Combo
-		if err := rows.Scan(&c.ComboID, &c.Codigo, &c.Nombre, &c.Estado, &c.SedeIdsHabilitadas,
-			&c.PrecioTotal, &c.PrecioTotalMoneda, &c.PrecioPromocional, &c.PrecioPromocionalMoneda); err != nil {
-			return nil, fmt.Errorf("scan combo: %w", err)
+		var b Bundle
+		if err := rows.Scan(&b.BundleID, &b.Code, &b.Name, &b.Status, &b.EnabledBranchIDs,
+			&b.TotalPrice, &b.TotalPriceCurrency, &b.PromotionalPrice, &b.PromotionalPriceCurrency); err != nil {
+			return nil, fmt.Errorf("scan bundle: %w", err)
 		}
-		combos = append(combos, c)
+		bundles = append(bundles, b)
 	}
-	return combos, nil
+	return bundles, nil
 }
 
-func (s *Service) UpdateCombo(ctx context.Context, id uuid.UUID, req CreateComboRequest) (*Combo, error) {
+func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBundleRequest) (*Bundle, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	combo := &Combo{}
+	bundle := &Bundle{}
 	err = tx.QueryRow(ctx, `
-		UPDATE combos SET codigo = $2, nombre = $3, sede_ids_habilitadas = $4
-		WHERE combo_id = $1
-		RETURNING combo_id, codigo, nombre, estado, sede_ids_habilitadas, precio_total, precio_total_moneda, precio_promocional, precio_promocional_moneda
-	`, id, req.Codigo, req.Nombre, req.SedeIdsHabilitadas).Scan(
-		&combo.ComboID, &combo.Codigo, &combo.Nombre, &combo.Estado, &combo.SedeIdsHabilitadas,
-		&combo.PrecioTotal, &combo.PrecioTotalMoneda, &combo.PrecioPromocional, &combo.PrecioPromocionalMoneda,
+		UPDATE bundles SET code = $2, name = $3, enabled_branch_ids = $4
+		WHERE bundle_id = $1
+		RETURNING bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency
+	`, id, req.Code, req.Name, req.EnabledBranchIDs).Scan(
+		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.EnabledBranchIDs,
+		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("update combo: %w", err)
+		return nil, fmt.Errorf("update bundle: %w", err)
 	}
 
 	// Replace items
-	tx.Exec(ctx, `DELETE FROM combo_items WHERE combo_id = $1`, id)
+	tx.Exec(ctx, `DELETE FROM bundle_items WHERE bundle_id = $1`, id)
 
 	for _, item := range req.Items {
-		var ci ComboItem
+		var bi BundleItem
 		err = tx.QueryRow(ctx, `
-			INSERT INTO combo_items (id, combo_id, producto_id, cantidad)
+			INSERT INTO bundle_items (id, bundle_id, product_id, quantity)
 			VALUES ($1, $2, $3, $4)
-			RETURNING id, combo_id, producto_id, cantidad
-		`, uuid.New(), combo.ComboID, item.ProductoID, item.Cantidad).Scan(
-			&ci.ID, &ci.ComboID, &ci.ProductoID, &ci.Cantidad,
+			RETURNING id, bundle_id, product_id, quantity
+		`, uuid.New(), bundle.BundleID, item.ProductID, item.Quantity).Scan(
+			&bi.ID, &bi.BundleID, &bi.ProductID, &bi.Quantity,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("create combo item: %w", err)
+			return nil, fmt.Errorf("create bundle item: %w", err)
 		}
-		combo.Items = append(combo.Items, ci)
+		bundle.Items = append(bundle.Items, bi)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
 
-	return combo, nil
+	return bundle, nil
 }
 
-func (s *Service) DeleteCombo(ctx context.Context, id uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM combos WHERE combo_id = $1`, id)
+func (s *Service) DeleteBundle(ctx context.Context, id uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM bundles WHERE bundle_id = $1`, id)
 	if err != nil {
-		return fmt.Errorf("delete combo: %w", err)
+		return fmt.Errorf("delete bundle: %w", err)
 	}
 	return nil
 }
 
-func (s *Service) UpdateComboEstado(ctx context.Context, id uuid.UUID, estado string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE combos SET estado = $2 WHERE combo_id = $1`, id, estado)
+func (s *Service) UpdateBundleStatus(ctx context.Context, id uuid.UUID, status string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE bundles SET status = $2 WHERE bundle_id = $1`, id, status)
 	if err != nil {
-		return fmt.Errorf("update combo estado: %w", err)
+		return fmt.Errorf("update bundle status: %w", err)
 	}
 	return nil
 }
 
-// Precio
+// Price
 
-type PrecioProductoSede struct {
-	PrecioID                uuid.UUID `json:"precio_producto_sede_id"`
-	ProductoID              uuid.UUID `json:"producto_id"`
-	SedeID                  uuid.UUID `json:"sede_id"`
-	Precio1Unidad           float64   `json:"precio1_unidad"`
-	Precio1Moneda           string    `json:"precio1_moneda"`
-	Precio2CajaBultoPieza   float64   `json:"precio2_caja_bulto_pieza"`
-	Precio2Moneda           string    `json:"precio2_moneda"`
-	Precio3MayorDesde2      float64   `json:"precio3_mayor_desde2"`
-	Precio3Moneda           string    `json:"precio3_moneda"`
-	Precio4Mayorista        *float64  `json:"precio4_mayorista"`
-	Precio4Moneda           *string   `json:"precio4_moneda"`
-	Precio4RequiereAcuerdo  bool      `json:"precio4_requiere_acuerdo"`
-	VigenteDesde            time.Time `json:"vigente_desde"`
-	VigenteHasta            *time.Time `json:"vigente_hasta"`
+type ProductBranchPrice struct {
+	PriceID                 uuid.UUID  `json:"id"`
+	ProductID               uuid.UUID  `json:"product_id"`
+	BranchID                uuid.UUID  `json:"branch_id"`
+	Price1Unit              float64    `json:"price1_unit"`
+	Price1Currency          string     `json:"price1_currency"`
+	Price2BoxBundlePiece    float64    `json:"price2_box_bundle_piece"`
+	Price2Currency          string     `json:"price2_currency"`
+	Price3WholesaleFrom2    float64    `json:"price3_wholesale_from2"`
+	Price3Currency          string     `json:"price3_currency"`
+	Price4Wholesale         *float64   `json:"price4_wholesale"`
+	Price4Currency          *string    `json:"price4_currency"`
+	Price4RequiresAgreement bool       `json:"price4_requires_agreement"`
+	ValidFrom               time.Time  `json:"valid_from"`
+	ValidUntil              *time.Time `json:"valid_until"`
 }
 
-type CreatePrecioRequest struct {
-	ProductoID             uuid.UUID  `json:"producto_id" validate:"required"`
-	SedeID                 uuid.UUID  `json:"sede_id" validate:"required"`
-	Precio1Unidad          float64    `json:"precio1_unidad" validate:"required"`
-	Precio2CajaBultoPieza  float64    `json:"precio2_caja_bulto_pieza" validate:"required"`
-	Precio3MayorDesde2     float64    `json:"precio3_mayor_desde2" validate:"required"`
-	Precio4Mayorista       *float64   `json:"precio4_mayorista"`
-	Precio4RequiereAcuerdo bool       `json:"precio4_requiere_acuerdo"`
-	VigenteDesde           time.Time  `json:"vigente_desde" validate:"required"`
-	VigenteHasta           *time.Time `json:"vigente_hasta"`
+type CreatePriceRequest struct {
+	ProductID               uuid.UUID  `json:"product_id" validate:"required"`
+	BranchID                uuid.UUID  `json:"branch_id" validate:"required"`
+	Price1Unit              float64    `json:"price1_unit" validate:"required"`
+	Price2BoxBundlePiece    float64    `json:"price2_box_bundle_piece" validate:"required"`
+	Price3WholesaleFrom2    float64    `json:"price3_wholesale_from2" validate:"required"`
+	Price4Wholesale         *float64   `json:"price4_wholesale"`
+	Price4RequiresAgreement bool       `json:"price4_requires_agreement"`
+	ValidFrom               time.Time  `json:"valid_from" validate:"required"`
+	ValidUntil              *time.Time `json:"valid_until"`
 }
 
-func (s *Service) CreatePrecio(ctx context.Context, req CreatePrecioRequest) (*PrecioProductoSede, error) {
-	p := &PrecioProductoSede{}
-	moneda := "USD"
+func (s *Service) CreatePrice(ctx context.Context, req CreatePriceRequest) (*ProductBranchPrice, error) {
+	p := &ProductBranchPrice{}
+	currency := "USD"
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO precios_producto_sede (precio_producto_sede_id, producto_id, sede_id, precio1_unidad, precio1_moneda, precio2_caja_bulto_pieza, precio2_moneda, precio3_mayor_desde2, precio3_moneda, precio4_mayorista, precio4_moneda, precio4_requiere_acuerdo, vigente_desde, vigente_hasta)
+		INSERT INTO product_branch_prices (id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until)
 		VALUES ($1, $2, $3, $4, $5, $6, $5, $7, $5, $8, $5, $9, $10, $11)
-		RETURNING precio_producto_sede_id, producto_id, sede_id, precio1_unidad, precio1_moneda, precio2_caja_bulto_pieza, precio2_moneda, precio3_mayor_desde2, precio3_moneda, precio4_mayorista, precio4_moneda, precio4_requiere_acuerdo, vigente_desde, vigente_hasta
-	`, uuid.New(), req.ProductoID, req.SedeID, req.Precio1Unidad, moneda, req.Precio2CajaBultoPieza,
-		req.Precio3MayorDesde2, req.Precio4Mayorista, req.Precio4RequiereAcuerdo, req.VigenteDesde, req.VigenteHasta).Scan(
-		&p.PrecioID, &p.ProductoID, &p.SedeID, &p.Precio1Unidad, &p.Precio1Moneda,
-		&p.Precio2CajaBultoPieza, &p.Precio2Moneda, &p.Precio3MayorDesde2, &p.Precio3Moneda,
-		&p.Precio4Mayorista, &p.Precio4Moneda, &p.Precio4RequiereAcuerdo, &p.VigenteDesde, &p.VigenteHasta,
+		RETURNING id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
+	`, uuid.New(), req.ProductID, req.BranchID, req.Price1Unit, currency, req.Price2BoxBundlePiece,
+		req.Price3WholesaleFrom2, req.Price4Wholesale, req.Price4RequiresAgreement, req.ValidFrom, req.ValidUntil).Scan(
+		&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
+		&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
+		&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create precio: %w", err)
+		return nil, fmt.Errorf("create price: %w", err)
 	}
 	return p, nil
 }
 
-func (s *Service) GetPrecioByID(ctx context.Context, id uuid.UUID) (*PrecioProductoSede, error) {
-	p := &PrecioProductoSede{}
+func (s *Service) GetPriceByID(ctx context.Context, id uuid.UUID) (*ProductBranchPrice, error) {
+	p := &ProductBranchPrice{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT precio_producto_sede_id, producto_id, sede_id, precio1_unidad, precio1_moneda, precio2_caja_bulto_pieza, precio2_moneda, precio3_mayor_desde2, precio3_moneda, precio4_mayorista, precio4_moneda, precio4_requiere_acuerdo, vigente_desde, vigente_hasta
-		FROM precios_producto_sede WHERE precio_producto_sede_id = $1
+		SELECT id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
+		FROM product_branch_prices WHERE id = $1
 	`, id).Scan(
-		&p.PrecioID, &p.ProductoID, &p.SedeID, &p.Precio1Unidad, &p.Precio1Moneda,
-		&p.Precio2CajaBultoPieza, &p.Precio2Moneda, &p.Precio3MayorDesde2, &p.Precio3Moneda,
-		&p.Precio4Mayorista, &p.Precio4Moneda, &p.Precio4RequiereAcuerdo, &p.VigenteDesde, &p.VigenteHasta,
+		&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
+		&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
+		&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
 	}
 	if err != nil {
-		return nil, fmt.Errorf("get precio: %w", err)
+		return nil, fmt.Errorf("get price: %w", err)
 	}
 	return p, nil
 }
 
-func (s *Service) ListPreciosByProductoID(ctx context.Context, productoID uuid.UUID) ([]PrecioProductoSede, error) {
+func (s *Service) ListPricesByProductID(ctx context.Context, productID uuid.UUID) ([]ProductBranchPrice, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT precio_producto_sede_id, producto_id, sede_id, precio1_unidad, precio1_moneda, precio2_caja_bulto_pieza, precio2_moneda, precio3_mayor_desde2, precio3_moneda, precio4_mayorista, precio4_moneda, precio4_requiere_acuerdo, vigente_desde, vigente_hasta
-		FROM precios_producto_sede WHERE producto_id = $1 ORDER BY vigente_desde DESC
-	`, productoID)
+		SELECT id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
+		FROM product_branch_prices WHERE product_id = $1 ORDER BY valid_from DESC
+	`, productID)
 	if err != nil {
-		return nil, fmt.Errorf("list precios: %w", err)
+		return nil, fmt.Errorf("list prices: %w", err)
 	}
 	defer rows.Close()
 
-	var precios []PrecioProductoSede
+	prices := make([]ProductBranchPrice, 0)
 	for rows.Next() {
-		var p PrecioProductoSede
-		if err := rows.Scan(&p.PrecioID, &p.ProductoID, &p.SedeID, &p.Precio1Unidad, &p.Precio1Moneda,
-			&p.Precio2CajaBultoPieza, &p.Precio2Moneda, &p.Precio3MayorDesde2, &p.Precio3Moneda,
-			&p.Precio4Mayorista, &p.Precio4Moneda, &p.Precio4RequiereAcuerdo, &p.VigenteDesde, &p.VigenteHasta); err != nil {
-			return nil, fmt.Errorf("scan precio: %w", err)
+		var p ProductBranchPrice
+		if err := rows.Scan(&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
+			&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
+			&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil); err != nil {
+			return nil, fmt.Errorf("scan price: %w", err)
 		}
-		precios = append(precios, p)
+		prices = append(prices, p)
 	}
-	return precios, nil
+	return prices, nil
 }
 
-func (s *Service) ListPreciosBySedeID(ctx context.Context, sedeID uuid.UUID) ([]PrecioProductoSede, error) {
+func (s *Service) ListPricesByBranchID(ctx context.Context, branchID uuid.UUID) ([]ProductBranchPrice, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT precio_producto_sede_id, producto_id, sede_id, precio1_unidad, precio1_moneda, precio2_caja_bulto_pieza, precio2_moneda, precio3_mayor_desde2, precio3_moneda, precio4_mayorista, precio4_moneda, precio4_requiere_acuerdo, vigente_desde, vigente_hasta
-		FROM precios_producto_sede WHERE sede_id = $1 ORDER BY vigente_desde DESC
-	`, sedeID)
+		SELECT id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
+		FROM product_branch_prices WHERE branch_id = $1 ORDER BY valid_from DESC
+	`, branchID)
 	if err != nil {
-		return nil, fmt.Errorf("list precios: %w", err)
+		return nil, fmt.Errorf("list prices: %w", err)
 	}
 	defer rows.Close()
 
-	var precios []PrecioProductoSede
+	prices := make([]ProductBranchPrice, 0)
 	for rows.Next() {
-		var p PrecioProductoSede
-		if err := rows.Scan(&p.PrecioID, &p.ProductoID, &p.SedeID, &p.Precio1Unidad, &p.Precio1Moneda,
-			&p.Precio2CajaBultoPieza, &p.Precio2Moneda, &p.Precio3MayorDesde2, &p.Precio3Moneda,
-			&p.Precio4Mayorista, &p.Precio4Moneda, &p.Precio4RequiereAcuerdo, &p.VigenteDesde, &p.VigenteHasta); err != nil {
-			return nil, fmt.Errorf("scan precio: %w", err)
+		var p ProductBranchPrice
+		if err := rows.Scan(&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
+			&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
+			&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil); err != nil {
+			return nil, fmt.Errorf("scan price: %w", err)
 		}
-		precios = append(precios, p)
+		prices = append(prices, p)
 	}
-	return precios, nil
+	return prices, nil
 }
 
-func (s *Service) UpdatePrecio(ctx context.Context, id uuid.UUID, req CreatePrecioRequest) (*PrecioProductoSede, error) {
-	moneda := "USD"
-	p := &PrecioProductoSede{}
+func (s *Service) UpdatePrice(ctx context.Context, id uuid.UUID, req CreatePriceRequest) (*ProductBranchPrice, error) {
+	currency := "USD"
+	p := &ProductBranchPrice{}
 	err := s.pool.QueryRow(ctx, `
-		UPDATE precios_producto_sede SET precio1_unidad = $2, precio1_moneda = $3, precio2_caja_bulto_pieza = $4, precio2_moneda = $3, precio3_mayor_desde2 = $5, precio3_moneda = $3, precio4_mayorista = $6, precio4_moneda = $3, precio4_requiere_acuerdo = $7, vigente_desde = $8, vigente_hasta = $9
-		WHERE precio_producto_sede_id = $1
-		RETURNING precio_producto_sede_id, producto_id, sede_id, precio1_unidad, precio1_moneda, precio2_caja_bulto_pieza, precio2_moneda, precio3_mayor_desde2, precio3_moneda, precio4_mayorista, precio4_moneda, precio4_requiere_acuerdo, vigente_desde, vigente_hasta
-	`, id, req.Precio1Unidad, moneda, req.Precio2CajaBultoPieza, req.Precio3MayorDesde2,
-		req.Precio4Mayorista, req.Precio4RequiereAcuerdo, req.VigenteDesde, req.VigenteHasta).Scan(
-		&p.PrecioID, &p.ProductoID, &p.SedeID, &p.Precio1Unidad, &p.Precio1Moneda,
-		&p.Precio2CajaBultoPieza, &p.Precio2Moneda, &p.Precio3MayorDesde2, &p.Precio3Moneda,
-		&p.Precio4Mayorista, &p.Precio4Moneda, &p.Precio4RequiereAcuerdo, &p.VigenteDesde, &p.VigenteHasta,
+		UPDATE product_branch_prices SET price1_unit = $2, price1_currency = $3, price2_box_bundle_piece = $4, price2_currency = $3, price3_wholesale_from2 = $5, price3_currency = $3, price4_wholesale = $6, price4_currency = $3, price4_requires_agreement = $7, valid_from = $8, valid_until = $9
+		WHERE id = $1
+		RETURNING id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
+	`, id, req.Price1Unit, currency, req.Price2BoxBundlePiece, req.Price3WholesaleFrom2,
+		req.Price4Wholesale, req.Price4RequiresAgreement, req.ValidFrom, req.ValidUntil).Scan(
+		&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
+		&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
+		&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("update precio: %w", err)
+		return nil, fmt.Errorf("update price: %w", err)
 	}
 	return p, nil
 }
 
-func (s *Service) DeletePrecio(ctx context.Context, id uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM precios_producto_sede WHERE precio_producto_sede_id = $1`, id)
+func (s *Service) DeletePrice(ctx context.Context, id uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM product_branch_prices WHERE id = $1`, id)
 	if err != nil {
-		return fmt.Errorf("delete precio: %w", err)
+		return fmt.Errorf("delete price: %w", err)
 	}
 	return nil
 }

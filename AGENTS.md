@@ -53,14 +53,14 @@ High-signal guidance for OpenCode sessions in this repo.
 - Password hashing is PBKDF2-SHA256, 100k iterations, compatible with the previous C# hashes.
 - The OAuth2 server is custom-built (authorize, token, introspect, revoke). It is NOT using `golang.org/x/oauth2` as a server.
 - `golang.org/x/oauth2` is used only as a Google OAuth **client**.
-- Package structure: `internal/auth/` (auth + OAuth2), `internal/pricing/` (productos, combos, precios), `internal/sede/`, `internal/sync/`, `internal/email/`, `internal/db/`, `internal/rbac/` (RBAC store + CRUD).
+- Package structure: `internal/auth/` (auth + OAuth2), `internal/pricing/` (products, bundles, prices), `internal/branch/`, `internal/sync/`, `internal/email/`, `internal/db/`, `internal/rbac/` (RBAC store + CRUD), `internal/order/` (orders, items, status transitions).
 
 ## Frontend facts agents often guess wrong
 
 - The real frontend root is `web/`, not `api/LCDPC/web/`.
 - `web/` is not scaffold-only: it already has standalone components, route wiring, PrimeNG theme setup, and active auth/register flows.
 - Package-manager rule: use `pnpm` only for JS/TS work unless the user explicitly approves otherwise.
-- Existing route/UI language is Spanish (`/autenticacion`, `/registro`); extend the current app vocabulary instead of anglicizing it mid-feature.
+- Existing route/UI language is English (`/login`, `/register`); extend the current app vocabulary instead of introducing Spanish mid-feature.
 
 ## Repo gotchas
 

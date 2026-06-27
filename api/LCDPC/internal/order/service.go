@@ -22,6 +22,12 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 		return nil, fmt.Errorf("order must have at least one item")
 	}
 
+	for _, item := range req.Items {
+		if item.ItemType != "product" && item.ItemType != "bundle" {
+			return nil, fmt.Errorf("invalid item_type: %s", item.ItemType)
+		}
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
@@ -30,9 +36,9 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 
 	orderID := uuid.New()
 	_, err = tx.Exec(ctx, `
-		INSERT INTO orders (id, sede_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc)
+		INSERT INTO orders (id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc)
 		VALUES ($1, $2, $3, $4, 0, 0, 'USD', $5, now(), now())
-	`, orderID, req.SedeID, req.ClientUserID, StatusPendingReview, nullString(req.Notes))
+	`, orderID, req.BranchID, req.ClientUserID, StatusPendingReview, nullString(req.Notes))
 	if err != nil {
 		return nil, fmt.Errorf("insert order: %w", err)
 	}
@@ -45,17 +51,17 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 		priceTotal += subtotal
 		totalItems += int(item.Quantity)
 
-		var productoID, comboID *uuid.UUID
-		if item.ItemType == "producto" {
-			productoID = &item.ProductoID
+		var productID, bundleID *uuid.UUID
+		if item.ItemType == "product" {
+			productID = &item.ProductID
 		} else {
-			comboID = &item.ComboID
+			bundleID = &item.BundleID
 		}
 
 		_, err = tx.Exec(ctx, `
-			INSERT INTO order_items (id, order_id, item_type, producto_id, combo_id, quantity, unit_price, subtotal, currency)
+			INSERT INTO order_items (id, order_id, item_type, product_id, bundle_id, quantity, unit_price, subtotal, currency)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'USD')
-		`, uuid.New(), orderID, item.ItemType, productoID, comboID, item.Quantity, item.UnitPrice, subtotal)
+		`, uuid.New(), orderID, item.ItemType, productID, bundleID, item.Quantity, item.UnitPrice, subtotal)
 		if err != nil {
 			return nil, fmt.Errorf("insert order item: %w", err)
 		}
@@ -86,9 +92,9 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Order, error) {
 	o := &Order{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, sede_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc
+		SELECT id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc
 		FROM orders WHERE id = $1
-	`, id).Scan(&o.ID, &o.SedeID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
+	`, id).Scan(&o.ID, &o.BranchID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
 		&o.Currency, &o.Notes, &o.CreatedAtUtc, &o.UpdatedAtUtc)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("ORDER_NOT_FOUND")
@@ -106,13 +112,13 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Order, error) {
 }
 
 func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, error) {
-	query := `SELECT id, sede_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc FROM orders WHERE 1=1`
+	query := `SELECT id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc FROM orders WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
 
-	if filter.SedeID != nil {
-		query += fmt.Sprintf(" AND sede_id = $%d", argIdx)
-		args = append(args, *filter.SedeID)
+	if filter.BranchID != nil {
+		query += fmt.Sprintf(" AND branch_id = $%d", argIdx)
+		args = append(args, *filter.BranchID)
 		argIdx++
 	}
 	if filter.ClientUserID != nil {
@@ -128,16 +134,27 @@ func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, error)
 
 	query += " ORDER BY created_at_utc DESC"
 
+	if filter.Limit != nil {
+		query += fmt.Sprintf(" LIMIT $%d", argIdx)
+		args = append(args, *filter.Limit)
+		argIdx++
+	}
+	if filter.Offset != nil {
+		query += fmt.Sprintf(" OFFSET $%d", argIdx)
+		args = append(args, *filter.Offset)
+		argIdx++
+	}
+
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list orders: %w", err)
 	}
 	defer rows.Close()
 
-	var orders []Order
+	orders := make([]Order, 0)
 	for rows.Next() {
 		var o Order
-		if err := rows.Scan(&o.ID, &o.SedeID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
+		if err := rows.Scan(&o.ID, &o.BranchID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
 			&o.Currency, &o.Notes, &o.CreatedAtUtc, &o.UpdatedAtUtc); err != nil {
 			return nil, fmt.Errorf("scan order: %w", err)
 		}
@@ -156,16 +173,24 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 		return nil, fmt.Errorf("ORDER_NOT_EDITABLE")
 	}
 
+	if req.Items != nil {
+		for _, item := range req.Items {
+			if item.ItemType != "product" && item.ItemType != "bundle" {
+				return nil, fmt.Errorf("invalid item_type: %s", item.ItemType)
+			}
+		}
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	if req.Notes != "" || req.Items != nil {
-		_, err = tx.Exec(ctx, `UPDATE orders SET notes = $2, updated_at_utc = now() WHERE id = $1`, id, nullString(req.Notes))
+	if req.Notes != "" {
+		_, err = tx.Exec(ctx, `UPDATE orders SET notes = $2, updated_at_utc = now() WHERE id = $1`, id, req.Notes)
 		if err != nil {
-			return nil, fmt.Errorf("update order: %w", err)
+			return nil, fmt.Errorf("update notes: %w", err)
 		}
 	}
 
@@ -187,17 +212,17 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 			priceTotal += subtotal
 			totalItems += int(item.Quantity)
 
-			var productoID, comboID *uuid.UUID
-			if item.ItemType == "producto" {
-				productoID = &item.ProductoID
+			var productID, bundleID *uuid.UUID
+			if item.ItemType == "product" {
+				productID = &item.ProductID
 			} else {
-				comboID = &item.ComboID
+				bundleID = &item.BundleID
 			}
 
 			_, err = tx.Exec(ctx, `
-				INSERT INTO order_items (id, order_id, item_type, producto_id, combo_id, quantity, unit_price, subtotal, currency)
+				INSERT INTO order_items (id, order_id, item_type, product_id, bundle_id, quantity, unit_price, subtotal, currency)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'USD')
-			`, uuid.New(), id, item.ItemType, productoID, comboID, item.Quantity, item.UnitPrice, subtotal)
+			`, uuid.New(), id, item.ItemType, productID, bundleID, item.Quantity, item.UnitPrice, subtotal)
 			if err != nil {
 				return nil, fmt.Errorf("insert order item: %w", err)
 			}
@@ -226,12 +251,18 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, changedByUserID uuid
 		return fmt.Errorf("ORDER_IN_TERMINAL_STATUS")
 	}
 
-	_, err = s.pool.Exec(ctx, `UPDATE orders SET status = $2, updated_at_utc = now() WHERE id = $1`, id, StatusCancelledByCustomer)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `UPDATE orders SET status = $2, updated_at_utc = now() WHERE id = $1`, id, StatusCancelledByCustomer)
 	if err != nil {
 		return fmt.Errorf("cancel order: %w", err)
 	}
 
-	_, err = s.pool.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO order_status_history (id, order_id, from_status, to_status, changed_by_user_id, notes, created_at_utc)
 		VALUES ($1, $2, $3, $4, $5, NULL, now())
 	`, uuid.New(), id, o.Status, StatusCancelledByCustomer, changedByUserID)
@@ -239,7 +270,7 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, changedByUserID uuid
 		return fmt.Errorf("insert history: %w", err)
 	}
 
-	return nil
+	return tx.Commit(ctx)
 }
 
 func (s *Service) ChangeStatus(ctx context.Context, id uuid.UUID, req StatusChangeRequest, changedByUserID uuid.UUID) (*Order, error) {
@@ -252,17 +283,27 @@ func (s *Service) ChangeStatus(ctx context.Context, id uuid.UUID, req StatusChan
 		return nil, fmt.Errorf("INVALID_TRANSITION")
 	}
 
-	_, err = s.pool.Exec(ctx, `UPDATE orders SET status = $2, updated_at_utc = now() WHERE id = $1`, id, req.ToStatus)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `UPDATE orders SET status = $2, updated_at_utc = now() WHERE id = $1`, id, req.ToStatus)
 	if err != nil {
 		return nil, fmt.Errorf("update status: %w", err)
 	}
 
-	_, err = s.pool.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO order_status_history (id, order_id, from_status, to_status, changed_by_user_id, notes, created_at_utc)
 		VALUES ($1, $2, $3, $4, $5, $6, now())
 	`, uuid.New(), id, o.Status, req.ToStatus, changedByUserID, nullString(req.Notes))
 	if err != nil {
 		return nil, fmt.Errorf("insert history: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
 	}
 
 	return s.GetByID(ctx, id)
@@ -278,7 +319,7 @@ func (s *Service) GetHistory(ctx context.Context, orderID uuid.UUID) ([]StatusHi
 	}
 	defer rows.Close()
 
-	var entries []StatusHistoryEntry
+	entries := make([]StatusHistoryEntry, 0)
 	for rows.Next() {
 		var e StatusHistoryEntry
 		if err := rows.Scan(&e.ID, &e.OrderID, &e.FromStatus, &e.ToStatus, &e.ChangedByUserID, &e.Notes, &e.CreatedAtUtc); err != nil {
@@ -291,7 +332,7 @@ func (s *Service) GetHistory(ctx context.Context, orderID uuid.UUID) ([]StatusHi
 
 func (s *Service) getItems(ctx context.Context, orderID uuid.UUID) ([]OrderItem, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, order_id, item_type, producto_id, combo_id, quantity, unit_price, subtotal, currency
+		SELECT id, order_id, item_type, product_id, bundle_id, quantity, unit_price, subtotal, currency
 		FROM order_items WHERE order_id = $1
 	`, orderID)
 	if err != nil {
@@ -299,10 +340,10 @@ func (s *Service) getItems(ctx context.Context, orderID uuid.UUID) ([]OrderItem,
 	}
 	defer rows.Close()
 
-	var items []OrderItem
+	items := make([]OrderItem, 0)
 	for rows.Next() {
 		var i OrderItem
-		if err := rows.Scan(&i.ID, &i.OrderID, &i.ItemType, &i.ProductoID, &i.ComboID, &i.Quantity, &i.UnitPrice, &i.Subtotal, &i.Currency); err != nil {
+		if err := rows.Scan(&i.ID, &i.OrderID, &i.ItemType, &i.ProductID, &i.BundleID, &i.Quantity, &i.UnitPrice, &i.Subtotal, &i.Currency); err != nil {
 			return nil, fmt.Errorf("scan item: %w", err)
 		}
 		items = append(items, i)

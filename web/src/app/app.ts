@@ -74,6 +74,6 @@ export class App {
   }
 
   private isAuthRoute(url: string): boolean {
-    return url.startsWith('/autenticacion') || url.startsWith('/registro');
+    return url.startsWith('/login') || url.startsWith('/register');
   }
 }

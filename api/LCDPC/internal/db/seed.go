@@ -72,7 +72,7 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 	}
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO profiles (id, user_id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
+		INSERT INTO profiles (id, user_id, first_name, last_name, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
 	`, uuid.New(), userID, cfg.SuperUserFirstName, cfg.SuperUserLastName,
 		cfg.SuperUserIdentityDocument, nil, cfg.SuperUserWhatsAppPhone, cfg.SuperUserFullAddress)
@@ -81,7 +81,7 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 	}
 
 	var adminRoleID uuid.UUID
-	err = pool.QueryRow(ctx, `SELECT id FROM roles WHERE code = 'admin_global'`).Scan(&adminRoleID)
+	err = pool.QueryRow(ctx, `SELECT id FROM roles WHERE code = 'global_admin'`).Scan(&adminRoleID)
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func seedOAuth2Client(ctx context.Context, pool *pgxpool.Pool) error {
 
 	_, err = pool.Exec(ctx, `
 		INSERT INTO oauth2_clients (client_id, client_name, redirect_uris, grant_types, require_pkce, allowed_scopes, created_at_utc)
-		VALUES ('lcdpc-web', 'LCDPC Web SPA', $1, $2, true, 'openid email profile admin admin:sedes admin:users', now())
+		VALUES ('lcdpc-web', 'LCDPC Web SPA', $1, $2, true, 'openid email profile admin admin:branches admin:users', now())
 	`, redirectURIs, grantTypes)
 	if err != nil {
 		return err
@@ -147,7 +147,7 @@ func seedAPIToken(ctx context.Context, pool *pgxpool.Pool) error {
 	tokenHash := sha256Hex(token)
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO api_tokens (id, nombre, token_hash, activo, created_at_utc)
+		INSERT INTO api_tokens (id, name, token_hash, is_active, created_at_utc)
 		VALUES ($1, 'Initial Sync Token', $2, true, now())
 	`, uuid.New(), tokenHash)
 	if err != nil {
@@ -155,7 +155,7 @@ func seedAPIToken(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 
 	slog.Info("═══════════════════════════════════════════════════════════")
-	slog.Info("API TOKEN DE SYNC INICIAL (guardarlo, no se volverá a mostrar):")
+	slog.Info("INITIAL SYNC API TOKEN (save it, it will not be shown again):")
 	slog.Info(token)
 	slog.Info("═══════════════════════════════════════════════════════════")
 

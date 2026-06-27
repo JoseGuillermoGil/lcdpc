@@ -132,27 +132,27 @@ describe('AuthApiService', () => {
   it('calls complete profile with snake_case body', () => {
     service.completeProfile({
       flowId: 'f1',
-      nombres: 'Jose',
-      apellidos: 'Perez',
-      documentoIdentidad: 'V12345678',
-      rif: null,
-      telefonoWhatsApp: '04121234567',
-      direccionCompleta: 'Caracas',
+      firstName: 'Jose',
+      lastName: 'Perez',
+      identityDocument: 'V12345678',
+      taxId: null,
+      whatsappPhone: '04121234567',
+      fullAddress: 'Caracas',
       password: 'Secret123!'
     }).subscribe((result) => {
-      expect(result.usuarioId).toBe('u1');
-      expect(result.estado).toBe('activo');
+      expect(result.userId).toBe('u1');
+      expect(result.status).toBe('active');
     });
 
     const req = httpMock.expectOne('http://localhost:8080/api/v1/auth/register/profile');
     expect(req.request.method).toBe('POST');
     expect(req.request.withCredentials).toBeTrue();
     expect(req.request.body.flow_id).toBe('f1');
-    expect(req.request.body.documento_identidad).toBe('V12345678');
+    expect(req.request.body.identity_document).toBe('V12345678');
 
     req.flush({
       status: 'success',
-      data: { user_id: 'u1', status: 'activo', tipo_cuenta: 'cliente' }
+      data: { user_id: 'u1', status: 'active', account_type: 'client' }
     });
   });
 });

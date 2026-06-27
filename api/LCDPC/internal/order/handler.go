@@ -2,6 +2,7 @@ package order
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -59,9 +60,9 @@ func (h *Handler) GetByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	filter := OrderFilter{}
 
-	if sedeIDStr := r.URL.Query().Get("sede_id"); sedeIDStr != "" {
-		if sedeID, err := uuid.Parse(sedeIDStr); err == nil {
-			filter.SedeID = &sedeID
+	if branchIDStr := r.URL.Query().Get("branch_id"); branchIDStr != "" {
+		if branchID, err := uuid.Parse(branchIDStr); err == nil {
+			filter.BranchID = &branchID
 		}
 	}
 	if clientStr := r.URL.Query().Get("client_user_id"); clientStr != "" {
@@ -71,6 +72,16 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if status := r.URL.Query().Get("status"); status != "" {
 		filter.Status = &status
+	}
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
+			filter.Limit = &limit
+		}
+	}
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil && offset >= 0 {
+			filter.Offset = &offset
+		}
 	}
 
 	result, err := h.svc.List(r.Context(), filter)

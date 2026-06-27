@@ -35,19 +35,19 @@ export interface VerifyEmailRegistrationResponse {
 
 export interface CompleteProfileRegistrationRequest {
   flowId: string;
-  nombres: string;
-  apellidos: string;
-  documentoIdentidad: string;
-  rif: string | null;
-  telefonoWhatsApp: string;
-  direccionCompleta: string;
+  firstName: string;
+  lastName: string;
+  identityDocument: string;
+  taxId: string | null;
+  whatsappPhone: string;
+  fullAddress: string;
   password: string;
 }
 
 export interface CompleteProfileRegistrationResponse {
-  usuarioId: string;
-  estado: string;
-  tipoCuenta: string;
+  userId: string;
+  status: string;
+  accountType: string;
 }
 
 // Raw Go API response types (snake_case)
@@ -82,7 +82,7 @@ interface VerifyEmailGoData {
 interface CompleteProfileGoData {
   user_id: string;
   status: string;
-  tipo_cuenta: string;
+  account_type: string;
 }
 
 // Mapped frontend types
@@ -184,21 +184,21 @@ export class AuthApiService {
     return this.httpClient
       .post<JsendEnvelope<CompleteProfileGoData>>(this.url('/api/v1/auth/register/profile'), {
         flow_id: request.flowId,
-        nombres: request.nombres,
-        apellidos: request.apellidos,
-        documento_identidad: request.documentoIdentidad,
-        rif: request.rif,
-        telefono_whatsapp: request.telefonoWhatsApp,
-        direccion_completa: request.direccionCompleta,
+        first_name: request.firstName,
+        last_name: request.lastName,
+        identity_document: request.identityDocument,
+        tax_id: request.taxId,
+        whatsapp_phone: request.whatsappPhone,
+        full_address: request.fullAddress,
         password: request.password,
       }, {
         withCredentials: true,
       })
       .pipe(
         map((res) => ({
-          usuarioId: res.data.user_id,
-          estado: res.data.status,
-          tipoCuenta: res.data.tipo_cuenta,
+          userId: res.data.user_id,
+          status: res.data.status,
+          accountType: res.data.account_type,
         }))
       );
   }

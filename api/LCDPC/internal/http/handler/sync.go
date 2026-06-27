@@ -15,14 +15,14 @@ func NewSyncHandler(svc *sync.Service) *SyncHandler {
 	return &SyncHandler{svc: svc}
 }
 
-func (h *SyncHandler) SyncProductos(w http.ResponseWriter, r *http.Request) {
-	var req []sync.SyncProductoRequest
+func (h *SyncHandler) SyncProducts(w http.ResponseWriter, r *http.Request) {
+	var req []sync.SyncProductRequest
 	if err := response.Decode(r, &req); err != nil {
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
 		return
 	}
 
-	result, err := h.svc.SyncProductos(r.Context(), req)
+	result, err := h.svc.SyncProducts(r.Context(), req)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
@@ -31,14 +31,14 @@ func (h *SyncHandler) SyncProductos(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *SyncHandler) SyncCombos(w http.ResponseWriter, r *http.Request) {
-	var req []sync.SyncComboRequest
+func (h *SyncHandler) SyncBundles(w http.ResponseWriter, r *http.Request) {
+	var req []sync.SyncBundleRequest
 	if err := response.Decode(r, &req); err != nil {
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
 		return
 	}
 
-	result, err := h.svc.SyncCombos(r.Context(), req)
+	result, err := h.svc.SyncBundles(r.Context(), req)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
