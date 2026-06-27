@@ -1,4 +1,5 @@
 using LCDPC.Domain.Entities.OAuth2;
+using LCDPC.Domain.Entities.Pricing;
 using LCDPC.Domain.Entities.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -23,6 +24,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<OAuth2Client> OAuth2Clients => Set<OAuth2Client>();
     public DbSet<OAuth2AuthorizationCode> OAuth2AuthorizationCodes => Set<OAuth2AuthorizationCode>();
     public DbSet<OAuth2RefreshToken> OAuth2RefreshTokens => Set<OAuth2RefreshToken>();
+    public DbSet<Producto> Productos => Set<Producto>();
+    public DbSet<Combo> Combos => Set<Combo>();
+    public DbSet<PrecioProductoSede> PreciosProductoSede => Set<PrecioProductoSede>();
+    public DbSet<ApiToken> ApiTokens => Set<ApiToken>();
 
     private static readonly Guid ClientRoleId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid AdminSedeRoleId = Guid.Parse("22222222-2222-2222-2222-222222222222");
@@ -473,6 +478,116 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(x => x.UserId);
             entity.HasIndex(x => x.FamilyId);
             entity.HasIndex(x => x.ExpiresAtUtc);
+        });
+
+        modelBuilder.Entity<Producto>(entity =>
+        {
+            entity.ToTable("productos");
+            entity.HasKey(x => x.ProductoId);
+            entity.Property(x => x.ProductoId).HasColumnName("producto_id");
+            entity.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Sku).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.TipoMedidaBase).HasConversion<string>().HasMaxLength(20).IsRequired();
+            entity.Property(x => x.TipoComercialMayor).HasConversion<string>().HasMaxLength(20).IsRequired();
+            entity.Property(x => x.UnidadesPorCaja).IsRequired(false);
+            entity.Property(x => x.UnidadesPorBulto).IsRequired(false);
+            entity.Property(x => x.Activo).IsRequired();
+
+            entity.HasIndex(x => x.Sku).IsUnique();
+            entity.HasIndex(x => x.Nombre);
+        });
+
+        modelBuilder.Entity<Combo>(entity =>
+        {
+            entity.ToTable("combos");
+            entity.HasKey(x => x.ComboId);
+            entity.Property(x => x.ComboId).HasColumnName("combo_id");
+            entity.Property(x => x.Codigo).HasMaxLength(50).IsRequired();
+            entity.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Estado).HasConversion<string>().HasMaxLength(20).IsRequired();
+
+            entity.OwnsMany(x => x.Items, item =>
+            {
+                item.ToTable("combo_items");
+                item.WithOwner().HasForeignKey("ComboId");
+                item.Property<Guid>("Id").ValueGeneratedOnAdd();
+                item.HasKey("Id");
+                item.Property(x => x.ProductoId).IsRequired();
+                item.Property(x => x.Cantidad).HasColumnType("decimal(10,2)").IsRequired();
+            });
+
+            entity.Ignore(x => x.SedeIdsHabilitadas);
+            entity.Property<List<Guid>>("_sedeIdsHabilitadas")
+                .HasColumnName("sede_ids_habilitadas")
+                .HasColumnType("uuid[]")
+                .HasField("sedeIdsHabilitadas");
+
+            entity.OwnsOne(x => x.PrecioTotal, money =>
+            {
+                money.Property(m => m.Amount).HasColumnName("precio_total").HasColumnType("decimal(12,2)").IsRequired();
+                money.Property(m => m.Currency).HasColumnName("precio_total_moneda").HasMaxLength(3).IsRequired();
+            });
+
+            entity.OwnsOne(x => x.PrecioPromocional, money =>
+            {
+                money.Property(m => m.Amount).HasColumnName("precio_promocional").HasColumnType("decimal(12,2)").IsRequired(false);
+                money.Property(m => m.Currency).HasColumnName("precio_promocional_moneda").HasMaxLength(3).IsRequired(false);
+            });
+
+            entity.HasIndex(x => x.Estado);
+            entity.HasIndex(x => x.Codigo).IsUnique();
+        });
+
+        modelBuilder.Entity<PrecioProductoSede>(entity =>
+        {
+            entity.ToTable("precios_producto_sede");
+            entity.HasKey(x => x.PrecioProductoSedeId);
+            entity.Property(x => x.PrecioProductoSedeId).HasColumnName("precio_producto_sede_id");
+            entity.Property(x => x.ProductoId).IsRequired();
+            entity.Property(x => x.SedeId).IsRequired();
+
+            entity.OwnsOne(x => x.Precio1Unidad, money =>
+            {
+                money.Property(m => m.Amount).HasColumnName("precio1_unidad").HasColumnType("decimal(12,2)").IsRequired();
+                money.Property(m => m.Currency).HasColumnName("precio1_moneda").HasMaxLength(3).IsRequired();
+            });
+
+            entity.OwnsOne(x => x.Precio2CajaBultoPieza, money =>
+            {
+                money.Property(m => m.Amount).HasColumnName("precio2_caja_bulto_pieza").HasColumnType("decimal(12,2)").IsRequired();
+                money.Property(m => m.Currency).HasColumnName("precio2_moneda").HasMaxLength(3).IsRequired();
+            });
+
+            entity.OwnsOne(x => x.Precio3MayorDesde2, money =>
+            {
+                money.Property(m => m.Amount).HasColumnName("precio3_mayor_desde2").HasColumnType("decimal(12,2)").IsRequired();
+                money.Property(m => m.Currency).HasColumnName("precio3_moneda").HasMaxLength(3).IsRequired();
+            });
+
+            entity.OwnsOne(x => x.Precio4MayoristaNegociable, money =>
+            {
+                money.Property(m => m.Amount).HasColumnName("precio4_mayorista").HasColumnType("decimal(12,2)").IsRequired(false);
+                money.Property(m => m.Currency).HasColumnName("precio4_moneda").HasMaxLength(3).IsRequired(false);
+            });
+
+            entity.Property(x => x.Precio4RequiereAcuerdo).IsRequired();
+            entity.Property(x => x.VigenteDesde).IsRequired();
+            entity.Property(x => x.VigenteHasta).IsRequired(false);
+
+            entity.HasIndex(x => new { x.ProductoId, x.SedeId, x.VigenteDesde });
+        });
+
+        modelBuilder.Entity<ApiToken>(entity =>
+        {
+            entity.ToTable("api_tokens");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Nombre).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.TokenHash).HasMaxLength(128).IsRequired();
+            entity.Property(x => x.Activo).IsRequired();
+            entity.Property(x => x.CreatedAtUtc).IsRequired();
+
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => x.Activo);
         });
     }
 }

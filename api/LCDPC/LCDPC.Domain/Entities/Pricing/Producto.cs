@@ -81,4 +81,60 @@ public class Producto
             Activo = activo
         };
     }
+
+    public void Actualizar(
+        string nombre,
+        string sku,
+        TipoMedidaBase tipoMedidaBase,
+        TipoComercialMayor tipoComercialMayor,
+        int? unidadesPorCaja,
+        int? unidadesPorBulto)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            throw new ArgumentException("nombre is required", nameof(nombre));
+        }
+
+        if (string.IsNullOrWhiteSpace(sku))
+        {
+            throw new ArgumentException("sku is required", nameof(sku));
+        }
+
+        if (tipoMedidaBase == TipoMedidaBase.Unidad)
+        {
+            if (!unidadesPorCaja.HasValue || unidadesPorCaja <= 0)
+            {
+                throw new ArgumentException("unidadesPorCaja is required for unit-based products", nameof(unidadesPorCaja));
+            }
+
+            if (!unidadesPorBulto.HasValue || unidadesPorBulto <= 0)
+            {
+                throw new ArgumentException("unidadesPorBulto is required for unit-based products", nameof(unidadesPorBulto));
+            }
+
+            if (unidadesPorBulto < unidadesPorCaja)
+            {
+                throw new ArgumentException("unidadesPorBulto must be greater than or equal to unidadesPorCaja", nameof(unidadesPorBulto));
+            }
+        }
+
+        if (tipoMedidaBase is TipoMedidaBase.Gramos or TipoMedidaBase.Kilo)
+        {
+            if (unidadesPorCaja.HasValue || unidadesPorBulto.HasValue)
+            {
+                throw new ArgumentException("weight-based products do not use box/bulk thresholds");
+            }
+        }
+
+        Nombre = nombre.Trim();
+        Sku = sku.Trim().ToUpperInvariant();
+        TipoMedidaBase = tipoMedidaBase;
+        TipoComercialMayor = tipoComercialMayor;
+        UnidadesPorCaja = unidadesPorCaja;
+        UnidadesPorBulto = unidadesPorBulto;
+    }
+
+    public void Desactivar() => Activo = false;
+
+    public void Activar() => Activo = true;
 }

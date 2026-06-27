@@ -94,6 +94,15 @@ using (var scope = app.Services.CreateScope())
     await SuperUserSeeder.SeedAsync(dbContext, superUserPassword, superUserSeed);
     await OAuth2ClientSeeder.SeedAsync(dbContext);
 
+    var initialApiToken = await ApiTokenSeeder.SeedAsync(dbContext);
+    if (initialApiToken is not null)
+    {
+        Console.WriteLine("═══════════════════════════════════════════════════════════");
+        Console.WriteLine("  API TOKEN DE SYNC INICIAL (guardarlo, no se volverá a mostrar):");
+        Console.WriteLine($"  {initialApiToken}");
+        Console.WriteLine("═══════════════════════════════════════════════════════════");
+    }
+
     var keyService = scope.ServiceProvider.GetRequiredService<IOAuth2KeyService>();
     _ = keyService.GetJwks();
 }

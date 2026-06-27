@@ -78,4 +78,27 @@ public class PrecioProductoSede
             _ => null
         };
     }
+
+    public void Actualizar(
+        Money precio1Unidad,
+        Money precio2CajaBultoPieza,
+        Money precio3MayorDesde2,
+        Money? precio4MayoristaNegociable,
+        bool precio4RequiereAcuerdo,
+        DateTime vigenteDesde,
+        DateTime? vigenteHasta = null)
+    {
+        if (vigenteHasta.HasValue && vigenteHasta <= vigenteDesde)
+        {
+            throw new ArgumentException("vigenteHasta must be greater than vigenteDesde", nameof(vigenteHasta));
+        }
+
+        Precio1Unidad = precio1Unidad;
+        Precio2CajaBultoPieza = precio2CajaBultoPieza;
+        Precio3MayorDesde2 = precio3MayorDesde2;
+        Precio4MayoristaNegociable = precio4MayoristaNegociable;
+        Precio4RequiereAcuerdo = precio4RequiereAcuerdo;
+        VigenteDesde = vigenteDesde;
+        VigenteHasta = vigenteHasta;
+    }
 }

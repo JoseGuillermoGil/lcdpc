@@ -1,9 +1,17 @@
+using LCDPC.Application.Combos;
+using LCDPC.Application.OAuth2;
+using LCDPC.Application.Precios;
+using LCDPC.Application.Productos;
+using LCDPC.Application.Sync;
+using LCDPC.Application.Users.Auth;
+using LCDPC.Infrastructure.Combos;
 using LCDPC.Infrastructure.Email;
 using LCDPC.Infrastructure.OAuth2;
 using LCDPC.Infrastructure.Persistence;
+using LCDPC.Infrastructure.Precios;
+using LCDPC.Infrastructure.Productos;
+using LCDPC.Infrastructure.Sync;
 using LCDPC.Infrastructure.Users.Auth;
-using LCDPC.Application.OAuth2;
-using LCDPC.Application.Users.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -105,6 +113,11 @@ public static class DependencyInjection
         services.AddHealthChecks().AddDbContextCheck<AppDbContext>("postgres");
         services.AddScoped<IRegistrationFlowService, RegistrationFlowService>();
         services.AddScoped<IEmailService, ResendEmailService>();
+
+        services.AddScoped<IProductoService, ProductoService>();
+        services.AddScoped<IComboService, ComboService>();
+        services.AddScoped<IPrecioProductoSedeService, PrecioProductoSedeService>();
+        services.AddScoped<ISyncService, SyncService>();
 
         return services;
     }

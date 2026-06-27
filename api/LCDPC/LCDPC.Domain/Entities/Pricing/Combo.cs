@@ -6,6 +6,7 @@ namespace LCDPC.Domain.Entities.Pricing;
 public class Combo
 {
     public Guid ComboId { get; private set; }
+    public string Codigo { get; private set; } = string.Empty;
     public string Nombre { get; private set; } = string.Empty;
     public EstadoCombo Estado { get; private set; }
     public List<ComboItem> Items { get; private set; } = [];
@@ -19,11 +20,16 @@ public class Combo
     {
     }
 
-    public static Combo Create(Guid comboId, string nombre, IEnumerable<ComboItem> items, IEnumerable<Guid>? sedeIdsHabilitadas = null)
+    public static Combo Create(Guid comboId, string codigo, string nombre, IEnumerable<ComboItem> items, IEnumerable<Guid>? sedeIdsHabilitadas = null)
     {
         if (comboId == Guid.Empty)
         {
             throw new ArgumentException("comboId is required", nameof(comboId));
+        }
+
+        if (string.IsNullOrWhiteSpace(codigo))
+        {
+            throw new ArgumentException("codigo is required", nameof(codigo));
         }
 
         if (string.IsNullOrWhiteSpace(nombre))
@@ -34,6 +40,7 @@ public class Combo
         var combo = new Combo
         {
             ComboId = comboId,
+            Codigo = codigo.Trim().ToUpperInvariant(),
             Nombre = nombre.Trim(),
             Estado = EstadoCombo.Borrador
         };
@@ -91,4 +98,40 @@ public class Combo
     }
 
     public bool EsVisibleEnCatalogo() => Estado == EstadoCombo.Publicado;
+
+    public void ActualizarNombre(string nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            throw new ArgumentException("nombre is required", nameof(nombre));
+        }
+
+        Nombre = nombre.Trim();
+    }
+
+    public void ActualizarCodigo(string codigo)
+    {
+        if (string.IsNullOrWhiteSpace(codigo))
+        {
+            throw new ArgumentException("codigo is required", nameof(codigo));
+        }
+
+        Codigo = codigo.Trim().ToUpperInvariant();
+    }
+
+    public void ActualizarItems(IEnumerable<ComboItem> items)
+    {
+        Items.Clear();
+        Items.AddRange(items ?? throw new ArgumentNullException(nameof(items)));
+    }
+
+    public void ActualizarSedes(IEnumerable<Guid>? sedeIds)
+    {
+        sedeIdsHabilitadas.Clear();
+
+        if (sedeIds is not null)
+        {
+            sedeIdsHabilitadas.AddRange(sedeIds.Where(x => x != Guid.Empty));
+        }
+    }
 }
