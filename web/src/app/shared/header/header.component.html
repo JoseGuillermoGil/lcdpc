@@ -9,14 +9,6 @@
       <span class="brand-name">LA CASA DEL PERROCALENTERO</span>
     </a>
 
-    <!-- <nav class="desktop-nav" aria-label="Secciones principales">
-      <p-button label="Combos" styleClass="nav-link active" [text]="true" [rounded]="true" severity="secondary"></p-button>
-      <p-button label="Salchichas" styleClass="nav-link" [text]="true" [rounded]="true" severity="secondary"></p-button>
-      <p-button label="Panes" styleClass="nav-link" [text]="true" [rounded]="true" severity="secondary"></p-button>
-      <p-button label="Salsas" styleClass="nav-link" [text]="true" [rounded]="true" severity="secondary"></p-button>
-      <p-button label="Admin" styleClass="nav-link" [text]="true" [rounded]="true" severity="secondary"></p-button>
-    </nav> -->
-
     <div class="topbar-actions">
       <p-button
         label="Buscar"
@@ -55,15 +47,38 @@
         <span class="cart-count-badge">{{ cartCount }}</span>
       </div>
 
-      <p-button
-        icon="pi pi-user"
-        styleClass="account-button"
-        [rounded]="true"
-        [text]="true"
-        severity="secondary"
-        ariaLabel="Cuenta"
-        routerLink="/autenticacion"
-      ></p-button>
+      @if (isAuthenticated()) {
+        <div class="user-menu">
+          <p-button
+            [label]="user()?.displayName ?? ''"
+            icon="pi pi-user"
+            styleClass="account-button"
+            [rounded]="true"
+            [text]="true"
+            severity="secondary"
+            ariaLabel="Cuenta"
+          ></p-button>
+          <p-button
+            icon="pi pi-sign-out"
+            styleClass="logout-button"
+            [rounded]="true"
+            [text]="true"
+            severity="secondary"
+            ariaLabel="Cerrar sesión"
+            (onClick)="logout()"
+          ></p-button>
+        </div>
+      } @else {
+        <p-button
+          icon="pi pi-user"
+          styleClass="account-button"
+          [rounded]="true"
+          [text]="true"
+          severity="secondary"
+          ariaLabel="Iniciar sesión"
+          routerLink="/autenticacion"
+        ></p-button>
+      }
     </div>
   </div>
 </header>

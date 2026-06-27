@@ -5,15 +5,17 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/lcdpc/lcdpc-go/internal/auth"
+	"github.com/lcdpc/lcdpc-go/internal/rbac"
 )
 
 type contextKey string
 
 const (
-	UserIDKey   contextKey = "user_id"
-	UserRolesKey contextKey = "user_roles"
-	TokenKey    contextKey = "access_token"
+	UserIDKey    contextKey = "user_id"
+	ProfileIDKey contextKey = "profile_id"
+	TokenKey     contextKey = "access_token"
 )
 
 func PASETOAuth(key []byte, issuer, audience string) func(http.Handler) http.Handler {
@@ -32,7 +34,7 @@ func PASETOAuth(key []byte, issuer, audience string) func(http.Handler) http.Han
 			}
 
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.Sub)
-			ctx = context.WithValue(ctx, UserRolesKey, claims.Roles)
+			ctx = context.WithValue(ctx, ProfileIDKey, claims.ProfileID)
 			ctx = context.WithValue(ctx, TokenKey, tokenString)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -53,21 +55,27 @@ func RequireAuth() func(http.Handler) http.Handler {
 	}
 }
 
-func RequireRoles(roles ...string) func(http.Handler) http.Handler {
+func RequirePermission(store *rbac.Store, resourceCode string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			userRoles, _ := r.Context().Value(UserRolesKey).([]string)
-
-			for _, required := range roles {
-				for _, user := range userRoles {
-					if user == required {
-						next.ServeHTTP(w, r)
-						return
-					}
-				}
+			profileIDStr := GetProfileID(r.Context())
+			if profileIDStr == "" {
+				http.Error(w, `{"status":"error","message":"unauthorized"}`, http.StatusUnauthorized)
+				return
 			}
 
-			http.Error(w, `{"status":"error","message":"insufficient_permissions"}`, http.StatusForbidden)
+			profileID, err := uuid.Parse(profileIDStr)
+			if err != nil {
+				http.Error(w, `{"status":"error","message":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+
+			if !store.HasPermission(profileID, resourceCode) {
+				http.Error(w, `{"status":"error","message":"insufficient_permissions"}`, http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
 		})
 	}
 }
@@ -93,11 +101,11 @@ func GetUserID(ctx context.Context) string {
 	return ""
 }
 
-func GetUserRoles(ctx context.Context) []string {
-	if v, ok := ctx.Value(UserRolesKey).([]string); ok {
+func GetProfileID(ctx context.Context) string {
+	if v, ok := ctx.Value(ProfileIDKey).(string); ok {
 		return v
 	}
-	return nil
+	return ""
 }
 
 func GetAccessToken(ctx context.Context) string {

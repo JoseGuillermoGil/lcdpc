@@ -14,7 +14,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { SelectModule } from 'primeng/select';
 import { StepperModule } from 'primeng/stepper';
-import { AuthApiService, StartRegistrationResponse } from '../auth-page/auth-api.service';
+import { AuthApiService, StartRegistrationResponse } from '../auth-page/auth-api-go.service';
 
 type RegisterStep = 1 | 2 | 3;
 type DocumentTypeOption = { label: string; value: string };

@@ -40,7 +40,7 @@ High-signal guidance for OpenCode sessions in this repo.
 - Interfaces are defined in the consuming package, not the implementing package.
 - Auth tokens are PASETO v2.local (XChaCha20-Poly1305). The payload is encrypted and opaque to clients.
 - Cookies `lcdpc_at` and `lcdpc_rt` are HTTP-only for legacy compatibility.
-- Role checks use `RequireRoles` middleware; preserve that flow when adding protected endpoints.
+- Role checks use `RequirePermission(store, "resource:action")` middleware; preserve that flow when adding protected endpoints.
 - CORS must keep `AllowCredentials()` for auth to work cross-origin.
 - Seeders run on startup (superuser, oauth2 client, api token). Do not introduce migration runners unless asked.
 - API responses use JSend format (`{"status":"success","data":{}}`).
@@ -53,7 +53,7 @@ High-signal guidance for OpenCode sessions in this repo.
 - Password hashing is PBKDF2-SHA256, 100k iterations, compatible with the previous C# hashes.
 - The OAuth2 server is custom-built (authorize, token, introspect, revoke). It is NOT using `golang.org/x/oauth2` as a server.
 - `golang.org/x/oauth2` is used only as a Google OAuth **client**.
-- Package structure: `internal/auth/` (auth + OAuth2), `internal/pricing/` (productos, combos, precios), `internal/sede/`, `internal/sync/`, `internal/email/`, `internal/db/`.
+- Package structure: `internal/auth/` (auth + OAuth2), `internal/pricing/` (productos, combos, precios), `internal/sede/`, `internal/sync/`, `internal/email/`, `internal/db/`, `internal/rbac/` (RBAC store + CRUD).
 
 ## Frontend facts agents often guess wrong
 

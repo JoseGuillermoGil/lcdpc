@@ -15,6 +15,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/email"
 	httpserver "github.com/lcdpc/lcdpc-go/internal/http"
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
+	"github.com/lcdpc/lcdpc-go/internal/rbac"
 	"github.com/lcdpc/lcdpc-go/internal/sede"
 	"github.com/lcdpc/lcdpc-go/internal/sync"
 )
@@ -52,6 +53,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	rbacStore := rbac.NewStore()
+	if err := rbacStore.LoadFromDB(ctx, pool); err != nil {
+		slog.Error("failed to load RBAC store", "error", err)
+		os.Exit(1)
+	}
+
 	var emailSvc email.Sender
 	if cfg.ResendAPIKey != "" {
 		emailSvc = email.NewResendSender(cfg.ResendAPIKey, cfg.ResendFrom)
@@ -66,7 +73,7 @@ func main() {
 		OAuth2Issuer:                  cfg.OAuth2Issuer,
 		OAuth2Audience:                cfg.OAuth2Audience,
 		AccessTokenTTLMin:             cfg.OAuth2AccessTokenTTLMin,
-	})
+	}, rbacStore)
 
 	oauth2Svc := auth.NewOAuth2Service(pool, keySvc, auth.OAuth2Config{
 		AccessTokenTTLMin:   cfg.OAuth2AccessTokenTTLMin,
@@ -79,8 +86,9 @@ func main() {
 	pricingSvc := pricing.NewService(pool)
 	sedeSvc := sede.NewService(pool)
 	syncSvc := sync.NewService(pool)
+	rbacSvc := rbac.NewService(pool, rbacStore)
 
-	router := httpserver.NewServer(cfg, pool, authSvc, oauth2Svc, keySvc, pricingSvc, sedeSvc, syncSvc)
+	router := httpserver.NewServer(cfg, pool, authSvc, oauth2Svc, keySvc, pricingSvc, sedeSvc, syncSvc, rbacStore, rbacSvc)
 
 	addr := ":" + cfg.Port
 	srv := &http.Server{

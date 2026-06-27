@@ -4,6 +4,7 @@ import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { FooterComponent } from './shared/footer/footer.component';
 import { HeaderComponent } from './shared/header/header.component';
+import { AuthStore } from './core/auth/auth.store';
 
 type BranchCard = {
   id: string;
@@ -22,6 +23,7 @@ type BranchCard = {
 export class App {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+  protected readonly authStore = inject(AuthStore);
 
   protected readonly showStoreShell = signal(!this.isAuthRoute(this.router.url));
   protected readonly selectedBranchId = signal('ocumare');

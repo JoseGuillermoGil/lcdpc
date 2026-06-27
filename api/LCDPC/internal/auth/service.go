@@ -24,15 +24,21 @@ const (
 )
 
 type Service struct {
-	pool     *pgxpool.Pool
-	emailSvc emailSender
-	keySvc   *KeyService
-	tokenCfg TokenConfig
+	pool      *pgxpool.Pool
+	emailSvc  emailSender
+	keySvc    *KeyService
+	tokenCfg  TokenConfig
+	rbacStore rbacStore
 }
 
 type emailSender interface {
 	SendOtpAsync(ctx context.Context, to, otp string) error
 	SendPasswordResetAsync(ctx context.Context, to, token string) error
+}
+
+type rbacStore interface {
+	HasPermission(profileID uuid.UUID, resourceCode string) bool
+	GetPermissions(profileID uuid.UUID) []string
 }
 
 type Config struct {
@@ -43,7 +49,7 @@ type Config struct {
 	AccessTokenTTLMin             int
 }
 
-func NewService(pool *pgxpool.Pool, emailSvc emailSender, keySvc *KeyService, cfg Config) *Service {
+func NewService(pool *pgxpool.Pool, emailSvc emailSender, keySvc *KeyService, cfg Config, rbacStore rbacStore) *Service {
 	return &Service{
 		pool:     pool,
 		emailSvc: emailSvc,
@@ -53,6 +59,7 @@ func NewService(pool *pgxpool.Pool, emailSvc emailSender, keySvc *KeyService, cf
 			Audience:          cfg.OAuth2Audience,
 			AccessTokenTTLMin: cfg.AccessTokenTTLMin,
 		},
+		rbacStore: rbacStore,
 	}
 }
 
@@ -316,10 +323,11 @@ func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileReques
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 
+	profileID := uuid.New()
 	_, err = tx.Exec(ctx, `
 		INSERT INTO profiles (id, user_id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
-	`, uuid.New(), userID, req.Nombres, req.Apellidos, req.DocumentoIdentidad,
+	`, profileID, userID, req.Nombres, req.Apellidos, req.DocumentoIdentidad,
 		nullString(req.Rif), req.TelefonoWhatsApp, req.DireccionCompleta)
 	if err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
@@ -332,9 +340,9 @@ func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileReques
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO user_role_assignments (id, user_id, role_id, sede_ids, active, created_at_utc)
-		VALUES ($1, $2, $3, '{}', true, now())
-	`, uuid.New(), userID, clientRoleID)
+		INSERT INTO profile_role_assignments (id, profile_id, role_id, active, created_at_utc)
+		VALUES ($1, $2, $3, true, now())
+	`, uuid.New(), profileID, clientRoleID)
 	if err != nil {
 		return nil, fmt.Errorf("assign role: %w", err)
 	}
@@ -394,10 +402,11 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 		return nil, fmt.Errorf("INVALID_CREDENTIALS")
 	}
 
-	// Get roles
-	roles, err := s.getUserRoles(ctx, user.ID)
+	// Get profile ID
+	var profileID uuid.UUID
+	err = s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, user.ID).Scan(&profileID)
 	if err != nil {
-		return nil, fmt.Errorf("get roles: %w", err)
+		return nil, fmt.Errorf("get profile: %w", err)
 	}
 
 	// Generate access token
@@ -405,10 +414,10 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 		s.keySvc.Key(),
 		s.tokenCfg,
 		user.ID,
+		profileID,
 		"lcdpc-web",
 		"openid email profile",
 		user.Email,
-		roles,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
@@ -455,10 +464,10 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 // Me
 
 type MeResponse struct {
-	Authenticated bool                   `json:"authenticated"`
-	User          *UserSummary           `json:"user,omitempty"`
-	Permissions   []ResourcePermission   `json:"permissions"`
-	ExpiresIn     *int                   `json:"expires_in,omitempty"`
+	Authenticated bool           `json:"authenticated"`
+	User          *UserSummary   `json:"user,omitempty"`
+	Permissions   []string       `json:"permissions"`
+	ExpiresIn     *int           `json:"expires_in,omitempty"`
 }
 
 type UserSummary struct {
@@ -469,21 +478,12 @@ type UserSummary struct {
 	TipoCuenta       string    `json:"tipo_cuenta"`
 	OnboardingStatus string    `json:"onboarding_status"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
-	Roles            []string  `json:"roles"`
-}
-
-type ResourcePermission struct {
-	ResourceCode string `json:"resource_code"`
-	CanView      bool   `json:"can_view"`
-	CanWrite     bool   `json:"can_write"`
-	CanUpdate    bool   `json:"can_update"`
-	CanDelete    bool   `json:"can_delete"`
-	CanAll       bool   `json:"can_all"`
+	ProfileID        string    `json:"profile_id"`
 }
 
 func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, error) {
 	if accessToken == "" {
-		return &MeResponse{Authenticated: false, Permissions: []ResourcePermission{}}, nil
+		return &MeResponse{Authenticated: false, Permissions: []string{}}, nil
 	}
 
 	accessTokenHash := HashToken(accessToken)
@@ -498,7 +498,7 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 		WHERE access_token_hash = $1 AND revoked_at_utc IS NULL AND access_token_expires_at_utc > now()
 	`, accessTokenHash).Scan(&session.UserID, &session.AccessTokenExpiresAtUtc)
 	if err == pgx.ErrNoRows {
-		return &MeResponse{Authenticated: false, Permissions: []ResourcePermission{}}, nil
+		return &MeResponse{Authenticated: false, Permissions: []string{}}, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get session: %w", err)
@@ -513,24 +513,19 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 		EmailVerifiedAt  *time.Time
 		FirstName        *string
 		LastName         *string
+		ProfileID        uuid.UUID
 	}
 
 	err = s.pool.QueryRow(ctx, `
 		SELECT u.id, u.email, u.status, u.onboarding_status, u.email_verified_at_utc,
-		       p.first_name, p.last_name
+		       p.first_name, p.last_name, p.id
 		FROM users u
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE u.id = $1
 	`, session.UserID).Scan(&user.ID, &user.Email, &user.Status, &user.OnboardingStatus,
-		&user.EmailVerifiedAt, &user.FirstName, &user.LastName)
+		&user.EmailVerifiedAt, &user.FirstName, &user.LastName, &user.ProfileID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
-	}
-
-	// Get roles
-	roles, err := s.getUserRoles(ctx, session.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("get roles: %w", err)
 	}
 
 	displayName := user.Email
@@ -546,18 +541,18 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 		estado = "desactivado"
 	}
 
+	// Get permissions from store
+	permissions := s.rbacStore.GetPermissions(user.ProfileID)
+	if permissions == nil {
+		permissions = []string{}
+	}
+
 	tipoCuenta := "cliente"
-	for _, r := range roles {
-		if len(r) >= 5 && r[:5] == "admin" {
+	for _, code := range permissions {
+		if code == "rbac:resource:create" || code == "rbac:role:create" {
 			tipoCuenta = "administrador"
 			break
 		}
-	}
-
-	// Get permissions
-	permissions, err := s.getUserPermissions(ctx, session.UserID)
-	if err != nil {
-		return nil, fmt.Errorf("get permissions: %w", err)
 	}
 
 	expiresIn := int(time.Until(session.AccessTokenExpiresAtUtc).Seconds())
@@ -575,7 +570,7 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 			TipoCuenta:       tipoCuenta,
 			OnboardingStatus: user.OnboardingStatus,
 			EmailVerifiedAt:  user.EmailVerifiedAt,
-			Roles:            roles,
+			ProfileID:        user.ProfileID.String(),
 		},
 		Permissions: permissions,
 		ExpiresIn:   &expiresIn,
@@ -619,9 +614,10 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*LoginRespo
 	}
 
 	// Generate new tokens
-	roles, err := s.getUserRoles(ctx, rt.UserID)
+	var profileID uuid.UUID
+	err = s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, rt.UserID).Scan(&profileID)
 	if err != nil {
-		return nil, fmt.Errorf("get roles: %w", err)
+		return nil, fmt.Errorf("get profile: %w", err)
 	}
 
 	var email string
@@ -630,7 +626,7 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*LoginRespo
 		return nil, fmt.Errorf("get user email: %w", err)
 	}
 
-	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, rt.ClientID, rt.Scope, email, roles)
+	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, profileID, rt.ClientID, rt.Scope, email)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
 	}
@@ -871,67 +867,6 @@ func (s *Service) UpdateSecurityPolicy(ctx context.Context, ttlMinutes int, revo
 }
 
 // Helpers
-
-func (s *Service) getUserRoles(ctx context.Context, userID uuid.UUID) ([]string, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT r.code FROM user_role_assignments ura
-		JOIN roles r ON r.id = ura.role_id
-		WHERE ura.user_id = $1 AND ura.active = true
-	`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var roles []string
-	for rows.Next() {
-		var code string
-		if err := rows.Scan(&code); err != nil {
-			return nil, err
-		}
-		roles = append(roles, code)
-	}
-	return roles, nil
-}
-
-func (s *Service) getUserPermissions(ctx context.Context, userID uuid.UUID) ([]ResourcePermission, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT ar.code, rrp.can_view, rrp.can_write, rrp.can_update, rrp.can_delete, rrp.can_all
-		FROM user_role_assignments ura
-		JOIN role_resource_permissions rrp ON rrp.role_id = ura.role_id
-		JOIN api_resources ar ON ar.id = rrp.resource_id
-		WHERE ura.user_id = $1 AND ura.active = true
-	`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	permMap := map[string]*ResourcePermission{}
-	for rows.Next() {
-		var code string
-		var p ResourcePermission
-		if err := rows.Scan(&code, &p.CanView, &p.CanWrite, &p.CanUpdate, &p.CanDelete, &p.CanAll); err != nil {
-			return nil, err
-		}
-		if existing, ok := permMap[code]; ok {
-			existing.CanView = existing.CanView || p.CanView
-			existing.CanWrite = existing.CanWrite || p.CanWrite
-			existing.CanUpdate = existing.CanUpdate || p.CanUpdate
-			existing.CanDelete = existing.CanDelete || p.CanDelete
-			existing.CanAll = existing.CanAll || p.CanAll
-		} else {
-			p.ResourceCode = code
-			permMap[code] = &p
-		}
-	}
-
-	permissions := make([]ResourcePermission, 0, len(permMap))
-	for _, p := range permMap {
-		permissions = append(permissions, *p)
-	}
-	return permissions, nil
-}
 
 func (s *Service) resetOTP(ctx context.Context, flowID uuid.UUID, now time.Time) {
 	otpCode := GenerateOtp()

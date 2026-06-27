@@ -8,7 +8,7 @@ import { ButtonModule } from 'primeng/button';
 import { CheckboxModule } from 'primeng/checkbox';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
-import { AuthApiService } from './auth-api.service';
+import { AuthStore } from '../../core/auth/auth.store';
 
 @Component({
   selector: 'app-auth-page',
@@ -18,7 +18,7 @@ import { AuthApiService } from './auth-api.service';
   styleUrl: './auth-page.component.scss'
 })
 export class AuthPageComponent {
-  private readonly authApi = inject(AuthApiService);
+  private readonly authStore = inject(AuthStore);
   private readonly router = inject(Router);
 
   protected readonly username = signal('');
@@ -37,12 +37,7 @@ export class AuthPageComponent {
     this.isSubmitting.set(true);
 
     try {
-      const loginResponse = await firstValueFrom(this.authApi.login({
-        email: this.username().trim(),
-        password: this.password()
-      }));
-
-      await firstValueFrom(this.authApi.me(loginResponse.tokenPair.accessToken));
+      await firstValueFrom(this.authStore.login(this.username().trim(), this.password()));
       await this.router.navigateByUrl('/');
     } catch (error) {
       this.submitError.set(this.resolveSubmitError(error));

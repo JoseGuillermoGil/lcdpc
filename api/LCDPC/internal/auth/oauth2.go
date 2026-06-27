@@ -264,10 +264,11 @@ func (s *OAuth2Service) ExchangeCode(ctx context.Context, code, codeVerifier, re
 	var email string
 	s.pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, authCode.UserID).Scan(&email)
 
-	// Get roles
-	roles, _ := s.getUserRoles(ctx, authCode.UserID)
+	// Get profile ID
+	var profileID uuid.UUID
+	s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, authCode.UserID).Scan(&profileID)
 
-	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, authCode.UserID, clientID, authCode.Scope, email, roles)
+	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, authCode.UserID, profileID, clientID, authCode.Scope, email)
 	if err != nil {
 		return nil, &TokenErrorResponse{Error: "server_error", ErrorDescription: "Failed to generate access token."}
 	}
@@ -347,9 +348,12 @@ func (s *OAuth2Service) RefreshToken(ctx context.Context, refreshToken, clientID
 	// Get user email
 	var email string
 	s.pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, rt.UserID).Scan(&email)
-	roles, _ := s.getUserRoles(ctx, rt.UserID)
 
-	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, clientID, rt.Scope, email, roles)
+	// Get profile ID
+	var profileID uuid.UUID
+	s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, rt.UserID).Scan(&profileID)
+
+	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, profileID, clientID, rt.Scope, email)
 	if err != nil {
 		return nil, &TokenErrorResponse{Error: "server_error", ErrorDescription: "Failed to generate access token."}
 	}
@@ -462,26 +466,4 @@ func (s *OAuth2Service) Revoke(ctx context.Context, token string) error {
 		UPDATE oauth2_refresh_tokens SET revoked_at_utc = now() WHERE family_id = $1 AND revoked_at_utc IS NULL
 	`, familyID)
 	return err
-}
-
-func (s *OAuth2Service) getUserRoles(ctx context.Context, userID uuid.UUID) ([]string, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT r.code FROM user_role_assignments ura
-		JOIN roles r ON r.id = ura.role_id
-		WHERE ura.user_id = $1 AND ura.active = true
-	`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var roles []string
-	for rows.Next() {
-		var code string
-		if err := rows.Scan(&code); err != nil {
-			return nil, err
-		}
-		roles = append(roles, code)
-	}
-	return roles, nil
 }

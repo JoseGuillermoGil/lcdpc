@@ -86,10 +86,16 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 		return err
 	}
 
+	var profileID uuid.UUID
+	err = pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, userID).Scan(&profileID)
+	if err != nil {
+		return err
+	}
+
 	_, err = pool.Exec(ctx, `
-		INSERT INTO user_role_assignments (id, user_id, role_id, sede_ids, active, created_at_utc)
-		VALUES ($1, $2, $3, '{}', true, now())
-	`, uuid.New(), userID, adminRoleID)
+		INSERT INTO profile_role_assignments (id, profile_id, role_id, active, created_at_utc)
+		VALUES ($1, $2, $3, true, now())
+	`, uuid.New(), profileID, adminRoleID)
 	if err != nil {
 		return err
 	}

@@ -25,16 +25,16 @@ type TokenPair struct {
 }
 
 type TokenClaims struct {
-	Iss      string   `json:"iss"`
-	Aud      string   `json:"aud"`
-	Sub      string   `json:"sub"`
-	ClientID string   `json:"client_id"`
-	Scope    string   `json:"scope"`
-	Email    string   `json:"email"`
-	Roles    []string `json:"roles"`
-	Iat      int64    `json:"iat"`
-	Exp      int64    `json:"exp"`
-	Jti      string   `json:"jti"`
+	Iss       string `json:"iss"`
+	Aud       string `json:"aud"`
+	Sub       string `json:"sub"`
+	ProfileID string `json:"profile_id"`
+	ClientID  string `json:"client_id"`
+	Scope     string `json:"scope"`
+	Email     string `json:"email"`
+	Iat       int64  `json:"iat"`
+	Exp       int64  `json:"exp"`
+	Jti       string `json:"jti"`
 }
 
 type KeyService struct {
@@ -95,29 +95,25 @@ func GenerateAccessToken(
 	key []byte,
 	cfg TokenConfig,
 	userID uuid.UUID,
+	profileID uuid.UUID,
 	clientID string,
 	scope string,
 	email string,
-	roles []string,
 ) (string, error) {
 	now := time.Now().UTC()
 	expires := now.Add(time.Duration(cfg.AccessTokenTTLMin) * time.Minute)
 
-	if roles == nil {
-		roles = []string{}
-	}
-
 	claims := TokenClaims{
-		Iss:      cfg.Issuer,
-		Aud:      cfg.Audience,
-		Sub:      userID.String(),
-		ClientID: clientID,
-		Scope:    scope,
-		Email:    email,
-		Roles:    roles,
-		Iat:      now.Unix(),
-		Exp:      expires.Unix(),
-		Jti:      uuid.New().String(),
+		Iss:       cfg.Issuer,
+		Aud:       cfg.Audience,
+		Sub:       userID.String(),
+		ProfileID: profileID.String(),
+		ClientID:  clientID,
+		Scope:     scope,
+		Email:     email,
+		Iat:       now.Unix(),
+		Exp:       expires.Unix(),
+		Jti:       uuid.New().String(),
 	}
 
 	token, err := paseto.NewV2().Encrypt(key, claims, nil)
