@@ -953,7 +953,217 @@ Asigna o cambia el profile de un usuario.
 
 ---
 
-## 9. Sync (`/api/v1/sync`)
+## 9. Orders (`/api/v1/orders`)
+
+### `POST /api/v1/orders`
+Crea una orden con items.
+
+**Auth:** Requiere permiso `order:create`
+
+**Request:**
+```json
+{
+  "sede_id": "uuid",
+  "client_user_id": "uuid",
+  "notes": "Entrega urgente",
+  "items": [
+    {
+      "item_type": "producto",
+      "producto_id": "uuid",
+      "quantity": 5,
+      "unit_price": 1.50
+    },
+    {
+      "item_type": "combo",
+      "combo_id": "uuid",
+      "quantity": 2,
+      "unit_price": 25.99
+    }
+  ]
+}
+```
+
+**Validaciones:**
+- Debe tener al menos 1 item
+- `item_type` debe ser `producto` o `combo`
+- Si `item_type` = `producto`: `producto_id` requerido, `combo_id` debe ser null
+- Si `item_type` = `combo`: `combo_id` requerido, `producto_id` debe ser null
+
+**Respuesta (201):** Orden completa con items y price_total calculado.
+
+---
+
+### `GET /api/v1/orders`
+Lista órdenes con filtros opcionales.
+
+**Auth:** Requiere permiso `order:view`
+
+**Query params:**
+| Param | Tipo | Descripción |
+|-------|------|-------------|
+| `sede_id` | UUID | Filtrar por sede |
+| `client_user_id` | UUID | Filtrar por cliente |
+| `status` | string | Filtrar por estado |
+
+**Respuesta:**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "sede_id": "uuid",
+      "client_user_id": "uuid",
+      "status": "PENDING_REVIEW",
+      "price_total": 59.48,
+      "total_items": 7,
+      "currency": "USD",
+      "notes": "Entrega urgente",
+      "created_at_utc": "2026-06-27T12:00:00Z",
+      "updated_at_utc": "2026-06-27T12:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `GET /api/v1/orders/{id}`
+Obtiene una orden por ID con sus items.
+
+**Auth:** Requiere permiso `order:view`
+
+**Respuesta:**
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "sede_id": "uuid",
+    "client_user_id": "uuid",
+    "status": "PENDING_REVIEW",
+    "price_total": 59.48,
+    "total_items": 7,
+    "currency": "USD",
+    "notes": "Entrega urgente",
+    "created_at_utc": "2026-06-27T12:00:00Z",
+    "updated_at_utc": "2026-06-27T12:00:00Z",
+    "items": [
+      {
+        "id": "uuid",
+        "order_id": "uuid",
+        "item_type": "producto",
+        "producto_id": "uuid",
+        "combo_id": null,
+        "quantity": 5,
+        "unit_price": 1.50,
+        "subtotal": 7.50,
+        "currency": "USD"
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `PUT /api/v1/orders/{id}`
+Actualiza una orden (solo si está en estado editable: `PENDING_REVIEW` o `UNDER_REVIEW`).
+
+**Auth:** Requiere permiso `order:update`
+
+**Request:**
+```json
+{
+  "notes": "Nota actualizada",
+  "items": [
+    {"item_type": "producto", "producto_id": "uuid", "quantity": 10, "unit_price": 1.50}
+  ]
+}
+```
+
+Si se proporciona `items`, se reemplazan todos los items existentes y se recalculan los totales.
+
+**Errores:** `ORDER_NOT_EDITABLE`, `ORDER_NOT_FOUND`
+
+---
+
+### `DELETE /api/v1/orders/{id}`
+Cancela una orden (cambia estado a `CANCELLED_BY_CUSTOMER`).
+
+**Auth:** Requiere permiso `order:delete`
+
+**Errores:** `ORDER_IN_TERMINAL_STATUS`, `ORDER_NOT_FOUND`
+
+---
+
+### `POST /api/v1/orders/{id}/status`
+Cambia el estado de una orden.
+
+**Auth:** Requiere permiso `order:status:change`
+
+**Request:**
+```json
+{
+  "to_status": "UNDER_REVIEW",
+  "notes": "Revisando disponibilidad"
+}
+```
+
+**Transiciones válidas:**
+| Desde | Hacia |
+|-------|-------|
+| `PENDING_REVIEW` | `UNDER_REVIEW`, `REJECTED_BY_VALIDATION`, `CANCELLED_BY_CUSTOMER` |
+| `UNDER_REVIEW` | `APPROVED_FOR_FULFILLMENT`, `REJECTED_BY_VALIDATION`, `CANCELLED_BY_CUSTOMER` |
+| `APPROVED_FOR_FULFILLMENT` | `IN_PREPARATION`, `CANCELLED_BY_CUSTOMER` |
+| `IN_PREPARATION` | `AWAITING_INVENTORY`, `PREPARATION_COMPLETED`, `CANCELLED_BY_CUSTOMER` |
+| `AWAITING_INVENTORY` | `IN_PREPARATION`, `CANCELLED_BY_CUSTOMER` |
+| `PREPARATION_COMPLETED` | `READY_FOR_PICKUP`, `READY_FOR_DISPATCH` |
+| `READY_FOR_PICKUP` | `PICKED_UP`, `DELIVERY_FAILED` |
+| `READY_FOR_DISPATCH` | `IN_TRANSIT`, `DELIVERY_FAILED` |
+| `IN_TRANSIT` | `DELIVERED`, `DELIVERY_FAILED` |
+| `DELIVERED` | `COMPLETED` |
+| `PICKED_UP` | `COMPLETED` |
+
+**Errores:** `INVALID_TRANSITION`, `ORDER_NOT_FOUND`
+
+---
+
+### `GET /api/v1/orders/{id}/history`
+Obtiene el historial de cambios de estado de una orden.
+
+**Auth:** Requiere permiso `order:view`
+
+**Respuesta:**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": "uuid",
+      "order_id": "uuid",
+      "from_status": null,
+      "to_status": "PENDING_REVIEW",
+      "changed_by_user_id": "uuid",
+      "notes": null,
+      "created_at_utc": "2026-06-27T12:00:00Z"
+    },
+    {
+      "id": "uuid",
+      "order_id": "uuid",
+      "from_status": "PENDING_REVIEW",
+      "to_status": "UNDER_REVIEW",
+      "changed_by_user_id": "uuid",
+      "notes": "Revisando disponibilidad",
+      "created_at_utc": "2026-06-27T12:05:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## 10. Sync (`/api/v1/sync`)
 
 ### `POST /api/v1/sync/productos`
 Bulk upsert de productos (ON CONFLICT sku).
@@ -1030,8 +1240,8 @@ X-API-Key: {api-key-seed}
 | Rol | Permisos |
 |-----|----------|
 | `admin_global` | Todos los resources |
-| `admin_sede` | CRUD productos, combos, precios, sedes. Sin RBAC ni security-policy |
-| `cliente` | Solo lectura: `product:view`, `combo:view`, `price:view`, `sede:view` |
+| `admin_sede` | CRUD productos, combos, precios, sedes, orders. Sin RBAC ni security-policy |
+| `cliente` | Solo lectura: `product:view`, `combo:view`, `price:view`, `sede:view`, `order:create`, `order:view` |
 
 ---
 
@@ -1064,6 +1274,10 @@ X-API-Key: {api-key-seed}
 | 400 | `FLOW_NOT_FOUND` | Flow de registro no existe |
 | 400 | `INVALID_REFRESH_TOKEN` | Refresh token inválido/expirado |
 | 400 | `INVALID_OR_EXPIRED_RESET_TOKEN` | Token de reseteo inválido |
+| 400 | `ORDER_NOT_FOUND` | Orden no existe |
+| 400 | `ORDER_NOT_EDITABLE` | Orden no está en estado editable |
+| 400 | `ORDER_IN_TERMINAL_STATUS` | Orden en estado terminal, no se puede cancelar |
+| 400 | `INVALID_TRANSITION` | Transición de estado no permitida |
 | 401 | `unauthorized` | Token no proporcionado o inválido |
 | 403 | `insufficient_permissions` | Rol insuficiente |
 | 404 | `NOT_FOUND` | Recurso no existe |

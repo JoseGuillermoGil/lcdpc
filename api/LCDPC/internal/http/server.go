@@ -12,6 +12,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/auth"
 	"github.com/lcdpc/lcdpc-go/internal/http/handler"
 	"github.com/lcdpc/lcdpc-go/internal/http/middleware"
+	"github.com/lcdpc/lcdpc-go/internal/order"
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
 	"github.com/lcdpc/lcdpc-go/internal/rbac"
 	"github.com/lcdpc/lcdpc-go/internal/sede"
@@ -29,6 +30,7 @@ func NewServer(
 	syncSvc *sync.Service,
 	rbacStore *rbac.Store,
 	rbacSvc *rbac.Service,
+	orderSvc *order.Service,
 ) *chi.Mux {
 	r := chi.NewRouter()
 
@@ -47,6 +49,7 @@ func NewServer(
 	syncH := handler.NewSyncHandler(syncSvc)
 	healthH := handler.NewHealthHandler(pool)
 	rbacH := rbac.NewHandler(rbacSvc)
+	orderH := order.NewHandler(orderSvc)
 
 	// Public
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -253,6 +256,35 @@ func NewServer(
 		r.Use(middleware.RequireAuth())
 		r.Use(middleware.RequirePermission(rbacStore, "rbac:user:update"))
 		r.Put("/{id}/profile", rbacH.AssignProfileToUser)
+	})
+
+	// Orders
+	r.Route("/api/v1/orders", func(r chi.Router) {
+		r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+		r.Use(middleware.RequireAuth())
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "order:view"))
+			r.Get("/", orderH.List)
+			r.Get("/{id}", orderH.GetByID)
+			r.Get("/{id}/history", orderH.GetHistory)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "order:create"))
+			r.Post("/", orderH.Create)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "order:update"))
+			r.Put("/{id}", orderH.Update)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "order:delete"))
+			r.Delete("/{id}", orderH.Delete)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "order:status:change"))
+			r.Post("/{id}/status", orderH.ChangeStatus)
+		})
 	})
 
 	// Sync (API Key protected)
