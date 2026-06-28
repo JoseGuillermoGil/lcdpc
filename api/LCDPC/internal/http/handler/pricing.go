@@ -108,13 +108,14 @@ func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
-	result, err := h.svc.ListProducts(r.Context())
+	f := pricing.ParseProductFilter(r)
+	items, total, err := h.svc.ListProducts(r.Context(), f)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.Success(w, result)
+	response.Paginated(w, items, total, f.GetLimit(), f.GetOffset())
 }
 
 func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -310,13 +311,14 @@ func (h *BundleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BundleHandler) List(w http.ResponseWriter, r *http.Request) {
-	result, err := h.svc.ListBundles(r.Context())
+	f := pricing.ParseBundleFilter(r)
+	items, total, err := h.svc.ListBundles(r.Context(), f)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.Success(w, result)
+	response.Paginated(w, items, total, f.GetLimit(), f.GetOffset())
 }
 
 func (h *BundleHandler) Update(w http.ResponseWriter, r *http.Request) {

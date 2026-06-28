@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { API_BASE_URL } from '../../pages/auth-page/auth-api-go.service';
 import { CreateProductRequest, Product } from '../models/product.model';
+import { PaginatedResponse, ProductListFilter } from '../models/pagination.model';
 
 interface JsendEnvelope<T> {
   status: 'success' | 'fail' | 'error';
@@ -23,6 +24,13 @@ interface ProductGoData {
   category_id: string | null;
 }
 
+interface PaginatedGoData<T> {
+  items: T[];
+  total_count: number;
+  limit: number;
+  offset: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ProductApiService {
   private readonly baseUrl: string;
@@ -34,10 +42,25 @@ export class ProductApiService {
     this.baseUrl = apiBaseUrl.replace(/\/$/, '');
   }
 
-  list(): Observable<Product[]> {
+  list(filter?: ProductListFilter): Observable<PaginatedResponse<Product>> {
+    const params: Record<string, string> = {};
+    if (filter?.limit != null) params['limit'] = String(filter.limit);
+    if (filter?.offset != null) params['offset'] = String(filter.offset);
+    if (filter?.category_id) params['category_id'] = filter.category_id;
+    if (filter?.name) params['name'] = filter.name;
+    if (filter?.sku) params['sku'] = filter.sku;
+    if (filter?.is_active != null) params['is_active'] = String(filter.is_active);
+
     return this.http
-      .get<JsendEnvelope<ProductGoData[]>>(`${this.baseUrl}/api/v1/products/`)
-      .pipe(map((res) => res.data.map((p) => this.map(p))));
+      .get<JsendEnvelope<PaginatedGoData<ProductGoData>>>(`${this.baseUrl}/api/v1/products/`, { params })
+      .pipe(
+        map((res) => ({
+          items: res.data.items.map((p) => this.map(p)),
+          totalCount: res.data.total_count,
+          limit: res.data.limit,
+          offset: res.data.offset,
+        }))
+      );
   }
 
   getById(id: string): Observable<Product> {

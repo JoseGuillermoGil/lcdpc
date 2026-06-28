@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { API_BASE_URL } from '../../pages/auth-page/auth-api-go.service';
 import { Bundle, CreateBundleRequest } from '../models/bundle.model';
+import { BundleListFilter, PaginatedResponse } from '../models/pagination.model';
 
 interface JsendEnvelope<T> {
   status: 'success' | 'fail' | 'error';
@@ -32,6 +33,13 @@ interface BundleItemGoData {
   quantity: number;
 }
 
+interface PaginatedGoData<T> {
+  items: T[];
+  total_count: number;
+  limit: number;
+  offset: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class BundleApiService {
   private readonly baseUrl: string;
@@ -43,10 +51,25 @@ export class BundleApiService {
     this.baseUrl = apiBaseUrl.replace(/\/$/, '');
   }
 
-  list(): Observable<Bundle[]> {
+  list(filter?: BundleListFilter): Observable<PaginatedResponse<Bundle>> {
+    const params: Record<string, string> = {};
+    if (filter?.limit != null) params['limit'] = String(filter.limit);
+    if (filter?.offset != null) params['offset'] = String(filter.offset);
+    if (filter?.category_id) params['category_id'] = filter.category_id;
+    if (filter?.name) params['name'] = filter.name;
+    if (filter?.code) params['code'] = filter.code;
+    if (filter?.status) params['status'] = filter.status;
+
     return this.http
-      .get<JsendEnvelope<BundleGoData[]>>(`${this.baseUrl}/api/v1/bundles/`)
-      .pipe(map((res) => res.data.map((b) => this.map(b))));
+      .get<JsendEnvelope<PaginatedGoData<BundleGoData>>>(`${this.baseUrl}/api/v1/bundles/`, { params })
+      .pipe(
+        map((res) => ({
+          items: res.data.items.map((b) => this.map(b)),
+          totalCount: res.data.total_count,
+          limit: res.data.limit,
+          offset: res.data.offset,
+        }))
+      );
   }
 
   getById(id: string): Observable<Bundle> {

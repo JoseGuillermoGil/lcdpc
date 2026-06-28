@@ -86,13 +86,59 @@ func (s *Service) GetProductByID(ctx context.Context, id uuid.UUID) (*Product, e
 	return p, nil
 }
 
-func (s *Service) ListProducts(ctx context.Context) ([]Product, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id
-		FROM products ORDER BY name
-	`)
+func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]Product, int, error) {
+	var f ProductFilter
+	if len(filter) > 0 {
+		f = filter[0]
+	}
+
+	countQuery := `SELECT COUNT(*) FROM products WHERE 1=1`
+	dataQuery := `SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id FROM products WHERE 1=1`
+	var args []interface{}
+	argIdx := 1
+
+	if f.CategoryID != nil {
+		countQuery += fmt.Sprintf(` AND category_id = $%d`, argIdx)
+		dataQuery += fmt.Sprintf(` AND category_id = $%d`, argIdx)
+		args = append(args, *f.CategoryID)
+		argIdx++
+	}
+	if f.Name != nil {
+		countQuery += fmt.Sprintf(` AND name ILIKE '%%' || $%d || '%%'`, argIdx)
+		dataQuery += fmt.Sprintf(` AND name ILIKE '%%' || $%d || '%%'`, argIdx)
+		args = append(args, *f.Name)
+		argIdx++
+	}
+	if f.Sku != nil {
+		countQuery += fmt.Sprintf(` AND sku = $%d`, argIdx)
+		dataQuery += fmt.Sprintf(` AND sku = $%d`, argIdx)
+		args = append(args, *f.Sku)
+		argIdx++
+	}
+	if f.IsActive != nil {
+		countQuery += fmt.Sprintf(` AND is_active = $%d`, argIdx)
+		dataQuery += fmt.Sprintf(` AND is_active = $%d`, argIdx)
+		args = append(args, *f.IsActive)
+		argIdx++
+	}
+
+	var totalCount int
+	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, fmt.Errorf("count products: %w", err)
+	}
+
+	dataQuery += ` ORDER BY name`
+
+	if len(filter) > 0 {
+		limit := f.GetLimit()
+		offset := f.GetOffset()
+		dataQuery += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+		args = append(args, limit, offset)
+	}
+
+	rows, err := s.pool.Query(ctx, dataQuery, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list products: %w", err)
+		return nil, 0, fmt.Errorf("list products: %w", err)
 	}
 	defer rows.Close()
 
@@ -100,11 +146,11 @@ func (s *Service) ListProducts(ctx context.Context) ([]Product, error) {
 	for rows.Next() {
 		var p Product
 		if err := rows.Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img, &p.CategoryID); err != nil {
-			return nil, fmt.Errorf("scan product: %w", err)
+			return nil, 0, fmt.Errorf("scan product: %w", err)
 		}
 		products = append(products, p)
 	}
-	return products, nil
+	return products, totalCount, nil
 }
 
 func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreateProductRequest) (*Product, error) {
@@ -269,13 +315,59 @@ func (s *Service) GetBundleByID(ctx context.Context, id uuid.UUID) (*Bundle, err
 	return bundle, nil
 }
 
-func (s *Service) ListBundles(ctx context.Context) ([]Bundle, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id
-		FROM bundles ORDER BY name
-	`)
+func (s *Service) ListBundles(ctx context.Context, filter ...BundleFilter) ([]Bundle, int, error) {
+	var f BundleFilter
+	if len(filter) > 0 {
+		f = filter[0]
+	}
+
+	countQuery := `SELECT COUNT(*) FROM bundles WHERE 1=1`
+	dataQuery := `SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id FROM bundles WHERE 1=1`
+	var args []interface{}
+	argIdx := 1
+
+	if f.CategoryID != nil {
+		countQuery += fmt.Sprintf(` AND category_id = $%d`, argIdx)
+		dataQuery += fmt.Sprintf(` AND category_id = $%d`, argIdx)
+		args = append(args, *f.CategoryID)
+		argIdx++
+	}
+	if f.Name != nil {
+		countQuery += fmt.Sprintf(` AND name ILIKE '%%' || $%d || '%%'`, argIdx)
+		dataQuery += fmt.Sprintf(` AND name ILIKE '%%' || $%d || '%%'`, argIdx)
+		args = append(args, *f.Name)
+		argIdx++
+	}
+	if f.Code != nil {
+		countQuery += fmt.Sprintf(` AND code = $%d`, argIdx)
+		dataQuery += fmt.Sprintf(` AND code = $%d`, argIdx)
+		args = append(args, *f.Code)
+		argIdx++
+	}
+	if f.Status != nil {
+		countQuery += fmt.Sprintf(` AND status = $%d`, argIdx)
+		dataQuery += fmt.Sprintf(` AND status = $%d`, argIdx)
+		args = append(args, *f.Status)
+		argIdx++
+	}
+
+	var totalCount int
+	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, fmt.Errorf("count bundles: %w", err)
+	}
+
+	dataQuery += ` ORDER BY name`
+
+	if len(filter) > 0 {
+		limit := f.GetLimit()
+		offset := f.GetOffset()
+		dataQuery += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+		args = append(args, limit, offset)
+	}
+
+	rows, err := s.pool.Query(ctx, dataQuery, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list bundles: %w", err)
+		return nil, 0, fmt.Errorf("list bundles: %w", err)
 	}
 	defer rows.Close()
 
@@ -284,11 +376,11 @@ func (s *Service) ListBundles(ctx context.Context) ([]Bundle, error) {
 		var b Bundle
 		if err := rows.Scan(&b.BundleID, &b.Code, &b.Name, &b.Status, &b.EnabledBranchIDs,
 			&b.TotalPrice, &b.TotalPriceCurrency, &b.PromotionalPrice, &b.PromotionalPriceCurrency, &b.Img, &b.CategoryID); err != nil {
-			return nil, fmt.Errorf("scan bundle: %w", err)
+			return nil, 0, fmt.Errorf("scan bundle: %w", err)
 		}
 		bundles = append(bundles, b)
 	}
-	return bundles, nil
+	return bundles, totalCount, nil
 }
 
 func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBundleRequest) (*Bundle, error) {

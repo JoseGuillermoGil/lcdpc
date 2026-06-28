@@ -119,7 +119,7 @@ export class LandingPageComponent implements OnInit {
 
         const categoryMap = new Map(categories.map((c) => [c.categoryId, c.name]));
 
-        const bundleCards: ProductCard[] = bundles
+        const bundleCards: ProductCard[] = bundles.items
           .filter((b) => b.status === 'Published')
           .map((b) => ({
             id: b.bundleId,
@@ -133,7 +133,7 @@ export class LandingPageComponent implements OnInit {
             quantity: 1
           }));
 
-        const productCards: ProductCard[] = products
+        const productCards: ProductCard[] = products.items
           .filter((p) => p.isActive)
           .map((p) => ({
             id: p.productId,

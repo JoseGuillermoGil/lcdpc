@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ProductApiService } from '../../core/services/product-api.service';
@@ -24,29 +24,25 @@ export class SearchPageComponent implements OnInit {
   private readonly categoryApi = inject(CategoryApiService);
 
   protected query = this.route.snapshot.queryParamMap.get('q')?.trim() || '';
-  protected readonly allResults = signal<SearchResultItem[]>([]);
-
-  protected readonly filteredResults = computed(() => {
-    const q = this.query.trim().toLowerCase();
-    if (!q) return this.allResults();
-    return this.allResults().filter((item) =>
-      [item.name, item.description, ...item.tags]
-        .join(' ')
-        .toLowerCase()
-        .includes(q)
-    );
-  });
+  protected readonly searchResults = signal<SearchResultItem[]>([]);
 
   ngOnInit(): void {
+    this.loadData();
+  }
+
+  private loadData(): void {
+    const search = this.query.trim();
+    const filter = search ? { search, limit: 50 } : { limit: 50 };
+
     forkJoin({
       categories: this.categoryApi.list(),
-      products: this.productApi.list(),
-      bundles: this.bundleApi.list()
+      products: this.productApi.list(filter),
+      bundles: this.bundleApi.list(filter)
     }).subscribe({
       next: ({ categories, products, bundles }) => {
         const categoryMap = new Map(categories.map((c) => [c.categoryId, c.name]));
 
-        const bundleItems: SearchResultItem[] = bundles
+        const bundleItems: SearchResultItem[] = bundles.items
           .filter((b) => b.status === 'Published')
           .map((b) => ({
             id: b.bundleId,
@@ -60,7 +56,7 @@ export class SearchPageComponent implements OnInit {
             featured: true
           }));
 
-        const productItems: SearchResultItem[] = products
+        const productItems: SearchResultItem[] = products.items
           .filter((p) => p.isActive)
           .map((p) => ({
             id: p.productId,
@@ -73,10 +69,10 @@ export class SearchPageComponent implements OnInit {
             unitLabel: p.baseMeasureType
           }));
 
-        this.allResults.set([...bundleItems, ...productItems]);
+        this.searchResults.set([...bundleItems, ...productItems]);
       },
       error: () => {
-        this.allResults.set([]);
+        this.searchResults.set([]);
       }
     });
   }
@@ -95,5 +91,6 @@ export class SearchPageComponent implements OnInit {
     });
 
     this.query = cleanQuery;
+    this.loadData();
   }
 }
