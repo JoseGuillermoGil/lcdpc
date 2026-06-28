@@ -40,6 +40,10 @@ func NewServer(
 	r.Use(middleware.CORS(cfg.CORSAllowedOrigins))
 	r.Use(middleware.NoCache())
 
+	// Serve static files with cache + resize support
+	staticH := handler.NewStaticHandler("static")
+	r.HandleFunc("/static/*", staticH.ServeImage)
+
 	authH := handler.NewAuthHandler(authSvc)
 	oauth2H := handler.NewOAuth2Handler(oauth2Svc)
 	productH := handler.NewProductHandler(pricingSvc)
@@ -122,6 +126,11 @@ func NewServer(
 			r.Put("/{id}", productH.Update)
 
 			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "product:update"))
+				r.Put("/{id}/image", productH.UpdateImage)
+			})
+
+			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission(rbacStore, "product:delete"))
 				r.Delete("/{id}", productH.Delete)
 			})
@@ -142,6 +151,11 @@ func NewServer(
 			r.Put("/{id}", bundleH.Update)
 			r.Post("/{id}/publish", bundleH.Publish)
 			r.Post("/{id}/pause", bundleH.Pause)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "bundle:update"))
+				r.Put("/{id}/image", bundleH.UpdateImage)
+			})
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission(rbacStore, "bundle:delete"))
@@ -292,6 +306,8 @@ func NewServer(
 		r.Use(middleware.APIKeyAuth(pool))
 		r.Post("/products", syncH.SyncProducts)
 		r.Post("/bundles", syncH.SyncBundles)
+		r.Post("/products/{sku}/image", syncH.SyncProductImage)
+		r.Post("/bundles/{code}/image", syncH.SyncBundleImage)
 	})
 
 	return r

@@ -11,6 +11,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/server ./cmd/serv
 FROM scratch
 COPY --from=build /app/server /server
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=build /src/static /static
 
 EXPOSE 8080
 ENTRYPOINT ["/server"]

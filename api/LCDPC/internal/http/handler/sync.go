@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/lcdpc/lcdpc-go/internal/http/response"
 	"github.com/lcdpc/lcdpc-go/internal/sync"
 )
@@ -45,4 +46,118 @@ func (h *SyncHandler) SyncBundles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Success(w, result)
+}
+
+func (h *SyncHandler) SyncProductImage(w http.ResponseWriter, r *http.Request) {
+	sku := chi.URLParam(r, "sku")
+	if sku == "" {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"sku": "required"})
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"file": "invalid or too large"})
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"file": "required"})
+		return
+	}
+	defer file.Close()
+
+	ext, err := validateImageFile(header)
+	if err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"file": err.Error()})
+		return
+	}
+
+	oldImg, err := h.svc.UpdateProductImageBySKU(r.Context(), sku, "")
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	var imgPath string
+	if oldImg != "" {
+		imgPath, err = replaceExistingFile(oldImg, file)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "failed to save image")
+			return
+		}
+	} else {
+		imgPath, err = saveUploadedFile(file, ext)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "failed to save image")
+			return
+		}
+	}
+
+	_, err = h.svc.UpdateProductImageBySKU(r.Context(), sku, imgPath)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(w, map[string]string{"img": imgPath})
+}
+
+func (h *SyncHandler) SyncBundleImage(w http.ResponseWriter, r *http.Request) {
+	code := chi.URLParam(r, "code")
+	if code == "" {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"code": "required"})
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"file": "invalid or too large"})
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"file": "required"})
+		return
+	}
+	defer file.Close()
+
+	ext, err := validateImageFile(header)
+	if err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"file": err.Error()})
+		return
+	}
+
+	oldImg, err := h.svc.UpdateBundleImageByCode(r.Context(), code, "")
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	var imgPath string
+	if oldImg != "" {
+		imgPath, err = replaceExistingFile(oldImg, file)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "failed to save image")
+			return
+		}
+	} else {
+		imgPath, err = saveUploadedFile(file, ext)
+		if err != nil {
+			response.Error(w, http.StatusInternalServerError, "failed to save image")
+			return
+		}
+	}
+
+	_, err = h.svc.UpdateBundleImageByCode(r.Context(), code, imgPath)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(w, map[string]string{"img": imgPath})
 }

@@ -55,6 +55,9 @@ services:
       RESEND_FROM_ADDRESS: "${RESEND_FROM_ADDRESS:-LCDPC <onboarding@resend.dev>}"
     ports:
       - "8080:8080"
+    volumes:
+      - lcdpc_static_data:/static/img
 
 volumes:
   lcdpc_postgres_data:
+  lcdpc_static_data:

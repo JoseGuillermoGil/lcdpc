@@ -29,6 +29,7 @@ type Product struct {
 	UnitsPerBox          *int      `json:"units_per_box"`
 	UnitsPerBundle       *int      `json:"units_per_bundle"`
 	IsActive             bool      `json:"is_active"`
+	Img                  *string   `json:"img"`
 }
 
 type CreateProductRequest struct {
@@ -38,6 +39,7 @@ type CreateProductRequest struct {
 	WholesaleCommercialType string `json:"wholesale_commercial_type" validate:"required"`
 	UnitsPerBox          *int   `json:"units_per_box"`
 	UnitsPerBundle       *int   `json:"units_per_bundle"`
+	Img                  *string `json:"img"`
 }
 
 func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (*Product, error) {
@@ -55,11 +57,11 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO products (product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active
-	`, uuid.New(), req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle).Scan(
-		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive,
+		INSERT INTO products (product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8)
+		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img
+	`, uuid.New(), req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle, req.Img).Scan(
+		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create product: %w", err)
@@ -70,9 +72,9 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 func (s *Service) GetProductByID(ctx context.Context, id uuid.UUID) (*Product, error) {
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active
+		SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img
 		FROM products WHERE product_id = $1
-	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive)
+	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
 	}
@@ -84,7 +86,7 @@ func (s *Service) GetProductByID(ctx context.Context, id uuid.UUID) (*Product, e
 
 func (s *Service) ListProducts(ctx context.Context) ([]Product, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active
+		SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img
 		FROM products ORDER BY name
 	`)
 	if err != nil {
@@ -95,7 +97,7 @@ func (s *Service) ListProducts(ctx context.Context) ([]Product, error) {
 	products := make([]Product, 0)
 	for rows.Next() {
 		var p Product
-		if err := rows.Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive); err != nil {
+		if err := rows.Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img); err != nil {
 			return nil, fmt.Errorf("scan product: %w", err)
 		}
 		products = append(products, p)
@@ -106,11 +108,11 @@ func (s *Service) ListProducts(ctx context.Context) ([]Product, error) {
 func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreateProductRequest) (*Product, error) {
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		UPDATE products SET name = $2, sku = $3, base_measure_type = $4, wholesale_commercial_type = $5, units_per_box = $6, units_per_bundle = $7
+		UPDATE products SET name = $2, sku = $3, base_measure_type = $4, wholesale_commercial_type = $5, units_per_box = $6, units_per_bundle = $7, img = $8
 		WHERE product_id = $1
-		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active
-	`, id, req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle).Scan(
-		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive,
+		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img
+	`, id, req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle, req.Img).Scan(
+		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update product: %w", err)
@@ -126,6 +128,27 @@ func (s *Service) DeleteProduct(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+func (s *Service) UpdateProductImage(ctx context.Context, id uuid.UUID, img string) (string, error) {
+	var oldImg *string
+	err := s.pool.QueryRow(ctx, `SELECT img FROM products WHERE product_id = $1`, id).Scan(&oldImg)
+	if err == pgx.ErrNoRows {
+		return "", fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return "", fmt.Errorf("get product: %w", err)
+	}
+
+	_, err = s.pool.Exec(ctx, `UPDATE products SET img = $2 WHERE product_id = $1`, id, img)
+	if err != nil {
+		return "", fmt.Errorf("update product image: %w", err)
+	}
+
+	if oldImg != nil && *oldImg != "" {
+		return *oldImg, nil
+	}
+	return "", nil
+}
+
 // Bundle
 
 type Bundle struct {
@@ -139,6 +162,7 @@ type Bundle struct {
 	PromotionalPrice        *float64    `json:"promotional_price"`
 	PromotionalPriceCurrency *string   `json:"promotional_price_currency"`
 	Items                   []BundleItem `json:"items"`
+	Img                     *string     `json:"img"`
 }
 
 type BundleItem struct {
@@ -153,6 +177,7 @@ type CreateBundleRequest struct {
 	Name             string          `json:"name" validate:"required"`
 	Items            []BundleItemReq `json:"items" validate:"required"`
 	EnabledBranchIDs []uuid.UUID     `json:"enabled_branch_ids"`
+	Img              *string         `json:"img"`
 }
 
 type BundleItemReq struct {
@@ -169,12 +194,12 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 
 	bundle := &Bundle{}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO bundles (bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency)
-		VALUES ($1, $2, $3, 'Draft', $4, 0, 'USD')
-		RETURNING bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency
-	`, uuid.New(), req.Code, req.Name, req.EnabledBranchIDs).Scan(
+		INSERT INTO bundles (bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, img)
+		VALUES ($1, $2, $3, 'Draft', $4, 0, 'USD', $5)
+		RETURNING bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img
+	`, uuid.New(), req.Code, req.Name, req.EnabledBranchIDs, req.Img).Scan(
 		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.EnabledBranchIDs,
-		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency,
+		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency, &bundle.Img,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create bundle: %w", err)
@@ -205,11 +230,11 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 func (s *Service) GetBundleByID(ctx context.Context, id uuid.UUID) (*Bundle, error) {
 	bundle := &Bundle{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency
+		SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img
 		FROM bundles WHERE bundle_id = $1
 	`, id).Scan(
 		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.EnabledBranchIDs,
-		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency,
+		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency, &bundle.Img,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
@@ -238,7 +263,7 @@ func (s *Service) GetBundleByID(ctx context.Context, id uuid.UUID) (*Bundle, err
 
 func (s *Service) ListBundles(ctx context.Context) ([]Bundle, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency
+		SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img
 		FROM bundles ORDER BY name
 	`)
 	if err != nil {
@@ -250,7 +275,7 @@ func (s *Service) ListBundles(ctx context.Context) ([]Bundle, error) {
 	for rows.Next() {
 		var b Bundle
 		if err := rows.Scan(&b.BundleID, &b.Code, &b.Name, &b.Status, &b.EnabledBranchIDs,
-			&b.TotalPrice, &b.TotalPriceCurrency, &b.PromotionalPrice, &b.PromotionalPriceCurrency); err != nil {
+			&b.TotalPrice, &b.TotalPriceCurrency, &b.PromotionalPrice, &b.PromotionalPriceCurrency, &b.Img); err != nil {
 			return nil, fmt.Errorf("scan bundle: %w", err)
 		}
 		bundles = append(bundles, b)
@@ -267,12 +292,12 @@ func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBund
 
 	bundle := &Bundle{}
 	err = tx.QueryRow(ctx, `
-		UPDATE bundles SET code = $2, name = $3, enabled_branch_ids = $4
+		UPDATE bundles SET code = $2, name = $3, enabled_branch_ids = $4, img = $5
 		WHERE bundle_id = $1
-		RETURNING bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency
-	`, id, req.Code, req.Name, req.EnabledBranchIDs).Scan(
+		RETURNING bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img
+	`, id, req.Code, req.Name, req.EnabledBranchIDs, req.Img).Scan(
 		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.EnabledBranchIDs,
-		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency,
+		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency, &bundle.Img,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update bundle: %w", err)
@@ -309,6 +334,27 @@ func (s *Service) DeleteBundle(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("delete bundle: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) UpdateBundleImage(ctx context.Context, id uuid.UUID, img string) (string, error) {
+	var oldImg *string
+	err := s.pool.QueryRow(ctx, `SELECT img FROM bundles WHERE bundle_id = $1`, id).Scan(&oldImg)
+	if err == pgx.ErrNoRows {
+		return "", fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return "", fmt.Errorf("get bundle: %w", err)
+	}
+
+	_, err = s.pool.Exec(ctx, `UPDATE bundles SET img = $2 WHERE bundle_id = $1`, id, img)
+	if err != nil {
+		return "", fmt.Errorf("update bundle image: %w", err)
+	}
+
+	if oldImg != nil && *oldImg != "" {
+		return *oldImg, nil
+	}
+	return "", nil
 }
 
 func (s *Service) UpdateBundleStatus(ctx context.Context, id uuid.UUID, status string) error {

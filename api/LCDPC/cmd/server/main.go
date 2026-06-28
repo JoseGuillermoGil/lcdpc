@@ -25,6 +25,11 @@ func main() {
 	ctx := context.Background()
 	cfg := configs.Load()
 
+	if err := os.MkdirAll("static/img", 0755); err != nil {
+		slog.Error("failed to create static directory", "error", err)
+		os.Exit(1)
+	}
+
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)

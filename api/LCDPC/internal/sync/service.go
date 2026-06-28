@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -131,4 +132,88 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 	}
 
 	return result, nil
+}
+
+func (s *Service) UpdateProductImage(ctx context.Context, id uuid.UUID, img string) (string, error) {
+	var oldImg *string
+	err := s.pool.QueryRow(ctx, `SELECT img FROM products WHERE product_id = $1`, id).Scan(&oldImg)
+	if err == pgx.ErrNoRows {
+		return "", fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return "", fmt.Errorf("get product: %w", err)
+	}
+
+	_, err = s.pool.Exec(ctx, `UPDATE products SET img = $2 WHERE product_id = $1`, id, img)
+	if err != nil {
+		return "", fmt.Errorf("update product image: %w", err)
+	}
+
+	if oldImg != nil && *oldImg != "" {
+		return *oldImg, nil
+	}
+	return "", nil
+}
+
+func (s *Service) UpdateBundleImage(ctx context.Context, id uuid.UUID, img string) (string, error) {
+	var oldImg *string
+	err := s.pool.QueryRow(ctx, `SELECT img FROM bundles WHERE bundle_id = $1`, id).Scan(&oldImg)
+	if err == pgx.ErrNoRows {
+		return "", fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return "", fmt.Errorf("get bundle: %w", err)
+	}
+
+	_, err = s.pool.Exec(ctx, `UPDATE bundles SET img = $2 WHERE bundle_id = $1`, id, img)
+	if err != nil {
+		return "", fmt.Errorf("update bundle image: %w", err)
+	}
+
+	if oldImg != nil && *oldImg != "" {
+		return *oldImg, nil
+	}
+	return "", nil
+}
+
+func (s *Service) UpdateProductImageBySKU(ctx context.Context, sku string, img string) (string, error) {
+	var oldImg *string
+	err := s.pool.QueryRow(ctx, `SELECT img FROM products WHERE sku = $1`, sku).Scan(&oldImg)
+	if err == pgx.ErrNoRows {
+		return "", fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return "", fmt.Errorf("get product: %w", err)
+	}
+
+	_, err = s.pool.Exec(ctx, `UPDATE products SET img = $2 WHERE sku = $1`, sku, img)
+	if err != nil {
+		return "", fmt.Errorf("update product image: %w", err)
+	}
+
+	if oldImg != nil && *oldImg != "" {
+		return *oldImg, nil
+	}
+	return "", nil
+}
+
+func (s *Service) UpdateBundleImageByCode(ctx context.Context, code string, img string) (string, error) {
+	var oldImg *string
+	err := s.pool.QueryRow(ctx, `SELECT img FROM bundles WHERE code = $1`, code).Scan(&oldImg)
+	if err == pgx.ErrNoRows {
+		return "", fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return "", fmt.Errorf("get bundle: %w", err)
+	}
+
+	_, err = s.pool.Exec(ctx, `UPDATE bundles SET img = $2 WHERE code = $1`, code, img)
+	if err != nil {
+		return "", fmt.Errorf("update bundle image: %w", err)
+	}
+
+	if oldImg != nil && *oldImg != "" {
+		return *oldImg, nil
+	}
+	return "", nil
 }
