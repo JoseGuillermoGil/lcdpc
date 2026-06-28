@@ -11,6 +11,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/configs"
 	"github.com/lcdpc/lcdpc-go/internal/auth"
 	"github.com/lcdpc/lcdpc-go/internal/branch"
+	"github.com/lcdpc/lcdpc-go/internal/category"
 	"github.com/lcdpc/lcdpc-go/internal/http/handler"
 	"github.com/lcdpc/lcdpc-go/internal/http/middleware"
 	"github.com/lcdpc/lcdpc-go/internal/order"
@@ -27,6 +28,7 @@ func NewServer(
 	keySvc *auth.KeyService,
 	pricingSvc *pricing.Service,
 	branchSvc *branch.Service,
+	categorySvc *category.Service,
 	syncSvc *sync.Service,
 	rbacStore *rbac.Store,
 	rbacSvc *rbac.Service,
@@ -50,6 +52,7 @@ func NewServer(
 	bundleH := handler.NewBundleHandler(pricingSvc)
 	priceH := handler.NewPriceHandler(pricingSvc)
 	branchH := handler.NewBranchHandler(branchSvc)
+	categoryH := handler.NewCategoryHandler(categorySvc)
 	syncH := handler.NewSyncHandler(syncSvc)
 	healthH := handler.NewHealthHandler(pool)
 	rbacH := rbac.NewHandler(rbacSvc)
@@ -194,6 +197,33 @@ func NewServer(
 			r.Use(middleware.RequireAuth())
 			r.Use(middleware.RequirePermission(rbacStore, "branch:create"))
 			r.Post("/", branchH.Create)
+		})
+	})
+
+	// Categories
+	r.Route("/api/v1/categories", func(r chi.Router) {
+		r.Get("/", categoryH.List)
+		r.Get("/{id}", categoryH.GetByID)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "category:create"))
+			r.Post("/", categoryH.Create)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "category:update"))
+			r.Put("/{id}", categoryH.Update)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "category:delete"))
+			r.Delete("/{id}", categoryH.Delete)
 		})
 	})
 
