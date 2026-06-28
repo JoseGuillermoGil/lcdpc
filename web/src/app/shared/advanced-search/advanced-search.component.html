@@ -52,7 +52,7 @@
         <p-card styleClass="result-card" [class.featured]="item.featured" [class.sold-out]="item.soldOut">
           <ng-template pTemplate="content">
             <div class="result-image">
-              <img [src]="item.imageUrl" [alt]="item.alt" />
+              <img [src]="item.imageUrl" [alt]="item.alt" loading="lazy" (error)="onImageError($event)" />
               @if (item.promo) {
                 <span class="promo-badge">{{ item.promo }}</span>
               }

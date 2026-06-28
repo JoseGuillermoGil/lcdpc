@@ -1,9 +1,17 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
+import { forkJoin } from 'rxjs';
+import { Category } from '../../core/models/category.model';
+import { ProductApiService } from '../../core/services/product-api.service';
+import { BundleApiService } from '../../core/services/bundle-api.service';
+import { CategoryApiService } from '../../core/services/category-api.service';
+import { BranchApiService } from '../../core/services/branch-api.service';
 import { BranchesComponent } from '../../shared/branches/branches.component';
 import { CatalogComponent } from '../../shared/catalog/catalog.component';
 import { HeroComponent } from '../../shared/hero/hero.component';
+
+const NOT_FOUND_IMAGE = '/not-found.png';
 
 type HeroSlide = {
   title: string;
@@ -11,7 +19,7 @@ type HeroSlide = {
   alt: string;
 };
 
-type Category = {
+type CategoryFilter = {
   id: string;
   label: string;
 };
@@ -43,12 +51,19 @@ type BranchCard = {
   imports: [CommonModule, HeroComponent, CatalogComponent, BranchesComponent],
   templateUrl: './landing-page.component.html'
 })
-export class LandingPageComponent {
+export class LandingPageComponent implements OnInit {
   private readonly router = inject(Router);
+  private readonly productApi = inject(ProductApiService);
+  private readonly bundleApi = inject(BundleApiService);
+  private readonly categoryApi = inject(CategoryApiService);
+  private readonly branchApi = inject(BranchApiService);
 
   protected readonly activeHeroIndex = signal(0);
   protected readonly search = signal('');
-  protected readonly selectedCategoryId = signal('combos');
+  protected readonly selectedCategoryId = signal('all');
+  protected readonly products = signal<ProductCard[]>([]);
+  protected readonly categories = signal<CategoryFilter[]>([{ id: 'all', label: 'Todos' }]);
+  protected readonly branches = signal<BranchCard[]>([]);
 
   protected readonly heroSlides: HeroSlide[] = [
     {
@@ -71,81 +86,11 @@ export class LandingPageComponent {
     }
   ];
 
-  protected readonly categories: Category[] = [
-    { id: 'combos', label: 'Combos' },
-    { id: 'salchichas', label: 'Salchichas' },
-    { id: 'panes', label: 'Panes' },
-    { id: 'salsas', label: 'Salsas' }
-  ];
-
-  protected readonly products: ProductCard[] = [
-    {
-      id: 'pan-basico',
-      name: 'Pan Básico x20',
-      price: '$4.50',
-      description: 'Paquete mayorista de 20 unidades de pan suave tradicional. Ideal para carritos y eventos.',
-      imageUrl:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuBkb7EcPzI89vSjQn2HVFk8-uzrTrT8wpYH-p_b3LY3c2iclAC9OeNaT21wDSDXNCY0ksoy2eQsh9UOQ3rjeCWnchAqF0zUQqG791ivNSi-ErlniTHMXD631C9yq1nw-HfkYl0vWGIJgZ-0Hx0HfDTsyO2g47NnlEMy3nUSaQOVtyV4uDbUutK94RosLm2llimN01s3lf_57e2XeqN3BhOFabOoByDC9WvzmHDmYuPR_PZiLrpQ5Z3GwiEitd4wvw2J2Xwl5u-pCDI',
-      alt: 'Paquete de pan para perro caliente',
-      category: 'panes',
-      badge: 'Más Vendido',
-      quantity: 10
-    },
-    {
-      id: 'combo-emprendedor',
-      name: 'Combo Emprendedor',
-      price: '$25',
-      description: '50 panes tradicionales, 50 salchichas tipo viena, 1 kg de papas fritas y 3 salsas.',
-      imageUrl:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuBzDseBhHu9EwvRAco9ePAKN5P7xc9lx9fVoTnM1edHkFtu_nDMQr2z-_cRfekhrcHfOsJ_W_buOJqgVb_OLp4UoqKPBEVhA6IMMxYyEzkCUXOxGEbY5hFUMU0uelIITl_FMyarwcgYh9jWX3voMm8b7UAZD56M8Lp1wv_G-ELO4GrfqtnS5IKepgNLU6prrPnJmoHkSBPP3CJTkFgVkigEbMfXbd4i2mp8PTN_OMNFCjv-SSEVZsbNNt1yMDBcbYATQYyIFK63k7A',
-      alt: 'Combo promocional para emprendedores',
-      category: 'combos',
-      badge: 'Promo Especial',
-      featured: true,
-      quantity: 1
-    },
-    {
-      id: 'salchicha-viena',
-      name: 'Salchicha Viena x50',
-      price: '$12.00',
-      description: 'Empaque al vacío con 50 unidades de salchicha tipo viena estándar. Larga duración.',
-      imageUrl:
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuCtjIPGFwHKbCB9WVJ-opSccsbmZktXss9K_ruOrt4T4IgGn540li3OvT1CyGSw7LIc46VNpyxxsEjJm6LHKIKg8E_QnDewh7g6k5k7ZHeQxxdAZDUIac2uvVIXBwCoouE180Fe-HvYuPW13gB3zRHA_kHGV1WPdLGYwffDJOAT7VXDLbl_q5CY2UtDTrDHbeWCk41n7wXXnIAeD1vRotyuj79aw41K_6Nl3bRf6bsdWSln08t-mGT2p9etEKdbAHBy8dTPKyznxJ0',
-      alt: 'Paquete de salchichas tipo viena',
-      category: 'salchichas',
-      quantity: 5
-    }
-  ];
-
-  protected readonly branches: BranchCard[] = [
-    {
-      id: 'ocumare',
-      name: 'Ocumare',
-      address: 'Av. Principal de Ocumare del Tuy, Sector Centro.',
-      phone: '+58 412-0000000',
-      icon: 'storefront'
-    },
-    {
-      id: 'charallave',
-      name: 'Charallave',
-      address: 'Calle Bolívar, frente a la plaza, Charallave.',
-      phone: '+58 414-0000000',
-      icon: 'storefront'
-    },
-    {
-      id: 'santa-teresa',
-      name: 'Santa Teresa',
-      address: 'Av. Ayacucho, Santa Teresa del Tuy.',
-      phone: '+58 424-0000000',
-      icon: 'storefront'
-    }
-  ];
-
   protected readonly filteredProducts = computed(() => {
     const term = this.search().trim().toLowerCase();
     const category = this.selectedCategoryId();
 
-    return this.products.filter((product) => {
+    return this.products().filter((product) => {
       const matchesCategory = category === 'all' || product.category === category;
       const matchesTerm =
         term.length === 0 ||
@@ -157,6 +102,69 @@ export class LandingPageComponent {
       return matchesCategory && matchesTerm;
     });
   });
+
+  ngOnInit(): void {
+    forkJoin({
+      categories: this.categoryApi.list(),
+      products: this.productApi.list(),
+      bundles: this.bundleApi.list(),
+      branches: this.branchApi.list()
+    }).subscribe({
+      next: ({ categories, products, bundles, branches }) => {
+        const categoryFilters: CategoryFilter[] = [
+          { id: 'all', label: 'Todos' },
+          ...categories.map((c) => ({ id: c.categoryId, label: c.name }))
+        ];
+        this.categories.set(categoryFilters);
+
+        const categoryMap = new Map(categories.map((c) => [c.categoryId, c.name]));
+
+        const bundleCards: ProductCard[] = bundles
+          .filter((b) => b.status === 'Published')
+          .map((b) => ({
+            id: b.bundleId,
+            name: b.name,
+            price: '$0.00',
+            description: `Código: ${b.code}`,
+            imageUrl: this.bundleApi.resolveImageUrl(b.img) ?? NOT_FOUND_IMAGE,
+            alt: b.name,
+            category: b.categoryId ? (categoryMap.get(b.categoryId) ?? 'Sin categoría') : 'Sin categoría',
+            featured: true,
+            quantity: 1
+          }));
+
+        const productCards: ProductCard[] = products
+          .filter((p) => p.isActive)
+          .map((p) => ({
+            id: p.productId,
+            name: p.name,
+            price: '$0.00',
+            description: `${p.baseMeasureType} — ${p.wholesaleCommercialType}`,
+            imageUrl: this.productApi.resolveImageUrl(p.img) ?? NOT_FOUND_IMAGE,
+            alt: p.name,
+            category: p.categoryId ? (categoryMap.get(p.categoryId) ?? 'Sin categoría') : 'Sin categoría',
+            quantity: 1
+          }));
+
+        this.products.set([...bundleCards, ...productCards]);
+
+        this.branches.set(
+          branches.map((b) => ({
+            id: b.id,
+            name: b.storeName,
+            address: b.address,
+            phone: b.contactPhone,
+            icon: 'storefront'
+          }))
+        );
+      },
+      error: () => {
+        this.products.set([]);
+        this.categories.set([{ id: 'all', label: 'Todos' }]);
+        this.branches.set([]);
+      }
+    });
+  }
 
   protected selectCategory(categoryId: string): void {
     this.selectedCategoryId.set(categoryId);

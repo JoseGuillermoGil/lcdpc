@@ -1,6 +1,6 @@
 @if (showStoreShell()) {
   <app-header
-    [branches]="branches"
+    [branches]="branches()"
     [selectedBranchId]="selectedBranchId()"
     [cartCount]="cartCount()"
     (branchChange)="selectBranch($event)"

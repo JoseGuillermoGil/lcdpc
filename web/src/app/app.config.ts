@@ -10,6 +10,7 @@ import { routes } from './app.routes';
 import { API_BASE_URL } from './pages/auth-page/auth-api-go.service';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { initializeAuth } from './core/auth/auth-init';
+import { environment } from '../environments/environment';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -21,7 +22,7 @@ export const appConfig: ApplicationConfig = {
     MessageService,
     {
       provide: API_BASE_URL,
-      useValue: 'http://localhost:8080'
+      useValue: environment.apiBaseUrl
     },
     {
       provide: APP_INITIALIZER,

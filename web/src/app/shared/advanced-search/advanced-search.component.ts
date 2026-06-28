@@ -28,4 +28,8 @@ export type SearchResultItem = {
 export class AdvancedSearchComponent {
   @Input() query = 'salchichas premium';
   @Input() results: SearchResultItem[] = [];
+
+  onImageError(event: Event): void {
+    (event.target as HTMLImageElement).src = '/not-found.png';
+  }
 }
