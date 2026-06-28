@@ -191,14 +191,14 @@ func (s *Service) VerifyEmail(ctx context.Context, flowID uuid.UUID, otp string)
 	var flow struct {
 		ID               uuid.UUID
 		Status           string
-		OtpCode          string
+		OtpHash          string
 		OtpExpiresAtUtc  time.Time
 		OtpAttempts      int
 	}
 
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, status, otp_code, otp_expires_at_utc, otp_attempts FROM registration_flows WHERE id = $1
-	`, flowID).Scan(&flow.ID, &flow.Status, &flow.OtpCode, &flow.OtpExpiresAtUtc, &flow.OtpAttempts)
+		SELECT id, status, otp_hash, otp_expires_at_utc, otp_attempts FROM registration_flows WHERE id = $1
+	`, flowID).Scan(&flow.ID, &flow.Status, &flow.OtpHash, &flow.OtpExpiresAtUtc, &flow.OtpAttempts)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("FLOW_NOT_FOUND")
 	}
@@ -231,7 +231,7 @@ func (s *Service) VerifyEmail(ctx context.Context, flowID uuid.UUID, otp string)
 		return nil, fmt.Errorf("increment attempts: %w", err)
 	}
 
-	if flow.OtpCode != otp {
+	if HashOtp(otp) != flow.OtpHash {
 		if attempts >= OtpMaxAttempts {
 			s.pool.Exec(ctx, `
 				UPDATE registration_flows SET status = $2, otp_blocked_until_utc = $3, updated_at_utc = now()

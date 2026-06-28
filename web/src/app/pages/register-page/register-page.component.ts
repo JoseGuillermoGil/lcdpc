@@ -3,7 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { CheckboxModule } from 'primeng/checkbox';
 import { FloatLabelModule } from 'primeng/floatlabel';
@@ -15,6 +15,7 @@ import { PasswordModule } from 'primeng/password';
 import { SelectModule } from 'primeng/select';
 import { StepperModule } from 'primeng/stepper';
 import { AuthApiService, StartRegistrationResponse } from '../auth-page/auth-api-go.service';
+import { AuthStore } from '../../core/auth/auth.store';
 
 type RegisterStep = 1 | 2 | 3;
 type DocumentTypeOption = { label: string; value: string };
@@ -43,6 +44,8 @@ type PhonePrefixOption = { label: string; value: string };
 })
 export class RegisterPageComponent {
   private readonly authApi = inject(AuthApiService);
+  private readonly authStore = inject(AuthStore);
+  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
   private readonly emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   private readonly nameRegex = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ']+(?:\s+[A-Za-zÁÉÍÓÚÜÑáéíóúüñ']+)*$/;
@@ -59,7 +62,7 @@ export class RegisterPageComponent {
   protected readonly businessEmail = signal('');
   protected readonly codeSent = signal(false);
   protected readonly otpCode = signal('');
-  protected readonly otpSecondsLeft = signal(120);
+  protected readonly otpSecondsLeft = signal(0);
   protected readonly forceOtpResendVisible = signal(false);
 
   protected readonly firstName = signal('');
@@ -364,8 +367,9 @@ export class RegisterPageComponent {
         password: this.password()
       }));
 
-      this.step.set(3);
-      this.submitAttempted.set(false);
+      await firstValueFrom(this.authStore.login(this.businessEmail(), this.password()));
+
+      this.router.navigateByUrl('/');
     } catch (error) {
       this.apiError.set(this.resolveApiError(error, 'No se pudo completar el registro.'));
     } finally {
@@ -379,7 +383,7 @@ export class RegisterPageComponent {
     this.codeSent.set(false);
     this.businessEmail.set('');
     this.otpCode.set('');
-    this.otpSecondsLeft.set(120);
+    this.otpSecondsLeft.set(0);
     this.forceOtpResendVisible.set(false);
     this.firstName.set('');
     this.lastName.set('');
@@ -449,12 +453,12 @@ export class RegisterPageComponent {
     this.codeSent.set(true);
     this.forceOtpResendVisible.set(false);
     this.otpCode.set('');
-    this.startOtpCountdown();
+    this.startOtpCountdown(response.otpPolicy.ttlMinutes * 60);
   }
 
-  private startOtpCountdown(): void {
+  private startOtpCountdown(seconds: number): void {
     this.stopOtpCountdown();
-    this.otpSecondsLeft.set(120);
+    this.otpSecondsLeft.set(seconds);
 
     this.otpCountdownHandle = setInterval(() => {
       const nextValue = this.otpSecondsLeft() - 1;

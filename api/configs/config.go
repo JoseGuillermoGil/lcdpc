@@ -1,6 +1,7 @@
 package configs
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -46,9 +47,19 @@ type Config struct {
 }
 
 func Load() *Config {
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "5432")
+	dbUser := getEnv("DB_USER", "postgres")
+	dbPassword := getEnv("DB_PASSWORD", "123456")
+	dbName := getEnv("DB_NAME", "tuinvoice")
+	dbSSL := getEnv("DB_SSL", "disable")
+
+	databaseURL := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		dbUser, dbPassword, dbHost, dbPort, dbName, dbSSL)
+
 	return &Config{
 		Port:        getEnv("PORT", "8080"),
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://lcdpc:lcdpc123@localhost:5432/lcdpc_db?sslmode=disable"),
+		DatabaseURL: databaseURL,
 		FrontendURL: getEnv("FRONTEND_URL", "http://localhost:4200"),
 
 		PasswordResetTTLMinutes:       getEnvInt("AUTH_PASSWORD_RESET_TTL_MINUTES", 30),

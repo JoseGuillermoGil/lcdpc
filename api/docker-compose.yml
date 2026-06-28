@@ -4,15 +4,15 @@ services:
     container_name: lcdpc-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: lcdpc_db
-      POSTGRES_USER: lcdpc
-      POSTGRES_PASSWORD: lcdpc123
+      POSTGRES_DB: tuinvoice
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
     ports:
       - "5432:5432"
     volumes:
       - lcdpc_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lcdpc -d lcdpc_db"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tuinvoice"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -28,18 +28,15 @@ services:
         condition: service_healthy
     environment:
       PORT: "8080"
-      DATABASE_URL: "postgres://lcdpc:lcdpc123@postgres:5432/lcdpc_db?sslmode=disable"
       FRONTEND_URL: "http://localhost:4200"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: postgres
+      DB_PASSWORD: "123456"
+      DB_NAME: tuinvoice
+      DB_SSL: disable
       AUTH_PASSWORD_RESET_TTL_MINUTES: "${AUTH_PASSWORD_RESET_TTL_MINUTES:-30}"
       AUTH_REVOKE_SESSIONS_ON_PASSWORD_RESET: "${AUTH_REVOKE_SESSIONS_ON_PASSWORD_RESET:-true}"
-      AUTH_SUPERUSER_PASSWORD: "${AUTH_SUPERUSER_PASSWORD:-SuperPerro123!}"
-      AUTH_SUPERUSER_ALIAS: "${AUTH_SUPERUSER_ALIAS:-admin_inicial}"
-      AUTH_SUPERUSER_EMAIL: "${AUTH_SUPERUSER_EMAIL:-admin@lcdpc.local}"
-      AUTH_SUPERUSER_FIRST_NAME: "${AUTH_SUPERUSER_FIRST_NAME:-Admin}"
-      AUTH_SUPERUSER_LAST_NAME: "${AUTH_SUPERUSER_LAST_NAME:-Inicial}"
-      AUTH_SUPERUSER_IDENTITY_DOCUMENT: "${AUTH_SUPERUSER_IDENTITY_DOCUMENT:-V00000001}"
-      AUTH_SUPERUSER_WHATSAPP_PHONE: "${AUTH_SUPERUSER_WHATSAPP_PHONE:-0000000000}"
-      AUTH_SUPERUSER_FULL_ADDRESS: "${AUTH_SUPERUSER_FULL_ADDRESS:-Usuario administrador inicial}"
       AUTH_GOOGLE_CLIENT_ID: "${AUTH_GOOGLE_CLIENT_ID:-}"
       AUTH_GOOGLE_CLIENT_SECRET: "${AUTH_GOOGLE_CLIENT_SECRET:-}"
       AUTH_GOOGLE_REDIRECT_URI: "${AUTH_GOOGLE_REDIRECT_URI:-http://localhost:8080/api/v1/auth/register/google/callback}"

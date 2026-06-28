@@ -12,6 +12,7 @@ FROM scratch
 COPY --from=build /app/server /server
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /src/static /static
+COPY --from=build /src/migrations /migrations
 
 EXPOSE 8080
 ENTRYPOINT ["/server"]

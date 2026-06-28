@@ -32,3 +32,9 @@ INSERT INTO resources (id, code) VALUES
     (gen_random_uuid(), 'category:update'),
     (gen_random_uuid(), 'category:delete')
 ON CONFLICT (code) DO NOTHING;
+
+-- Assign category resources to global_admin role
+INSERT INTO role_resources (role_id, resource_id)
+SELECT '33333333-3333-3333-3333-333333333333', id FROM resources
+WHERE code IN ('category:create', 'category:update', 'category:delete')
+ON CONFLICT (role_id, resource_id) DO NOTHING;

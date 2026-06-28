@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/lcdpc/lcdpc-go/configs"
 	"github.com/lcdpc/lcdpc-go/internal/auth"
 	"github.com/lcdpc/lcdpc-go/internal/branch"
@@ -23,6 +24,8 @@ import (
 )
 
 func main() {
+	_ = godotenv.Load()
+
 	ctx := context.Background()
 	cfg := configs.Load()
 
@@ -39,6 +42,11 @@ func main() {
 	defer pool.Close()
 
 	slog.Info("database connected")
+
+	if err := db.RunMigrations(cfg.DatabaseURL); err != nil {
+		slog.Error("failed to run migrations", "error", err)
+		os.Exit(1)
+	}
 
 	if err := db.Seed(ctx, pool, db.SeedConfig{
 		SuperUserPassword:         cfg.SuperUserPassword,

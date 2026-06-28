@@ -123,15 +123,12 @@ ALTER TABLE order_items ADD CONSTRAINT order_items_item_check CHECK (
 -- 10. Update FK references in bundle_items
 -- =============================================
 ALTER TABLE bundle_items DROP CONSTRAINT combo_items_combo_id_fkey;
-ALTER TABLE bundle_items DROP CONSTRAINT combo_items_producto_id_fkey;
 ALTER TABLE bundle_items ADD CONSTRAINT bundle_items_bundle_id_fkey FOREIGN KEY (bundle_id) REFERENCES bundles(bundle_id) ON DELETE CASCADE;
 ALTER TABLE bundle_items ADD CONSTRAINT bundle_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE RESTRICT;
 
 -- =============================================
 -- 11. Update FK references in product_branch_prices
 -- =============================================
-ALTER TABLE product_branch_prices DROP CONSTRAINT precios_producto_sede_producto_id_fkey;
-ALTER TABLE product_branch_prices DROP CONSTRAINT precios_producto_sede_sede_id_fkey;
 ALTER TABLE product_branch_prices ADD CONSTRAINT product_branch_prices_product_id_fkey FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE;
 ALTER TABLE product_branch_prices ADD CONSTRAINT product_branch_prices_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE;
 
