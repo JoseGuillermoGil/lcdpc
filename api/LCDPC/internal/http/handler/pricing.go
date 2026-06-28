@@ -20,6 +20,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/http/response"
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
 	"github.com/nfnt/resize"
+	"golang.org/x/image/webp"
 )
 
 const (
@@ -212,34 +213,28 @@ func (h *ProductHandler) UpdateImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldImg, err := h.svc.UpdateProductImage(r.Context(), id, "")
+	// Save new file first (with temp name)
+	newPath, err := saveUploadedFile(file, ext)
 	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "failed to save image")
+		return
+	}
+
+	// Update DB — returns old image path
+	oldImg, err := h.svc.UpdateProductImage(r.Context(), id, newPath)
+	if err != nil {
+		// Rollback: delete the new file
+		os.Remove(filepath.Join(staticImgDir, filepath.Base(newPath)))
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
 
-	var imgPath string
+	// Delete old file if existed
 	if oldImg != "" {
-		imgPath, err = replaceExistingFile(oldImg, file)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "failed to save image")
-			return
-		}
-	} else {
-		imgPath, err = saveUploadedFile(file, ext)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "failed to save image")
-			return
-		}
+		deleteOldFile(oldImg)
 	}
 
-	_, err = h.svc.UpdateProductImage(r.Context(), id, imgPath)
-	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	response.Success(w, map[string]string{"img": imgPath})
+	response.Success(w, map[string]string{"img": newPath})
 }
 
 // Bundle Handler
@@ -452,34 +447,28 @@ func (h *BundleHandler) UpdateImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldImg, err := h.svc.UpdateBundleImage(r.Context(), id, "")
+	// Save new file first (with temp name)
+	newPath, err := saveUploadedFile(file, ext)
 	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "failed to save image")
+		return
+	}
+
+	// Update DB — returns old image path
+	oldImg, err := h.svc.UpdateBundleImage(r.Context(), id, newPath)
+	if err != nil {
+		// Rollback: delete the new file
+		os.Remove(filepath.Join(staticImgDir, filepath.Base(newPath)))
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
 
-	var imgPath string
+	// Delete old file if existed
 	if oldImg != "" {
-		imgPath, err = replaceExistingFile(oldImg, file)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "failed to save image")
-			return
-		}
-	} else {
-		imgPath, err = saveUploadedFile(file, ext)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "failed to save image")
-			return
-		}
+		deleteOldFile(oldImg)
 	}
 
-	_, err = h.svc.UpdateBundleImage(r.Context(), id, imgPath)
-	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	response.Success(w, map[string]string{"img": imgPath})
+	response.Success(w, map[string]string{"img": newPath})
 }
 
 // Price Handler
@@ -626,20 +615,10 @@ func saveUploadedFile(file multipart.File, ext string) (string, error) {
 	filename := uuid.New().String() + ext
 	path := filepath.Join(staticImgDir, filename)
 
-	// Decode the image
 	file.Seek(0, 0)
-	var img image.Image
-	var err error
-
-	switch ext {
-	case ".jpg", ".jpeg":
-		img, err = jpeg.Decode(file)
-	case ".png":
-		img, err = png.Decode(file)
-	case ".gif":
-		img, err = gif.Decode(file)
-	default:
-		// For unsupported formats, save as-is
+	img, err := decodeImage(file, ext)
+	if err != nil {
+		// Unsupported format for processing, save as-is
 		file.Seek(0, 0)
 		out, err := os.Create(path)
 		if err != nil {
@@ -652,10 +631,6 @@ func saveUploadedFile(file multipart.File, ext string) (string, error) {
 		return "/static/img/" + filename, nil
 	}
 
-	if err != nil {
-		return "", fmt.Errorf("decode image: %w", err)
-	}
-
 	// Resize if larger than 1200px width
 	bounds := img.Bounds()
 	if bounds.Dx() > 1200 {
@@ -664,20 +639,10 @@ func saveUploadedFile(file multipart.File, ext string) (string, error) {
 
 	// Encode with compression
 	var buf bytes.Buffer
-	switch ext {
-	case ".jpg", ".jpeg":
-		err = jpeg.Encode(&buf, img, &jpeg.Options{Quality: 80})
-	case ".png":
-		encoder := png.Encoder{CompressionLevel: png.BestCompression}
-		err = encoder.Encode(&buf, img)
-	case ".gif":
-		err = gif.Encode(&buf, img, nil)
-	}
-	if err != nil {
+	if err := encodeImage(&buf, img, ext); err != nil {
 		return "", fmt.Errorf("encode image: %w", err)
 	}
 
-	// Write to disk
 	if err := os.WriteFile(path, buf.Bytes(), 0644); err != nil {
 		return "", fmt.Errorf("write file: %w", err)
 	}
@@ -685,23 +650,36 @@ func saveUploadedFile(file multipart.File, ext string) (string, error) {
 	return "/static/img/" + filename, nil
 }
 
-func replaceExistingFile(oldImg string, file multipart.File) (string, error) {
+func deleteOldFile(oldImg string) {
 	filename := strings.TrimPrefix(oldImg, "/static/img/")
-	imgPath := "/static/img/" + filename
+	os.Remove(filepath.Join(staticImgDir, filename))
+}
 
-	if err := os.Remove(filepath.Join(staticImgDir, filename)); err != nil && !os.IsNotExist(err) {
-		// Log but don't fail
+func decodeImage(file multipart.File, ext string) (image.Image, error) {
+	switch ext {
+	case ".jpg", ".jpeg":
+		return jpeg.Decode(file)
+	case ".png":
+		return png.Decode(file)
+	case ".gif":
+		return gif.Decode(file)
+	case ".webp":
+		return webp.Decode(file)
+	default:
+		return nil, fmt.Errorf("unsupported format: %s", ext)
 	}
+}
 
-	fileOnDisk, err := os.Create(filepath.Join(staticImgDir, filename))
-	if err != nil {
-		return "", fmt.Errorf("create file: %w", err)
+func encodeImage(w io.Writer, img image.Image, ext string) error {
+	switch ext {
+	case ".jpg", ".jpeg":
+		return jpeg.Encode(w, img, &jpeg.Options{Quality: 80})
+	case ".png":
+		encoder := png.Encoder{CompressionLevel: png.BestCompression}
+		return encoder.Encode(w, img)
+	case ".gif":
+		return gif.Encode(w, img, nil)
+	default:
+		return fmt.Errorf("unsupported format: %s", ext)
 	}
-	defer fileOnDisk.Close()
-
-	if _, err := io.Copy(fileOnDisk, file); err != nil {
-		return "", fmt.Errorf("write file: %w", err)
-	}
-
-	return imgPath, nil
 }

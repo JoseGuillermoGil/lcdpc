@@ -138,7 +138,11 @@ func (s *Service) UpdateProductImage(ctx context.Context, id uuid.UUID, img stri
 		return "", fmt.Errorf("get product: %w", err)
 	}
 
-	_, err = s.pool.Exec(ctx, `UPDATE products SET img = $2 WHERE product_id = $1`, id, img)
+	var newImg interface{}
+	if img != "" {
+		newImg = img
+	}
+	_, err = s.pool.Exec(ctx, `UPDATE products SET img = $2 WHERE product_id = $1`, id, newImg)
 	if err != nil {
 		return "", fmt.Errorf("update product image: %w", err)
 	}
@@ -346,7 +350,11 @@ func (s *Service) UpdateBundleImage(ctx context.Context, id uuid.UUID, img strin
 		return "", fmt.Errorf("get bundle: %w", err)
 	}
 
-	_, err = s.pool.Exec(ctx, `UPDATE bundles SET img = $2 WHERE bundle_id = $1`, id, img)
+	var newImg interface{}
+	if img != "" {
+		newImg = img
+	}
+	_, err = s.pool.Exec(ctx, `UPDATE bundles SET img = $2 WHERE bundle_id = $1`, id, newImg)
 	if err != nil {
 		return "", fmt.Errorf("update bundle image: %w", err)
 	}

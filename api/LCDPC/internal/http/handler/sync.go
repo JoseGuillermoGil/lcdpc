@@ -75,34 +75,28 @@ func (h *SyncHandler) SyncProductImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldImg, err := h.svc.UpdateProductImageBySKU(r.Context(), sku, "")
+	// Save new file first
+	newPath, err := saveUploadedFile(file, ext)
 	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "failed to save image")
+		return
+	}
+
+	// Update DB — returns old image path
+	oldImg, err := h.svc.UpdateProductImageBySKU(r.Context(), sku, newPath)
+	if err != nil {
+		// Rollback: delete the new file
+		deleteOldFile(newPath)
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
 
-	var imgPath string
+	// Delete old file if existed
 	if oldImg != "" {
-		imgPath, err = replaceExistingFile(oldImg, file)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "failed to save image")
-			return
-		}
-	} else {
-		imgPath, err = saveUploadedFile(file, ext)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "failed to save image")
-			return
-		}
+		deleteOldFile(oldImg)
 	}
 
-	_, err = h.svc.UpdateProductImageBySKU(r.Context(), sku, imgPath)
-	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	response.Success(w, map[string]string{"img": imgPath})
+	response.Success(w, map[string]string{"img": newPath})
 }
 
 func (h *SyncHandler) SyncBundleImage(w http.ResponseWriter, r *http.Request) {
@@ -132,32 +126,26 @@ func (h *SyncHandler) SyncBundleImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldImg, err := h.svc.UpdateBundleImageByCode(r.Context(), code, "")
+	// Save new file first
+	newPath, err := saveUploadedFile(file, ext)
 	if err != nil {
+		response.Error(w, http.StatusInternalServerError, "failed to save image")
+		return
+	}
+
+	// Update DB — returns old image path
+	oldImg, err := h.svc.UpdateBundleImageByCode(r.Context(), code, newPath)
+	if err != nil {
+		// Rollback: delete the new file
+		deleteOldFile(newPath)
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
 
-	var imgPath string
+	// Delete old file if existed
 	if oldImg != "" {
-		imgPath, err = replaceExistingFile(oldImg, file)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "failed to save image")
-			return
-		}
-	} else {
-		imgPath, err = saveUploadedFile(file, ext)
-		if err != nil {
-			response.Error(w, http.StatusInternalServerError, "failed to save image")
-			return
-		}
+		deleteOldFile(oldImg)
 	}
 
-	_, err = h.svc.UpdateBundleImageByCode(r.Context(), code, imgPath)
-	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	response.Success(w, map[string]string{"img": imgPath})
+	response.Success(w, map[string]string{"img": newPath})
 }

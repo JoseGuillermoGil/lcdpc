@@ -42,7 +42,7 @@ ALTER TABLE orders ADD CONSTRAINT orders_sede_id_fkey FOREIGN KEY (sede_id) REFE
 -- =============================================
 -- 6. Revert FK references in product_branch_prices
 -- =============================================
-ALTER TABLE product_branch_prices DROP CONSTRAINT product_branch_prices_sede_id_fkey;
+ALTER TABLE product_branch_prices DROP CONSTRAINT product_branch_prices_branch_id_fkey;
 ALTER TABLE product_branch_prices DROP CONSTRAINT product_branch_prices_product_id_fkey;
 ALTER TABLE product_branch_prices ADD CONSTRAINT precios_producto_sede_sede_id_fkey FOREIGN KEY (sede_id) REFERENCES sedes(id) ON DELETE CASCADE;
 ALTER TABLE product_branch_prices ADD CONSTRAINT precios_producto_sede_producto_id_fkey FOREIGN KEY (producto_id) REFERENCES productos(producto_id) ON DELETE CASCADE;
@@ -91,6 +91,9 @@ ALTER TABLE order_items RENAME COLUMN bundle_id TO combo_id;
 ALTER TABLE order_items RENAME COLUMN product_id TO producto_id;
 
 ALTER TABLE orders RENAME COLUMN branch_id TO sede_id;
+
+-- product_branch_prices.branch_id → sede_id
+ALTER TABLE product_branch_prices RENAME COLUMN branch_id TO sede_id;
 
 ALTER TABLE user_role_assignments RENAME COLUMN branch_ids TO sede_ids;
 

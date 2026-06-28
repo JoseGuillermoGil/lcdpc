@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/nfnt/resize"
+	"golang.org/x/image/webp"
 )
 
 type StaticHandler struct {
@@ -115,6 +116,8 @@ func (h *StaticHandler) serveResized(w http.ResponseWriter, r *http.Request, fil
 		img, err = png.Decode(file)
 	case ".gif":
 		img, err = gif.Decode(file)
+	case ".webp":
+		img, err = webp.Decode(file)
 	default:
 		http.Error(w, "unsupported format for resize", http.StatusBadRequest)
 		return

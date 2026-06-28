@@ -123,10 +123,10 @@ func NewServer(
 			r.Use(middleware.RequirePermission(rbacStore, "product:create"))
 
 			r.Post("/", productH.Create)
-			r.Put("/{id}", productH.Update)
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission(rbacStore, "product:update"))
+				r.Put("/{id}", productH.Update)
 				r.Put("/{id}/image", productH.UpdateImage)
 			})
 
@@ -148,12 +148,12 @@ func NewServer(
 			r.Use(middleware.RequirePermission(rbacStore, "bundle:create"))
 
 			r.Post("/", bundleH.Create)
-			r.Put("/{id}", bundleH.Update)
 			r.Post("/{id}/publish", bundleH.Publish)
 			r.Post("/{id}/pause", bundleH.Pause)
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission(rbacStore, "bundle:update"))
+				r.Put("/{id}", bundleH.Update)
 				r.Put("/{id}/image", bundleH.UpdateImage)
 			})
 

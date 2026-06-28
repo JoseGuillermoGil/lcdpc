@@ -82,6 +82,9 @@ ALTER TABLE user_role_assignments RENAME COLUMN sede_ids TO branch_ids;
 -- orders.sede_id → branch_id
 ALTER TABLE orders RENAME COLUMN sede_id TO branch_id;
 
+-- product_branch_prices.sede_id → branch_id
+ALTER TABLE product_branch_prices RENAME COLUMN sede_id TO branch_id;
+
 -- order_items.producto_id → product_id, combo_id → bundle_id
 ALTER TABLE order_items RENAME COLUMN producto_id TO product_id;
 ALTER TABLE order_items RENAME COLUMN combo_id TO bundle_id;
@@ -130,7 +133,7 @@ ALTER TABLE bundle_items ADD CONSTRAINT bundle_items_product_id_fkey FOREIGN KEY
 ALTER TABLE product_branch_prices DROP CONSTRAINT precios_producto_sede_producto_id_fkey;
 ALTER TABLE product_branch_prices DROP CONSTRAINT precios_producto_sede_sede_id_fkey;
 ALTER TABLE product_branch_prices ADD CONSTRAINT product_branch_prices_product_id_fkey FOREIGN KEY (product_id) REFERENCES products(product_id) ON DELETE CASCADE;
-ALTER TABLE product_branch_prices ADD CONSTRAINT product_branch_prices_sede_id_fkey FOREIGN KEY (sede_id) REFERENCES branches(id) ON DELETE CASCADE;
+ALTER TABLE product_branch_prices ADD CONSTRAINT product_branch_prices_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES branches(id) ON DELETE CASCADE;
 
 -- =============================================
 -- 12. Update FK reference in orders
