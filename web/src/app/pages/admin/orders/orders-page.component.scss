@@ -9,53 +9,15 @@
       margin: 0;
     }
   }
-}
 
-.filters {
-  display: flex;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-:host ::ng-deep {
-  .admin-table {
+  .filters {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
     background: var(--surface);
     border-radius: 8px;
-    overflow: hidden;
     box-shadow: var(--shadow);
-
-    th {
-      font-family: var(--font-body);
-      font-weight: 600;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-soft);
-      background: rgba(0, 0, 0, 0.02);
-    }
-
-    td {
-      font-family: var(--font-body);
-      font-size: 0.875rem;
-      vertical-align: middle;
-    }
-
-    code {
-      font-size: 0.8rem;
-      background: rgba(0, 0, 0, 0.04);
-      padding: 0.15rem 0.4rem;
-      border-radius: 4px;
-    }
-  }
-}
-
-.empty-state {
-  text-align: center;
-  padding: 2rem !important;
-
-  p {
-    color: var(--text-soft);
-    margin-top: 0.5rem;
+    padding: 0.75rem 1rem;
   }
 }
 
@@ -70,6 +32,7 @@
     gap: 0.25rem;
 
     label {
+      font-family: var(--font-body);
       font-weight: 500;
       font-size: 0.85rem;
       color: var(--text-soft);

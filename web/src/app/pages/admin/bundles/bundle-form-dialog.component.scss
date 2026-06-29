@@ -1,3 +1,9 @@
+:host ::ng-deep {
+  .p-dialog {
+    max-width: 95vw;
+  }
+}
+
 .bundle-form {
   display: flex;
   flex-direction: column;
@@ -49,6 +55,13 @@
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
 }
 
 .empty-items {
@@ -74,8 +87,18 @@
 }
 
 .p-error {
-  color: var(--red-500);
+  color: var(--danger);
   font-size: 0.8rem;
   margin-bottom: 0.5rem;
   display: block;
+}
+
+@media (max-width: 600px) {
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .item-row {
+    flex-wrap: wrap;
+  }
 }

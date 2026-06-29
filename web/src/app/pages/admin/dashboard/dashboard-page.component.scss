@@ -35,7 +35,7 @@
     width: 48px;
     height: 48px;
     border-radius: 10px;
-    background: rgba(245, 203, 0, 0.12);
+    background: rgba(247, 147, 26, 0.12);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -78,7 +78,7 @@
       width: 48px;
       height: 48px;
       border-radius: 10px;
-      background: #e0e0e0;
+      background: var(--page-bg);
       animation: pulse 1.5s ease-in-out infinite;
     }
 
@@ -86,7 +86,7 @@
       width: 60px;
       height: 32px;
       border-radius: 6px;
-      background: #e0e0e0;
+      background: var(--page-bg);
       animation: pulse 1.5s ease-in-out infinite;
     }
 
@@ -94,7 +94,7 @@
       width: 80px;
       height: 14px;
       border-radius: 4px;
-      background: #e0e0e0;
+      background: var(--page-bg);
       margin-top: 0.25rem;
       animation: pulse 1.5s ease-in-out infinite;
     }
