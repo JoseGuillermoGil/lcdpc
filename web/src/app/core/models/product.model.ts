@@ -20,4 +20,5 @@ export interface CreateProductRequest {
   units_per_bundle?: number | null;
   img?: string | null;
   category_id?: string | null;
+  is_active?: boolean;
 }

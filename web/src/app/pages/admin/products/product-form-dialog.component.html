@@ -1,0 +1,78 @@
+<p-dialog [header]="isEditMode ? 'Editar Producto' : 'Nuevo Producto'"
+          [visible]="visible" (visibleChange)="visibleChange.emit($event)"
+          [modal]="true" [dismissableMask]="true" [style]="{width: '550px'}"
+          (onHide)="close()">
+  <div class="product-form">
+    <div class="field">
+      <p-floatlabel>
+        <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" />
+        <label for="name">Nombre *</label>
+      </p-floatlabel>
+    </div>
+
+    <div class="field">
+      <p-floatlabel>
+        <input pInputText id="sku" [(ngModel)]="form.sku" [class.ng-invalid]="submitted && !form.sku" style="width: 100%" />
+        <label for="sku">SKU *</label>
+      </p-floatlabel>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <p-floatlabel>
+          <p-select id="measureType" [options]="measureTypeOptions" [(ngModel)]="form.base_measure_type" optionLabel="label" optionValue="value" [style]="{'width':'100%'}" />
+          <label for="measureType">Tipo de Medida *</label>
+        </p-floatlabel>
+      </div>
+      <div class="field">
+        <p-floatlabel>
+          <input pInputText id="commercialType" [(ngModel)]="form.wholesale_commercial_type" style="width: 100%" />
+          <label for="commercialType">Tipo Comercial *</label>
+        </p-floatlabel>
+      </div>
+    </div>
+
+    @if (form.base_measure_type === 'Unidad') {
+      <div class="field-row">
+        <div class="field">
+          <p-floatlabel>
+            <p-inputNumber id="unitsPerBox" [(ngModel)]="form.units_per_box" [min]="1" [style]="{'width':'100%'}" />
+            <label for="unitsPerBox">Unidades por Caja</label>
+          </p-floatlabel>
+        </div>
+        <div class="field">
+          <p-floatlabel>
+            <p-inputNumber id="unitsPerBundle" [(ngModel)]="form.units_per_bundle" [min]="1" [style]="{'width':'100%'}" />
+            <label for="unitsPerBundle">Unidades por Bulto</label>
+          </p-floatlabel>
+        </div>
+      </div>
+    }
+
+    <div class="field">
+      <p-floatlabel>
+        <p-select id="category" [options]="categories" [(ngModel)]="form.category_id"
+                  optionLabel="name" optionValue="categoryId" placeholder="Sin categoria"
+                  [showClear]="true" [style]="{'width':'100%'}" />
+        <label for="category">Categoria</label>
+      </p-floatlabel>
+    </div>
+
+    <div class="field">
+      <label class="field-label">Imagen</label>
+      @if (imagePreview) {
+        <div class="image-preview">
+          <img [src]="imagePreview" alt="Preview" />
+          <p-button icon="pi pi-times" [text]="true" severity="danger" (onClick)="removeImage()"></p-button>
+        </div>
+      }
+      <input type="file" accept="image/*" (change)="onFileSelect($event)" />
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="close()"></p-button>
+    <p-button [label]="isEditMode ? 'Guardar Cambios' : 'Crear Producto'"
+              icon="pi pi-check" [loading]="saving()" (onClick)="save()"></p-button>
+  </ng-template>
+</p-dialog>

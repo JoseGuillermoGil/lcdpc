@@ -69,7 +69,17 @@ export class ProductApiService {
       .pipe(map((res) => this.map(res.data)));
   }
 
-  create(req: CreateProductRequest): Observable<Product> {
+  create(req: CreateProductRequest, file?: File): Observable<Product> {
+    if (file) {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(req));
+      formData.append('file', file);
+      return this.http
+        .post<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/`, formData, {
+          withCredentials: true,
+        })
+        .pipe(map((res) => this.map(res.data)));
+    }
     return this.http
       .post<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/`, req, {
         withCredentials: true,
@@ -77,7 +87,17 @@ export class ProductApiService {
       .pipe(map((res) => this.map(res.data)));
   }
 
-  update(id: string, req: CreateProductRequest): Observable<Product> {
+  update(id: string, req: CreateProductRequest, file?: File): Observable<Product> {
+    if (file) {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(req));
+      formData.append('file', file);
+      return this.http
+        .put<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/${id}`, formData, {
+          withCredentials: true,
+        })
+        .pipe(map((res) => this.map(res.data)));
+    }
     return this.http
       .put<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/${id}`, req, {
         withCredentials: true,

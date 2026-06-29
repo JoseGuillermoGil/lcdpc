@@ -2,19 +2,10 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthStore } from './auth.store';
 
-export function permissionGuard(...requiredPermissions: string[]): CanActivateFn {
+export function permissionGuard(permission: string): CanActivateFn {
   return () => {
-    const store = inject(AuthStore);
-    const router = inject(Router);
-
-    if (!store.isAuthenticated()) {
-      return router.createUrlTree(['/login']);
-    }
-
-    if (store.hasAnyPermission(...requiredPermissions)) {
-      return true;
-    }
-
-    return router.createUrlTree(['/']);
+    const authStore = inject(AuthStore);
+    if (authStore.hasPermission(permission)) return true;
+    return inject(Router).createUrlTree(['/admin']);
   };
 }

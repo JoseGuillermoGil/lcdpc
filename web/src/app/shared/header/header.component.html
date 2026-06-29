@@ -10,6 +10,17 @@
     </a>
 
     <div class="topbar-actions">
+      @if (isAdmin()) {
+        <p-button
+          label="Administrar"
+          icon="pi pi-cog"
+          styleClass="admin-nav-button"
+          [text]="true"
+          severity="secondary"
+          routerLink="/admin"
+        ></p-button>
+      }
+
       <p-button
         label="Buscar"
         icon="pi pi-search"

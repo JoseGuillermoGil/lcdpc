@@ -1,0 +1,53 @@
+<section class="dashboard-page">
+  <div class="page-header">
+    <h1>Dashboard</h1>
+  </div>
+
+  @if (loading()) {
+    <div class="stats-grid">
+      @for (i of [1,2,3,4]; track i) {
+        <div class="stat-card skeleton">
+          <div class="stat-icon-skeleton"></div>
+          <div class="stat-body-skeleton">
+            <div class="value-skeleton"></div>
+            <div class="label-skeleton"></div>
+          </div>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon"><span class="pi pi-box"></span></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ stats().totalProducts }}</div>
+          <div class="stat-label">Productos</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon"><span class="pi pi-gift"></span></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ stats().totalBundles }}</div>
+          <div class="stat-label">Combos</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-icon"><span class="pi pi-shopping-cart"></span></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ stats().totalOrders }}</div>
+          <div class="stat-label">Ordenes Totales</div>
+        </div>
+      </div>
+
+      <div class="stat-card pending">
+        <div class="stat-icon"><span class="pi pi-clock"></span></div>
+        <div class="stat-body">
+          <div class="stat-value">{{ stats().pendingOrders }}</div>
+          <div class="stat-label">Pendientes</div>
+        </div>
+      </div>
+    </div>
+  }
+</section>

@@ -1,0 +1,73 @@
+<p-dialog [header]="isEditMode ? 'Editar Combo' : 'Nuevo Combo'"
+          [visible]="visible" (visibleChange)="visibleChange.emit($event)"
+          [modal]="true" [dismissableMask]="true" [style]="{width: '650px'}"
+          (onHide)="close()">
+  <div class="bundle-form">
+    <div class="field-row">
+      <div class="field">
+        <p-floatlabel>
+          <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" />
+          <label for="name">Nombre *</label>
+        </p-floatlabel>
+      </div>
+      <div class="field">
+        <p-floatlabel>
+          <input pInputText id="code" [(ngModel)]="form.code" [class.ng-invalid]="submitted && !form.code" style="width: 100%" />
+          <label for="code">Codigo *</label>
+        </p-floatlabel>
+      </div>
+    </div>
+
+    <div class="field">
+      <p-floatlabel>
+        <p-select id="category" [options]="categories" [(ngModel)]="form.category_id"
+                  optionLabel="name" optionValue="categoryId" placeholder="Sin categoria"
+                  [showClear]="true" [style]="{'width':'100%'}" />
+        <label for="category">Categoria</label>
+      </p-floatlabel>
+    </div>
+
+    <div class="items-section">
+      <div class="items-header">
+        <h3>Items del Combo</h3>
+        <p-button label="Agregar Item" icon="pi pi-plus" [text]="true" size="small" (onClick)="addItem()"></p-button>
+      </div>
+
+      @if (submitted && form.items.length === 0) {
+        <small class="p-error">Debe agregar al menos un item</small>
+      }
+
+      @for (item of form.items; track $index; let i = $index) {
+        <div class="item-row" [class.ng-invalid]="submitted && (!item.product_id || item.quantity <= 0)">
+          <p-select [options]="availableProducts" [(ngModel)]="item.product_id"
+                    optionLabel="name" optionValue="productId"
+                    placeholder="Seleccionar producto" [style]="{'flex':'1'}" />
+          <p-inputNumber [(ngModel)]="item.quantity" [min]="1" [style]="{'width':'100px'}" />
+          <p-button icon="pi pi-times" [text]="true" severity="danger" [rounded]="true"
+                    (onClick)="removeItem(i)"></p-button>
+        </div>
+      } @empty {
+        <div class="empty-items">
+          <p>No hay items agregados</p>
+        </div>
+      }
+    </div>
+
+    <div class="field">
+      <label class="field-label">Imagen</label>
+      @if (imagePreview) {
+        <div class="image-preview">
+          <img [src]="imagePreview" alt="Preview" />
+          <p-button icon="pi pi-times" [text]="true" severity="danger" (onClick)="removeImage()"></p-button>
+        </div>
+      }
+      <input type="file" accept="image/*" (change)="onFileSelect($event)" />
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="close()"></p-button>
+    <p-button [label]="isEditMode ? 'Guardar Cambios' : 'Crear Combo'"
+              icon="pi pi-check" [loading]="saving()" (onClick)="save()"></p-button>
+  </ng-template>
+</p-dialog>

@@ -78,7 +78,17 @@ export class BundleApiService {
       .pipe(map((res) => this.map(res.data)));
   }
 
-  create(req: CreateBundleRequest): Observable<Bundle> {
+  create(req: CreateBundleRequest, file?: File): Observable<Bundle> {
+    if (file) {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(req));
+      formData.append('file', file);
+      return this.http
+        .post<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/`, formData, {
+          withCredentials: true,
+        })
+        .pipe(map((res) => this.map(res.data)));
+    }
     return this.http
       .post<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/`, req, {
         withCredentials: true,
@@ -86,7 +96,17 @@ export class BundleApiService {
       .pipe(map((res) => this.map(res.data)));
   }
 
-  update(id: string, req: CreateBundleRequest): Observable<Bundle> {
+  update(id: string, req: CreateBundleRequest, file?: File): Observable<Bundle> {
+    if (file) {
+      const formData = new FormData();
+      formData.append('data', JSON.stringify(req));
+      formData.append('file', file);
+      return this.http
+        .put<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/${id}`, formData, {
+          withCredentials: true,
+        })
+        .pipe(map((res) => this.map(res.data)));
+    }
     return this.http
       .put<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/${id}`, req, {
         withCredentials: true,

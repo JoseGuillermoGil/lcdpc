@@ -1,0 +1,96 @@
+<section class="orders-page">
+  <div class="page-header">
+    <h1>Ordenes</h1>
+  </div>
+
+  <div class="filters">
+    <p-select [options]="statusOptions" [(ngModel)]="selectedStatus"
+              optionLabel="label" optionValue="value"
+              placeholder="Todos los estados" [showClear]="true"
+              (onChange)="loadOrders()"></p-select>
+    <p-select [options]="branches()" [(ngModel)]="selectedBranch"
+              optionLabel="name" optionValue="id"
+              placeholder="Todas las sucursales" [showClear]="true"
+              (onChange)="loadOrders()"></p-select>
+  </div>
+
+  <p-table [value]="orders()" styleClass="admin-table" [loading]="loading()">
+    <ng-template pTemplate="header">
+      <tr>
+        <th>ID</th>
+        <th>Sucursal</th>
+        <th>Estado</th>
+        <th>Total</th>
+        <th>Items</th>
+        <th>Fecha</th>
+        <th style="width: 140px">Acciones</th>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="body" let-order>
+      <tr>
+        <td><code>{{ order.id | slice:0:8 }}...</code></td>
+        <td>{{ getBranchName(order.branchId) }}</td>
+        <td><p-tag [value]="order.status" [severity]="orderStatusSeverity(order.status)" /></td>
+        <td>{{ order.priceTotal | currency:order.currency }}</td>
+        <td>{{ order.totalItems }}</td>
+        <td>{{ order.createdAtUtc | date:'short' }}</td>
+        <td>
+          <p-button icon="pi pi-eye" [text]="true" [rounded]="true"
+                    (onClick)="viewDetail(order)" pTooltip="Ver detalle"></p-button>
+          @if (canChangeStatus()) {
+            <p-button icon="pi pi-arrow-right" [text]="true" [rounded]="true" severity="success"
+                      (onClick)="openStatusDialog(order)" pTooltip="Cambiar estado"></p-button>
+          }
+          @if (canDelete()) {
+            <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger"
+                      (onClick)="confirmDelete(order)" pTooltip="Eliminar"></p-button>
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template pTemplate="emptymessage">
+      <tr>
+        <td colspan="7" class="empty-state">
+          <span class="pi pi-shopping-cart" style="font-size: 2rem; color: var(--text-soft)"></span>
+          <p>No hay ordenes registradas</p>
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
+</section>
+
+<!-- Detail Dialog -->
+<app-order-detail-dialog
+  [visible]="detailVisible()"
+  [order]="selectedOrder()"
+  [branches]="branches()"
+  (visibleChange)="detailVisible.set($event)"
+></app-order-detail-dialog>
+
+<!-- Status Change Dialog -->
+<p-dialog header="Cambiar Estado" [visible]="statusDialogVisible()"
+          (visibleChange)="statusDialogVisible.set($event)"
+          [modal]="true" [dismissableMask]="true" [style]="{width: '400px'}">
+  <div class="status-form">
+    <div class="field">
+      <label>Nuevo Estado</label>
+      <p-select [options]="nextStatusOptions()" [(ngModel)]="newStatus"
+                optionLabel="label" optionValue="value"
+                placeholder="Seleccionar estado" [style]="{'width':'100%'}" />
+    </div>
+    <div class="field">
+      <label>Notas</label>
+      <textarea pInputText [(ngModel)]="statusNotes" rows="3" style="width: 100%"
+                placeholder="Notas opcionales..."></textarea>
+    </div>
+  </div>
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" severity="secondary" [text]="true"
+              (onClick)="statusDialogVisible.set(false)"></p-button>
+    <p-button label="Confirmar" icon="pi pi-check" [disabled]="!newStatus"
+              (onClick)="changeStatus()"></p-button>
+  </ng-template>
+</p-dialog>
+
+<p-confirmDialog />
+<p-toast />

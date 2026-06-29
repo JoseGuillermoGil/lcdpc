@@ -1,0 +1,134 @@
+.admin-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.admin-sidebar {
+  width: 260px;
+  min-height: 100vh;
+  background: var(--text-strong);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 100;
+}
+
+.sidebar-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-brand {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  color: var(--surface-strong);
+  text-decoration: none;
+  letter-spacing: 0.5px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 1rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+
+  a {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    color: rgba(255, 255, 255, 0.7);
+    text-decoration: none;
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all 0.15s ease;
+    border-left: 3px solid transparent;
+
+    .pi {
+      font-size: 1rem;
+      width: 1.25rem;
+      text-align: center;
+    }
+
+    &:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    &.active {
+      color: var(--surface-strong);
+      background: rgba(245, 203, 0, 0.08);
+      border-left-color: var(--surface-strong);
+    }
+  }
+}
+
+.sidebar-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  .back-to-store {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-decoration: none;
+    font-size: 0.8rem;
+    transition: color 0.15s;
+
+    &:hover {
+      color: var(--surface-strong);
+    }
+  }
+
+  .sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+
+    .pi {
+      color: var(--surface-strong);
+    }
+  }
+}
+
+.admin-content {
+  flex: 1;
+  margin-left: 260px;
+  padding: 2rem;
+  background: var(--page-bg);
+  min-height: 100vh;
+}
+
+@media (max-width: 768px) {
+  .admin-sidebar {
+    width: 60px;
+
+    .sidebar-brand,
+    .sidebar-nav a span:last-child,
+    .sidebar-footer .back-to-store span:last-child,
+    .sidebar-footer .sidebar-user span:last-child {
+      display: none;
+    }
+
+    .sidebar-nav a {
+      justify-content: center;
+      padding: 0.75rem;
+    }
+  }
+
+  .admin-content {
+    margin-left: 60px;
+    padding: 1rem;
+  }
+}

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output, inject } from '@angular/core';
+import { Component, EventEmitter, Input, Output, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
@@ -31,6 +31,15 @@ export class HeaderComponent {
 
   protected readonly user = this.authStore.currentUser;
   protected readonly isAuthenticated = this.authStore.isAuthenticated;
+
+  protected readonly isAdmin = computed(() =>
+    this.authStore.hasAnyPermission(
+      'product:create', 'product:update', 'product:delete',
+      'bundle:create', 'bundle:update', 'bundle:delete',
+      'order:view', 'order:create', 'order:update', 'order:delete',
+      'rbac:resource:view'
+    )
+  );
 
   protected async logout(): Promise<void> {
     await this.authStore.logout().toPromise();

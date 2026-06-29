@@ -1,0 +1,115 @@
+.order-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+
+  .detail-id {
+    code {
+      font-size: 0.8rem;
+      background: rgba(0, 0, 0, 0.04);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+    }
+  }
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.detail-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-soft);
+}
+
+.detail-value {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.detail-notes {
+  p {
+    font-size: 0.9rem;
+    color: var(--text-soft);
+    margin: 0.25rem 0 0;
+  }
+}
+
+h3 {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1rem;
+  margin: 0;
+}
+
+:host ::ng-deep {
+  .detail-table {
+    font-size: 0.85rem;
+
+    th {
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-soft);
+    }
+
+    code {
+      font-size: 0.75rem;
+      background: rgba(0, 0, 0, 0.04);
+      padding: 0.1rem 0.3rem;
+      border-radius: 3px;
+    }
+  }
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.02);
+    border-radius: 6px;
+  }
+
+  .history-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .history-date {
+    font-size: 0.75rem;
+    color: var(--text-soft);
+  }
+
+  .history-notes {
+    font-size: 0.85rem;
+  }
+}
