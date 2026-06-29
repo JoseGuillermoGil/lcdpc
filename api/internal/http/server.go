@@ -174,7 +174,6 @@ func NewServer(
 	r.Route("/api/v1/prices", func(r chi.Router) {
 		r.Get("/{id}", priceH.GetByID)
 		r.Get("/product/{id}", priceH.ListByProductID)
-		r.Get("/branch/{id}", priceH.ListByBranchID)
 
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))

@@ -17,6 +17,7 @@ type ProductFilter struct {
 	Name       *string
 	Sku        *string
 	IsActive   *bool
+	BranchID   *uuid.UUID
 }
 
 func (f ProductFilter) GetLimit() int {
@@ -43,6 +44,7 @@ type BundleFilter struct {
 	Name       *string
 	Code       *string
 	Status     *string
+	BranchID   *uuid.UUID
 }
 
 func (f BundleFilter) GetLimit() int {
@@ -92,6 +94,11 @@ func ParseProductFilter(r *http.Request) ProductFilter {
 			f.IsActive = &b
 		}
 	}
+	if v := q.Get("branch_id"); v != "" {
+		if id, err := uuid.Parse(v); err == nil {
+			f.BranchID = &id
+		}
+	}
 
 	return f
 }
@@ -123,6 +130,11 @@ func ParseBundleFilter(r *http.Request) BundleFilter {
 	}
 	if v := q.Get("status"); v != "" {
 		f.Status = &v
+	}
+	if v := q.Get("branch_id"); v != "" {
+		if id, err := uuid.Parse(v); err == nil {
+			f.BranchID = &id
+		}
 	}
 
 	return f

@@ -29,15 +29,15 @@ type SyncProductRequest struct {
 }
 
 type SyncBundleRequest struct {
-	BundleID                uuid.UUID      `json:"bundle_id"`
-	Code                    string         `json:"code"`
-	Name                    string         `json:"name"`
-	Status                  string         `json:"status"`
-	EnabledBranchIDs        []uuid.UUID    `json:"enabled_branch_ids"`
-	TotalPrice              float64        `json:"total_price"`
-	TotalPriceCurrency      string         `json:"total_price_currency"`
-	PromotionalPrice        *float64       `json:"promotional_price"`
-	PromotionalPriceCurrency *string       `json:"promotional_price_currency"`
+	BundleID                uuid.UUID        `json:"bundle_id"`
+	Code                    string           `json:"code"`
+	Name                    string           `json:"name"`
+	Status                  string           `json:"status"`
+	BranchID                *uuid.UUID       `json:"branch_id"`
+	TotalPrice              float64          `json:"total_price"`
+	TotalPriceCurrency      string           `json:"total_price_currency"`
+	PromotionalPrice        *float64         `json:"promotional_price"`
+	PromotionalPriceCurrency *string         `json:"promotional_price_currency"`
 	Items                   []SyncBundleItem `json:"items"`
 }
 
@@ -95,17 +95,17 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 	result := &SyncResult{}
 	for _, b := range bundles {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO bundles (bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency)
+			INSERT INTO bundles (bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			ON CONFLICT (code) DO UPDATE SET
 				name = EXCLUDED.name,
 				status = EXCLUDED.status,
-				enabled_branch_ids = EXCLUDED.enabled_branch_ids,
+				branch_id = EXCLUDED.branch_id,
 				total_price = EXCLUDED.total_price,
 				total_price_currency = EXCLUDED.total_price_currency,
 				promotional_price = EXCLUDED.promotional_price,
 				promotional_price_currency = EXCLUDED.promotional_price_currency
-		`, b.BundleID, b.Code, b.Name, b.Status, b.EnabledBranchIDs,
+		`, b.BundleID, b.Code, b.Name, b.Status, b.BranchID,
 			b.TotalPrice, b.TotalPriceCurrency, b.PromotionalPrice, b.PromotionalPriceCurrency)
 		if err != nil {
 			result.Errors++

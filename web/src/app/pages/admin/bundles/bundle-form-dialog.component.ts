@@ -11,6 +11,7 @@ import { Bundle, CreateBundleRequest, BundleItemRequest } from '../../../core/mo
 import { Product } from '../../../core/models/product.model';
 import { BundleApiService } from '../../../core/services/bundle-api.service';
 import { ProductApiService } from '../../../core/services/product-api.service';
+import { BranchApiService } from '../../../core/services/branch-api.service';
 import { CategoryStore } from '../../../core/stores/category.store';
 
 @Component({
@@ -33,10 +34,12 @@ export class BundleFormDialogComponent implements OnChanges {
 
   private readonly bundleApi = inject(BundleApiService);
   private readonly productApi = inject(ProductApiService);
+  private readonly branchApi = inject(BranchApiService);
   readonly categoryStore = inject(CategoryStore);
 
   protected readonly saving = signal(false);
   protected readonly products = signal<Product[]>([]);
+  protected readonly branches = signal<{ label: string; value: string }[]>([]);
   protected submitted = false;
   protected imageFile: File | null = null;
   protected imagePreview: string | null = null;
@@ -54,11 +57,13 @@ export class BundleFormDialogComponent implements OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible'] && this.visible) {
       this.loadProducts();
+      this.loadBranches();
       if (this.bundle) {
         this.form = {
           code: this.bundle.code,
           name: this.bundle.name,
           category_id: this.bundle.categoryId,
+          branch_id: this.bundle.branchId,
           items: this.bundle.items?.map((i) => ({
             product_id: i.productId,
             quantity: i.quantity,
@@ -72,6 +77,12 @@ export class BundleFormDialogComponent implements OnChanges {
       this.submitted = false;
       this.imageFile = null;
     }
+  }
+
+  private loadBranches(): void {
+    this.branchApi.list().subscribe({
+      next: (branches) => this.branches.set(branches.map((b) => ({ label: b.storeName, value: b.id }))),
+    });
   }
 
   private loadProducts(): void {
@@ -121,6 +132,7 @@ export class BundleFormDialogComponent implements OnChanges {
       name: this.form.name,
       items: this.form.items,
       category_id: this.form.category_id ?? undefined,
+      branch_id: this.form.branch_id ?? undefined,
     };
 
     const operation = this.isEditMode
@@ -147,6 +159,7 @@ export class BundleFormDialogComponent implements OnChanges {
       code: '',
       name: '',
       category_id: null as string | null,
+      branch_id: null as string | null,
       items: [] as BundleItemRequest[],
     };
   }

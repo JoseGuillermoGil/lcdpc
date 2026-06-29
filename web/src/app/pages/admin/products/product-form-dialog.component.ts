@@ -10,6 +10,7 @@ import { CheckboxModule } from 'primeng/checkbox';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { Product, CreateProductRequest } from '../../../core/models/product.model';
 import { ProductApiService } from '../../../core/services/product-api.service';
+import { BranchApiService } from '../../../core/services/branch-api.service';
 import { CategoryStore } from '../../../core/stores/category.store';
 
 @Component({
@@ -32,9 +33,11 @@ export class ProductFormDialogComponent implements OnChanges {
   @Output() closed = new EventEmitter<void>();
 
   private readonly productApi = inject(ProductApiService);
+  private readonly branchApi = inject(BranchApiService);
   readonly categoryStore = inject(CategoryStore);
 
   protected readonly saving = signal(false);
+  protected readonly branches = signal<{ label: string; value: string }[]>([]);
   protected submitted = false;
   protected imageFile: File | null = null;
   protected imagePreview: string | null = null;
@@ -52,8 +55,9 @@ export class ProductFormDialogComponent implements OnChanges {
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['product'] || changes['visible']) {
-      if (this.visible && this.product) {
+    if (changes['visible'] && this.visible) {
+      this.loadBranches();
+      if (this.product) {
         this.form = {
           name: this.product.name,
           sku: this.product.sku,
@@ -62,15 +66,22 @@ export class ProductFormDialogComponent implements OnChanges {
           units_per_box: this.product.unitsPerBox,
           units_per_bundle: this.product.unitsPerBundle,
           category_id: this.product.categoryId,
+          branch_id: this.product.branchId,
         };
         this.imagePreview = this.productApi.resolveImageUrl(this.product.img);
-      } else if (this.visible) {
+      } else {
         this.form = this.emptyForm();
         this.imagePreview = null;
       }
       this.submitted = false;
       this.imageFile = null;
     }
+  }
+
+  private loadBranches(): void {
+    this.branchApi.list().subscribe({
+      next: (branches) => this.branches.set(branches.map((b) => ({ label: b.storeName, value: b.id }))),
+    });
   }
 
   onFileSelect(event: Event): void {
@@ -131,6 +142,7 @@ export class ProductFormDialogComponent implements OnChanges {
       units_per_box: null,
       units_per_bundle: null,
       category_id: null,
+      branch_id: null,
     };
   }
 }

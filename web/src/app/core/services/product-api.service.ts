@@ -22,6 +22,7 @@ interface ProductGoData {
   is_active: boolean;
   img: string | null;
   category_id: string | null;
+  branch_id: string | null;
 }
 
 interface PaginatedGoData<T> {
@@ -50,6 +51,7 @@ export class ProductApiService {
     if (filter?.name) params['name'] = filter.name;
     if (filter?.sku) params['sku'] = filter.sku;
     if (filter?.is_active != null) params['is_active'] = String(filter.is_active);
+    if (filter?.branch_id) params['branch_id'] = filter.branch_id;
 
     return this.http
       .get<JsendEnvelope<PaginatedGoData<ProductGoData>>>(`${this.baseUrl}/api/v1/products/`, { params })
@@ -143,6 +145,7 @@ export class ProductApiService {
       isActive: raw.is_active,
       img: raw.img,
       categoryId: raw.category_id,
+      branchId: raw.branch_id,
     };
   }
 }

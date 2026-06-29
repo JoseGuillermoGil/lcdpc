@@ -16,7 +16,7 @@ interface BundleGoData {
   code: string;
   name: string;
   status: string;
-  enabled_branch_ids: string[];
+  branch_id: string | null;
   total_price: number;
   total_price_currency: string;
   promotional_price: number | null;
@@ -166,7 +166,7 @@ export class BundleApiService {
       code: raw.code,
       name: raw.name,
       status: raw.status,
-      enabledBranchIds: raw.enabled_branch_ids,
+      branchId: raw.branch_id,
       totalPrice: raw.total_price,
       totalPriceCurrency: raw.total_price_currency,
       promotionalPrice: raw.promotional_price,

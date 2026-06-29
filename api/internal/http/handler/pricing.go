@@ -533,23 +533,6 @@ func (h *PriceHandler) ListByProductID(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, result)
 }
 
-func (h *PriceHandler) ListByBranchID(w http.ResponseWriter, r *http.Request) {
-	idStr := chiURLParam(r, "id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid id")
-		return
-	}
-
-	result, err := h.svc.ListPricesByBranchID(r.Context(), id)
-	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	response.Success(w, result)
-}
-
 func (h *PriceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)

@@ -1,7 +1,6 @@
 export interface ProductBranchPrice {
   id: string;
   productId: string;
-  branchId: string;
   price1Unit: number;
   price1Currency: string;
   price2BoxBundlePiece: number;
@@ -17,7 +16,6 @@ export interface ProductBranchPrice {
 
 export interface CreatePriceRequest {
   product_id: string;
-  branch_id: string;
   price1_unit: number;
   price2_box_bundle_piece: number;
   price3_wholesale_from2: number;

@@ -31,6 +31,7 @@ type Product struct {
 	IsActive                bool       `json:"is_active"`
 	Img                     *string    `json:"img"`
 	CategoryID              *uuid.UUID `json:"category_id"`
+	BranchID                *uuid.UUID `json:"branch_id"`
 }
 
 type CreateProductRequest struct {
@@ -42,6 +43,7 @@ type CreateProductRequest struct {
 	UnitsPerBundle          *int       `json:"units_per_bundle"`
 	Img                     *string    `json:"img"`
 	CategoryID              *uuid.UUID `json:"category_id"`
+	BranchID                *uuid.UUID `json:"branch_id"`
 }
 
 func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (*Product, error) {
@@ -59,11 +61,11 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO products (product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9)
-		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id
-	`, uuid.New(), req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle, req.Img, req.CategoryID).Scan(
-		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img, &p.CategoryID,
+		INSERT INTO products (product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id, branch_id)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10)
+		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id, branch_id
+	`, uuid.New(), req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle, req.Img, req.CategoryID, req.BranchID).Scan(
+		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img, &p.CategoryID, &p.BranchID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create product: %w", err)
@@ -74,9 +76,9 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 func (s *Service) GetProductByID(ctx context.Context, id uuid.UUID) (*Product, error) {
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id
+		SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id, branch_id
 		FROM products WHERE product_id = $1
-	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img, &p.CategoryID)
+	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img, &p.CategoryID, &p.BranchID)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
 	}
@@ -93,7 +95,7 @@ func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]
 	}
 
 	countQuery := `SELECT COUNT(*) FROM products WHERE 1=1`
-	dataQuery := `SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id FROM products WHERE 1=1`
+	dataQuery := `SELECT product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id, branch_id FROM products WHERE 1=1`
 	var args []interface{}
 	argIdx := 1
 
@@ -121,6 +123,12 @@ func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]
 		args = append(args, *f.IsActive)
 		argIdx++
 	}
+	if f.BranchID != nil {
+		countQuery += fmt.Sprintf(` AND branch_id = $%d`, argIdx)
+		dataQuery += fmt.Sprintf(` AND branch_id = $%d`, argIdx)
+		args = append(args, *f.BranchID)
+		argIdx++
+	}
 
 	var totalCount int
 	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
@@ -145,7 +153,7 @@ func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]
 	products := make([]Product, 0)
 	for rows.Next() {
 		var p Product
-		if err := rows.Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img, &p.CategoryID); err != nil {
+		if err := rows.Scan(&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img, &p.CategoryID, &p.BranchID); err != nil {
 			return nil, 0, fmt.Errorf("scan product: %w", err)
 		}
 		products = append(products, p)
@@ -156,11 +164,11 @@ func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]
 func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreateProductRequest) (*Product, error) {
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		UPDATE products SET name = $2, sku = $3, base_measure_type = $4, wholesale_commercial_type = $5, units_per_box = $6, units_per_bundle = $7, img = $8, category_id = $9
+		UPDATE products SET name = $2, sku = $3, base_measure_type = $4, wholesale_commercial_type = $5, units_per_box = $6, units_per_bundle = $7, img = $8, category_id = $9, branch_id = $10
 		WHERE product_id = $1
-		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id
-	`, id, req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle, req.Img, req.CategoryID).Scan(
-		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img, &p.CategoryID,
+		RETURNING product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active, img, category_id, branch_id
+	`, id, req.Name, req.Sku, req.BaseMeasureType, req.WholesaleCommercialType, req.UnitsPerBox, req.UnitsPerBundle, req.Img, req.CategoryID, req.BranchID).Scan(
+		&p.ProductID, &p.Name, &p.Sku, &p.BaseMeasureType, &p.WholesaleCommercialType, &p.UnitsPerBox, &p.UnitsPerBundle, &p.IsActive, &p.Img, &p.CategoryID, &p.BranchID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update product: %w", err)
@@ -208,7 +216,7 @@ type Bundle struct {
 	Code                     string       `json:"code"`
 	Name                     string       `json:"name"`
 	Status                   string       `json:"status"`
-	EnabledBranchIDs         []uuid.UUID  `json:"enabled_branch_ids"`
+	BranchID                 *uuid.UUID   `json:"branch_id"`
 	TotalPrice               float64      `json:"total_price"`
 	TotalPriceCurrency       string       `json:"total_price_currency"`
 	PromotionalPrice         *float64     `json:"promotional_price"`
@@ -229,7 +237,7 @@ type CreateBundleRequest struct {
 	Code             string          `json:"code" validate:"required"`
 	Name             string          `json:"name" validate:"required"`
 	Items            []BundleItemReq `json:"items" validate:"required"`
-	EnabledBranchIDs []uuid.UUID     `json:"enabled_branch_ids"`
+	BranchID         *uuid.UUID      `json:"branch_id"`
 	Img              *string         `json:"img"`
 	CategoryID       *uuid.UUID      `json:"category_id"`
 }
@@ -248,11 +256,11 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 
 	bundle := &Bundle{}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO bundles (bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, img, category_id)
+		INSERT INTO bundles (bundle_id, code, name, status, branch_id, total_price, total_price_currency, img, category_id)
 		VALUES ($1, $2, $3, 'Draft', $4, 0, 'USD', $5, $6)
-		RETURNING bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id
-	`, uuid.New(), req.Code, req.Name, req.EnabledBranchIDs, req.Img, req.CategoryID).Scan(
-		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.EnabledBranchIDs,
+		RETURNING bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id
+	`, uuid.New(), req.Code, req.Name, req.BranchID, req.Img, req.CategoryID).Scan(
+		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.BranchID,
 		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency, &bundle.Img, &bundle.CategoryID,
 	)
 	if err != nil {
@@ -284,10 +292,10 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 func (s *Service) GetBundleByID(ctx context.Context, id uuid.UUID) (*Bundle, error) {
 	bundle := &Bundle{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id
+		SELECT bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id
 		FROM bundles WHERE bundle_id = $1
 	`, id).Scan(
-		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.EnabledBranchIDs,
+		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.BranchID,
 		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency, &bundle.Img, &bundle.CategoryID,
 	)
 	if err == pgx.ErrNoRows {
@@ -322,7 +330,7 @@ func (s *Service) ListBundles(ctx context.Context, filter ...BundleFilter) ([]Bu
 	}
 
 	countQuery := `SELECT COUNT(*) FROM bundles WHERE 1=1`
-	dataQuery := `SELECT bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id FROM bundles WHERE 1=1`
+	dataQuery := `SELECT bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id FROM bundles WHERE 1=1`
 	var args []interface{}
 	argIdx := 1
 
@@ -350,6 +358,12 @@ func (s *Service) ListBundles(ctx context.Context, filter ...BundleFilter) ([]Bu
 		args = append(args, *f.Status)
 		argIdx++
 	}
+	if f.BranchID != nil {
+		countQuery += fmt.Sprintf(` AND branch_id = $%d`, argIdx)
+		dataQuery += fmt.Sprintf(` AND branch_id = $%d`, argIdx)
+		args = append(args, *f.BranchID)
+		argIdx++
+	}
 
 	var totalCount int
 	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
@@ -374,7 +388,7 @@ func (s *Service) ListBundles(ctx context.Context, filter ...BundleFilter) ([]Bu
 	bundles := make([]Bundle, 0)
 	for rows.Next() {
 		var b Bundle
-		if err := rows.Scan(&b.BundleID, &b.Code, &b.Name, &b.Status, &b.EnabledBranchIDs,
+		if err := rows.Scan(&b.BundleID, &b.Code, &b.Name, &b.Status, &b.BranchID,
 			&b.TotalPrice, &b.TotalPriceCurrency, &b.PromotionalPrice, &b.PromotionalPriceCurrency, &b.Img, &b.CategoryID); err != nil {
 			return nil, 0, fmt.Errorf("scan bundle: %w", err)
 		}
@@ -392,11 +406,11 @@ func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBund
 
 	bundle := &Bundle{}
 	err = tx.QueryRow(ctx, `
-		UPDATE bundles SET code = $2, name = $3, enabled_branch_ids = $4, img = $5, category_id = $6
+		UPDATE bundles SET code = $2, name = $3, branch_id = $4, img = $5, category_id = $6
 		WHERE bundle_id = $1
-		RETURNING bundle_id, code, name, status, enabled_branch_ids, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id
-	`, id, req.Code, req.Name, req.EnabledBranchIDs, req.Img, req.CategoryID).Scan(
-		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.EnabledBranchIDs,
+		RETURNING bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id
+	`, id, req.Code, req.Name, req.BranchID, req.Img, req.CategoryID).Scan(
+		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.BranchID,
 		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency, &bundle.Img, &bundle.CategoryID,
 	)
 	if err != nil {
@@ -474,7 +488,6 @@ func (s *Service) UpdateBundleStatus(ctx context.Context, id uuid.UUID, status s
 type ProductBranchPrice struct {
 	PriceID                 uuid.UUID  `json:"id"`
 	ProductID               uuid.UUID  `json:"product_id"`
-	BranchID                uuid.UUID  `json:"branch_id"`
 	Price1Unit              float64    `json:"price1_unit"`
 	Price1Currency          string     `json:"price1_currency"`
 	Price2BoxBundlePiece    float64    `json:"price2_box_bundle_piece"`
@@ -490,7 +503,6 @@ type ProductBranchPrice struct {
 
 type CreatePriceRequest struct {
 	ProductID               uuid.UUID  `json:"product_id" validate:"required"`
-	BranchID                uuid.UUID  `json:"branch_id" validate:"required"`
 	Price1Unit              float64    `json:"price1_unit" validate:"required"`
 	Price2BoxBundlePiece    float64    `json:"price2_box_bundle_piece" validate:"required"`
 	Price3WholesaleFrom2    float64    `json:"price3_wholesale_from2" validate:"required"`
@@ -504,12 +516,12 @@ func (s *Service) CreatePrice(ctx context.Context, req CreatePriceRequest) (*Pro
 	p := &ProductBranchPrice{}
 	currency := "USD"
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO product_branch_prices (id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until)
-		VALUES ($1, $2, $3, $4, $5, $6, $5, $7, $5, $8, $5, $9, $10, $11)
-		RETURNING id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
-	`, uuid.New(), req.ProductID, req.BranchID, req.Price1Unit, currency, req.Price2BoxBundlePiece,
+		INSERT INTO product_branch_prices (id, product_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until)
+		VALUES ($1, $2, $3, $4, $5, $4, $6, $4, $7, $4, $8, $9, $10)
+		RETURNING id, product_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
+	`, uuid.New(), req.ProductID, req.Price1Unit, currency, req.Price2BoxBundlePiece,
 		req.Price3WholesaleFrom2, req.Price4Wholesale, req.Price4RequiresAgreement, req.ValidFrom, req.ValidUntil).Scan(
-		&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
+		&p.PriceID, &p.ProductID, &p.Price1Unit, &p.Price1Currency,
 		&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
 		&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil,
 	)
@@ -522,10 +534,10 @@ func (s *Service) CreatePrice(ctx context.Context, req CreatePriceRequest) (*Pro
 func (s *Service) GetPriceByID(ctx context.Context, id uuid.UUID) (*ProductBranchPrice, error) {
 	p := &ProductBranchPrice{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
+		SELECT id, product_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
 		FROM product_branch_prices WHERE id = $1
 	`, id).Scan(
-		&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
+		&p.PriceID, &p.ProductID, &p.Price1Unit, &p.Price1Currency,
 		&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
 		&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil,
 	)
@@ -540,7 +552,7 @@ func (s *Service) GetPriceByID(ctx context.Context, id uuid.UUID) (*ProductBranc
 
 func (s *Service) ListPricesByProductID(ctx context.Context, productID uuid.UUID) ([]ProductBranchPrice, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
+		SELECT id, product_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
 		FROM product_branch_prices WHERE product_id = $1 ORDER BY valid_from DESC
 	`, productID)
 	if err != nil {
@@ -551,30 +563,7 @@ func (s *Service) ListPricesByProductID(ctx context.Context, productID uuid.UUID
 	prices := make([]ProductBranchPrice, 0)
 	for rows.Next() {
 		var p ProductBranchPrice
-		if err := rows.Scan(&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
-			&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
-			&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil); err != nil {
-			return nil, fmt.Errorf("scan price: %w", err)
-		}
-		prices = append(prices, p)
-	}
-	return prices, nil
-}
-
-func (s *Service) ListPricesByBranchID(ctx context.Context, branchID uuid.UUID) ([]ProductBranchPrice, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
-		FROM product_branch_prices WHERE branch_id = $1 ORDER BY valid_from DESC
-	`, branchID)
-	if err != nil {
-		return nil, fmt.Errorf("list prices: %w", err)
-	}
-	defer rows.Close()
-
-	prices := make([]ProductBranchPrice, 0)
-	for rows.Next() {
-		var p ProductBranchPrice
-		if err := rows.Scan(&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
+		if err := rows.Scan(&p.PriceID, &p.ProductID, &p.Price1Unit, &p.Price1Currency,
 			&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
 			&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil); err != nil {
 			return nil, fmt.Errorf("scan price: %w", err)
@@ -590,10 +579,10 @@ func (s *Service) UpdatePrice(ctx context.Context, id uuid.UUID, req CreatePrice
 	err := s.pool.QueryRow(ctx, `
 		UPDATE product_branch_prices SET price1_unit = $2, price1_currency = $3, price2_box_bundle_piece = $4, price2_currency = $3, price3_wholesale_from2 = $5, price3_currency = $3, price4_wholesale = $6, price4_currency = $3, price4_requires_agreement = $7, valid_from = $8, valid_until = $9
 		WHERE id = $1
-		RETURNING id, product_id, branch_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
+		RETURNING id, product_id, price1_unit, price1_currency, price2_box_bundle_piece, price2_currency, price3_wholesale_from2, price3_currency, price4_wholesale, price4_currency, price4_requires_agreement, valid_from, valid_until
 	`, id, req.Price1Unit, currency, req.Price2BoxBundlePiece, req.Price3WholesaleFrom2,
 		req.Price4Wholesale, req.Price4RequiresAgreement, req.ValidFrom, req.ValidUntil).Scan(
-		&p.PriceID, &p.ProductID, &p.BranchID, &p.Price1Unit, &p.Price1Currency,
+		&p.PriceID, &p.ProductID, &p.Price1Unit, &p.Price1Currency,
 		&p.Price2BoxBundlePiece, &p.Price2Currency, &p.Price3WholesaleFrom2, &p.Price3Currency,
 		&p.Price4Wholesale, &p.Price4Currency, &p.Price4RequiresAgreement, &p.ValidFrom, &p.ValidUntil,
 	)

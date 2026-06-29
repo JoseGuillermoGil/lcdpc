@@ -3,7 +3,7 @@ export interface Bundle {
   code: string;
   name: string;
   status: string;
-  enabledBranchIds: string[];
+  branchId: string | null;
   totalPrice: number;
   totalPriceCurrency: string;
   promotionalPrice: number | null;
@@ -29,7 +29,7 @@ export interface CreateBundleRequest {
   code: string;
   name: string;
   items: BundleItemRequest[];
-  enabled_branch_ids?: string[];
+  branch_id?: string | null;
   img?: string | null;
   category_id?: string | null;
 }

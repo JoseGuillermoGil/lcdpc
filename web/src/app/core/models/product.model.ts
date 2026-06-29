@@ -9,6 +9,7 @@ export interface Product {
   isActive: boolean;
   img: string | null;
   categoryId: string | null;
+  branchId: string | null;
 }
 
 export interface CreateProductRequest {
@@ -20,5 +21,6 @@ export interface CreateProductRequest {
   units_per_bundle?: number | null;
   img?: string | null;
   category_id?: string | null;
+  branch_id?: string | null;
   is_active?: boolean;
 }

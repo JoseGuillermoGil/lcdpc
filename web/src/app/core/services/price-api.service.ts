@@ -13,7 +13,6 @@ interface JsendEnvelope<T> {
 interface PriceGoData {
   id: string;
   product_id: string;
-  branch_id: string;
   price1_unit: number;
   price1_currency: string;
   price2_box_bundle_piece: number;
@@ -52,14 +51,6 @@ export class PriceApiService {
       .pipe(map((res) => res.data.map((p) => this.map(p))));
   }
 
-  listByBranchId(branchId: string): Observable<ProductBranchPrice[]> {
-    return this.http
-      .get<JsendEnvelope<PriceGoData[]>>(
-        `${this.baseUrl}/api/v1/prices/branch/${branchId}`
-      )
-      .pipe(map((res) => res.data.map((p) => this.map(p))));
-  }
-
   create(req: CreatePriceRequest): Observable<ProductBranchPrice> {
     return this.http
       .post<JsendEnvelope<PriceGoData>>(`${this.baseUrl}/api/v1/prices/`, req, {
@@ -88,7 +79,6 @@ export class PriceApiService {
     return {
       id: raw.id,
       productId: raw.product_id,
-      branchId: raw.branch_id,
       price1Unit: raw.price1_unit,
       price1Currency: raw.price1_currency,
       price2BoxBundlePiece: raw.price2_box_bundle_piece,
