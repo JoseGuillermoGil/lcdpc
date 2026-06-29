@@ -4,14 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/crypto/pbkdf2"
+	"github.com/lcdpc/lcdpc-go/internal/auth"
 )
 
 type SeedConfig struct {
@@ -57,10 +56,11 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 	if _, err := rand.Read(salt); err != nil {
 		return err
 	}
-	hash := pbkdf2.Key([]byte(cfg.SuperUserPassword), salt, 100_000, 32, sha256.New)
-	pwHash := fmt.Sprintf("PBKDF2$100000$SHA256$%s$%s",
-		base64.StdEncoding.EncodeToString(salt),
-		base64.StdEncoding.EncodeToString(hash))
+
+	pwHash, err := auth.HashPassword(cfg.SuperUserPassword)
+	if err != nil {
+		return fmt.Errorf("hash superuser password: %w", err)
+	}
 
 	userID := uuid.New()
 	_, err = pool.Exec(ctx, `

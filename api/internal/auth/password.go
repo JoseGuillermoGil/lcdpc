@@ -1,38 +1,63 @@
 package auth
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
-	"golang.org/x/crypto/pbkdf2"
-	"crypto/rand"
+	"golang.org/x/crypto/argon2"
+)
+
+// Argon2id parameters (OWASP recommended)
+const (
+	argon2Time    = 1
+	argon2Memory  = 64 * 1024 // 64 MB
+	argon2Threads = 4
+	argon2KeyLen  = 32
+	argon2SaltLen = 16
 )
 
 func HashPassword(password string) (string, error) {
-	salt := make([]byte, 16)
+	salt := make([]byte, argon2SaltLen)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("generate salt: %w", err)
 	}
-	hash := pbkdf2.Key([]byte(password), salt, 100_000, 32, sha256.New)
-	return fmt.Sprintf("PBKDF2$100000$SHA256$%s$%s",
-		encodeB64(salt), encodeB64(hash)), nil
+	hash := argon2.IDKey([]byte(password), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
+
+	return fmt.Sprintf("$argon2id$v=19$m=%d,t=%d,p=%d$%s$%s",
+		argon2Memory, argon2Time, argon2Threads,
+		base64.RawStdEncoding.EncodeToString(salt),
+		base64.RawStdEncoding.EncodeToString(hash),
+	), nil
 }
 
 func VerifyPassword(password, storedHash string) bool {
-	// Format: PBKDF2$iterations$algorithm$salt$hash
-	parts := splitN(storedHash, '$', 5)
-	if len(parts) != 5 || parts[0] != "PBKDF2" {
+	// Format: $argon2id$v=19$m=65536,t=1,p=4$<salt>$<hash>
+	parts := strings.Split(storedHash, "$")
+	if len(parts) != 6 || parts[1] != "argon2id" {
 		return false
 	}
 
-	var iterations int
-	fmt.Sscanf(parts[1], "%d", &iterations)
-	salt := decodeB64(parts[3])
-	expectedHash := decodeB64(parts[4])
+	var memory, time, threads uint32
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
+		return false
+	}
 
-	actualHash := pbkdf2.Key([]byte(password), salt, iterations, len(expectedHash), sha256.New)
-	return subtleCompare(actualHash, expectedHash)
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil {
+		return false
+	}
+	expectedHash, err := base64.RawStdEncoding.DecodeString(parts[5])
+	if err != nil {
+		return false
+	}
+
+	actualHash := argon2.IDKey([]byte(password), salt, time, memory, uint8(threads), uint32(len(expectedHash)))
+	return subtle.ConstantTimeCompare(actualHash, expectedHash) == 1
 }
 
 func HashToken(token string) string {
@@ -45,7 +70,7 @@ func GenerateOpaqueToken() (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("generate token: %w", err)
 	}
-	return encodeB64URL(b), nil
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func GenerateOtp() string {
@@ -59,133 +84,4 @@ func GenerateOtp() string {
 func HashOtp(otp string) string {
 	h := sha256.Sum256([]byte(otp))
 	return hex.EncodeToString(h[:])
-}
-
-// Helpers
-
-func encodeB64(b []byte) string {
-	return stdBase64(b)
-}
-
-func encodeB64URL(b []byte) string {
-	return rawURLBase64(b)
-}
-
-func decodeB64(s string) []byte {
-	b, _ := stdBase64Decode(s)
-	return b
-}
-
-func splitN(s string, sep byte, n int) []string {
-	result := make([]string, 0, n)
-	start := 0
-	for i := 0; i < len(s) && len(result) < n-1; i++ {
-		if s[i] == sep {
-			result = append(result, s[start:i])
-			start = i + 1
-		}
-	}
-	result = append(result, s[start:])
-	return result
-}
-
-func subtleCompare(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	var v byte
-	for i := 0; i < len(a); i++ {
-		v |= a[i] ^ b[i]
-	}
-	return v == 0
-}
-
-func stdBase64(b []byte) string {
-	const table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-	var result []byte
-	for i := 0; i < len(b); i += 3 {
-		switch len(b) - i {
-		case 3:
-			result = append(result,
-				table[b[i]>>2],
-				table[((b[i]&0x03)<<4)|(b[i+1]>>4)],
-				table[((b[i+1]&0x0F)<<2)|(b[i+2]>>6)],
-				table[b[i+2]&0x3F])
-		case 2:
-			result = append(result,
-				table[b[i]>>2],
-				table[((b[i]&0x03)<<4)|(b[i+1]>>4)],
-				table[(b[i+1]&0x0F)<<2])
-		case 1:
-			result = append(result,
-				table[b[i]>>2],
-				table[(b[i]&0x03)<<4])
-		}
-	}
-	return string(result)
-}
-
-func rawURLBase64(b []byte) string {
-	const table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-	var result []byte
-	for i := 0; i < len(b); i += 3 {
-		switch len(b) - i {
-		case 3:
-			result = append(result,
-				table[b[i]>>2],
-				table[((b[i]&0x03)<<4)|(b[i+1]>>4)],
-				table[((b[i+1]&0x0F)<<2)|(b[i+2]>>6)],
-				table[b[i+2]&0x3F])
-		case 2:
-			result = append(result,
-				table[b[i]>>2],
-				table[((b[i]&0x03)<<4)|(b[i+1]>>4)],
-				table[(b[i+1]&0x0F)<<2])
-		case 1:
-			result = append(result,
-				table[b[i]>>2],
-				table[(b[i]&0x03)<<4])
-		}
-	}
-	return string(result)
-}
-
-func stdBase64Decode(s string) ([]byte, error) {
-	const table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-	// Build reverse lookup
-	inv := make([]int8, 256)
-	for i := range inv {
-		inv[i] = -1
-	}
-	for i, c := range table {
-		inv[c] = int8(i)
-	}
-
-	// Remove padding
-	s = trimRight(s, '=')
-
-	result := make([]byte, 0, len(s)*3/4)
-	buf := 0
-	bits := 0
-	for _, c := range s {
-		val := inv[c]
-		if val < 0 {
-			continue
-		}
-		buf = (buf << 6) | int(val)
-		bits += 6
-		if bits >= 8 {
-			bits -= 8
-			result = append(result, byte(buf>>bits))
-			buf &= (1 << bits) - 1
-		}
-	}
-	return result, nil
-}
-
-func trimRight(s string, c byte) string {
-	for len(s) > 0 && s[len(s)-1] == c {
-		s = s[:len(s)-1]
-	}
-	return s
 }

@@ -2,17 +2,14 @@ package staff
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lcdpc/lcdpc-go/internal/auth"
 	"github.com/lcdpc/lcdpc-go/internal/rbac"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 type Service struct {
@@ -197,14 +194,10 @@ func (s *Service) GetByID(ctx context.Context, userID uuid.UUID) (*StaffMember, 
 }
 
 func (s *Service) Create(ctx context.Context, req CreateStaffRequest) (*StaffMember, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return nil, fmt.Errorf("generate salt: %w", err)
+	pwHash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
 	}
-	hash := pbkdf2.Key([]byte(req.Password), salt, 100_000, 32, sha256.New)
-	pwHash := fmt.Sprintf("PBKDF2$100000$SHA256$%s$%s",
-		base64.StdEncoding.EncodeToString(salt),
-		base64.StdEncoding.EncodeToString(hash))
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
