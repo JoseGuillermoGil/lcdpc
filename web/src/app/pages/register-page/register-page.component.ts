@@ -57,6 +57,7 @@ export class RegisterPageComponent {
   protected readonly isSendingCode = signal(false);
   protected readonly isVerifyingCode = signal(false);
   protected readonly isSubmittingProfile = signal(false);
+  protected readonly isLoggingIn = signal(false);
   protected readonly apiError = signal('');
 
   protected readonly businessEmail = signal('');
@@ -360,7 +361,7 @@ export class RegisterPageComponent {
 
     this.isSubmittingProfile.set(true);
     try {
-      await firstValueFrom(this.authApi.completeProfile({
+      await firstValueFrom(this.authApi.completeRegistration({
         flowId: this.flowId(),
         firstName: this.firstName().trim(),
         lastName: this.lastName().trim(),
@@ -371,13 +372,27 @@ export class RegisterPageComponent {
         password: this.password()
       }));
 
-      await firstValueFrom(this.authStore.login(this.businessEmail(), this.password()));
-
       this.step.set(3);
     } catch (error) {
       this.apiError.set(this.resolveApiError(error, 'No se pudo completar el registro.'));
     } finally {
       this.isSubmittingProfile.set(false);
+    }
+  }
+
+  protected async loginAndGoToShop(): Promise<void> {
+    if (this.isLoggingIn()) {
+      return;
+    }
+
+    this.isLoggingIn.set(true);
+    try {
+      await firstValueFrom(this.authStore.login(this.businessEmail(), this.password()));
+      this.router.navigateByUrl('/');
+    } catch {
+      this.router.navigateByUrl('/login');
+    } finally {
+      this.isLoggingIn.set(false);
     }
   }
 

@@ -97,7 +97,7 @@ func NewServer(
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.Post("/register/start", authH.RegisterStart)
 		r.Post("/register/verify-email", authH.RegisterVerifyEmail)
-		r.Post("/register/profile", authH.RegisterProfile)
+		r.Post("/register/complete", authH.RegisterComplete)
 		r.Post("/login", authH.Login)
 		r.Post("/forgot-password", authH.ForgotPassword)
 		r.Post("/reset-password", authH.ResetPassword)

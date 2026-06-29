@@ -54,7 +54,7 @@ func (h *AuthHandler) RegisterVerifyEmail(w http.ResponseWriter, r *http.Request
 	response.Success(w, result)
 }
 
-func (h *AuthHandler) RegisterProfile(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) RegisterComplete(w http.ResponseWriter, r *http.Request) {
 	var req auth.CompleteProfileRequest
 	if err := response.Decode(r, &req); err != nil {
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})

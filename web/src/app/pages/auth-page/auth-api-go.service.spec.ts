@@ -129,8 +129,8 @@ describe('AuthApiService', () => {
     });
   });
 
-  it('calls complete profile with snake_case body', () => {
-    service.completeProfile({
+  it('calls complete registration with snake_case body', () => {
+    service.completeRegistration({
       flowId: 'f1',
       firstName: 'Jose',
       lastName: 'Perez',
@@ -144,7 +144,7 @@ describe('AuthApiService', () => {
       expect(result.status).toBe('active');
     });
 
-    const req = httpMock.expectOne('http://localhost:8080/api/v1/auth/register/profile');
+    const req = httpMock.expectOne('http://localhost:8080/api/v1/auth/register/complete');
     expect(req.request.method).toBe('POST');
     expect(req.request.withCredentials).toBeTrue();
     expect(req.request.body.flow_id).toBe('f1');

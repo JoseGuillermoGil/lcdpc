@@ -211,8 +211,8 @@ Verify OTP received by email.
 
 ---
 
-### `POST /api/v1/auth/register/profile`
-Complete profile and create user. Assigns `client` role.
+### `POST /api/v1/auth/register/complete`
+Complete registration. Creates user and profile, assigns `client` role.
 
 **Request:**
 ```json

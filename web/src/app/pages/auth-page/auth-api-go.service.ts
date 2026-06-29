@@ -33,7 +33,7 @@ export interface VerifyEmailRegistrationResponse {
   status: string;
 }
 
-export interface CompleteProfileRegistrationRequest {
+export interface CompleteRegistrationRequest {
   flowId: string;
   firstName: string;
   lastName: string;
@@ -44,7 +44,7 @@ export interface CompleteProfileRegistrationRequest {
   password: string;
 }
 
-export interface CompleteProfileRegistrationResponse {
+export interface CompleteRegistrationResponse {
   userId: string;
   status: string;
   accountType: string;
@@ -79,7 +79,7 @@ interface VerifyEmailGoData {
   status: string;
 }
 
-interface CompleteProfileGoData {
+interface CompleteRegistrationGoData {
   user_id: string;
   status: string;
   account_type: string;
@@ -180,9 +180,9 @@ export class AuthApiService {
       );
   }
 
-  completeProfile(request: CompleteProfileRegistrationRequest): Observable<CompleteProfileRegistrationResponse> {
+  completeRegistration(request: CompleteRegistrationRequest): Observable<CompleteRegistrationResponse> {
     return this.httpClient
-      .post<JsendEnvelope<CompleteProfileGoData>>(this.url('/api/v1/auth/register/profile'), {
+      .post<JsendEnvelope<CompleteRegistrationGoData>>(this.url('/api/v1/auth/register/complete'), {
         flow_id: request.flowId,
         first_name: request.firstName,
         last_name: request.lastName,

@@ -418,7 +418,7 @@
                         label="Continuar"
                         styleClass="submit-btn"
                         [loading]="isSubmittingProfile()"
-                        [disabled]="!canSubmit() || isSubmittingProfile()"
+                        [disabled]="isSubmittingProfile()"
                       ></p-button>
                     </div>
                   </div>
@@ -463,8 +463,20 @@
                   </div>
 
                   <div class="actions-row two-buttons">
-                    <a pButton routerLink="/" class="submit-btn">Comenzar a Comprar</a>
-                    <button pButton type="button" class="back-btn" (click)="resetFlow()">Nuevo Registro</button>
+                    <p-button
+                      type="button"
+                      label="Comenzar a Comprar"
+                      styleClass="submit-btn"
+                      [loading]="isLoggingIn()"
+                      (onClick)="loginAndGoToShop()"
+                    ></p-button>
+                    <p-button
+                      type="button"
+                      label="Nuevo Registro"
+                      styleClass="back-btn"
+                      [outlined]="true"
+                      (onClick)="resetFlow()"
+                    ></p-button>
                   </div>
 
                   <p class="register-copy login-copy">
