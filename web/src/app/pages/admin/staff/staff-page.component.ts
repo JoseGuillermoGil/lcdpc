@@ -95,7 +95,7 @@ export class StaffPageComponent implements OnInit {
     this.loadStaff({ first: 0, rows: this.pageSize });
   }
 
-  roleSeverity(roleCode: string): string {
+  roleSeverity(roleCode: string): 'info' | 'warn' {
     switch (roleCode) {
       case 'manager': return 'warn';
       case 'staff': return 'info';

@@ -39,8 +39,16 @@ type Config struct {
 	PasetoKeyPath              string
 
 	// Email
-	ResendAPIKey  string
-	ResendFrom    string
+	EmailDriver  string
+	ResendAPIKey string
+	ResendFrom   string
+
+	// SMTP
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
 
 	// CORS
 	CORSAllowedOrigins []string
@@ -85,8 +93,15 @@ func Load() *Config {
 		OAuth2AuthCodeTTLMinutes:  getEnvInt("OAUTH2_AUTHORIZATION_CODE_TTL_MINUTES", 10),
 		PasetoKeyPath:             getEnv("PASETO_KEY_PATH", ""),
 
+		EmailDriver:  getEnv("EMAIL_DRIVER", "resend"),
 		ResendAPIKey: getEnv("RESEND_APITOKEN", ""),
 		ResendFrom:   getEnv("RESEND_FROM_ADDRESS", "LCDPC <onboarding@resend.dev>"),
+
+		SMTPHost:     getEnv("SMTP_HOST", "localhost"),
+		SMTPPort:     getEnvInt("SMTP_PORT", 1025),
+		SMTPUsername: getEnv("SMTP_USERNAME", ""),
+		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:     getEnv("SMTP_FROM_ADDRESS", "noreply@lcdpc.local"),
 
 		CORSAllowedOrigins: getEnvSlice("CORS_ALLOWED_ORIGINS", []string{
 			"http://localhost:4200",

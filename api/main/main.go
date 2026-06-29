@@ -76,11 +76,21 @@ func main() {
 	}
 
 	var emailSvc email.Sender
-	if cfg.ResendAPIKey != "" {
-		emailSvc = email.NewResendSender(cfg.ResendAPIKey, cfg.ResendFrom)
-	} else {
-		emailSvc = &noopEmailSender{}
-		slog.Warn("RESEND_APITOKEN not set, emails will not be sent")
+	switch cfg.EmailDriver {
+	case "smtp":
+		emailSvc = email.NewSMTPSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
+		slog.Info("email driver configured", "driver", "smtp", "host", cfg.SMTPHost, "port", cfg.SMTPPort)
+	case "resend":
+		if cfg.ResendAPIKey != "" {
+			emailSvc = email.NewResendSender(cfg.ResendAPIKey, cfg.ResendFrom)
+			slog.Info("email driver configured", "driver", "resend")
+		} else {
+			emailSvc = &email.NoopSender{}
+			slog.Warn("RESEND_APITOKEN not set, emails will not be sent")
+		}
+	default:
+		emailSvc = &email.NoopSender{}
+		slog.Warn("unknown EMAIL_DRIVER, falling back to noop", "driver", cfg.EmailDriver)
 	}
 
 	authSvc := auth.NewService(pool, emailSvc, keySvc, auth.Config{
@@ -137,14 +147,3 @@ func main() {
 	}
 }
 
-type noopEmailSender struct{}
-
-func (n *noopEmailSender) SendOtpAsync(ctx context.Context, to, otpCode string) error {
-	slog.Info("OTP email (noop)", "to", to, "otp", otpCode)
-	return nil
-}
-
-func (n *noopEmailSender) SendPasswordResetAsync(ctx context.Context, to, resetToken string) error {
-	slog.Info("Password reset email (noop)", "to", to)
-	return nil
-}

@@ -1,7 +1,7 @@
-# LCDPC API — Documentación Completa de Endpoints
+# LCDPC API — Endpoint Documentation
 
 Base URL: `http://localhost:8080`
-Formato de respuesta: **JSend** (`{"status": "success|fail|error", "data": {}, "message": ""}`)
+Response format: **JSend** (`{"status": "success|fail|error", "data": {}, "message": ""}`)
 
 ---
 
@@ -49,28 +49,28 @@ Discovery document OAuth2/OpenID.
 Authorization Code + PKCE (S256).
 
 **Query params:**
-| Param | Requerido | Descripción |
-|-------|-----------|-------------|
-| `client_id` | Sí | ID del cliente OAuth2 registrado |
-| `redirect_uri` | Sí | URI registrada del cliente |
-| `response_type` | Sí | Solo `code` |
-| `scope` | No | Scopes separados por espacio |
-| `state` | Recomendado | CSRF protection |
-| `code_challenge` | Si PKCE requerido | SHA256(code_verifier) en base64url |
-| `code_challenge_method` | Si PKCE requerido | Solo `S256` |
+| Param | Required | Description |
+|-------|----------|-------------|
+| `client_id` | Yes | Registered OAuth2 client ID |
+| `redirect_uri` | Yes | Registered client redirect URI |
+| `response_type` | Yes | Only `code` |
+| `scope` | No | Space-separated scopes |
+| `state` | Recommended | CSRF protection |
+| `code_challenge` | If PKCE required | SHA256(code_verifier) in base64url |
+| `code_challenge_method` | If PKCE required | Only `S256` |
 
-**Auth:** Cookie `lcdpc_at` o `Authorization: Bearer <token>` (usuario logueado).
+**Auth:** Cookie `lcdpc_at` or `Authorization: Bearer <token>` (logged-in user).
 
-**Respuesta exitosa:** Redirect 302 a `{redirect_uri}?code={code}&state={state}`
+**Success:** Redirect 302 to `{redirect_uri}?code={code}&state={state}`
 
-**Respuesta error:** Redirect 302 a `{redirect_uri}?error={code}&error_description={msg}`
+**Error:** Redirect 302 to `{redirect_uri}?error={code}&error_description={msg}`
 
-**Errores posibles:** `invalid_client`, `invalid_redirect_uri`, `unsupported_response_type`, `invalid_scope`, `invalid_request`, `login_required`
+**Possible errors:** `invalid_client`, `invalid_redirect_uri`, `unsupported_response_type`, `invalid_scope`, `invalid_request`, `login_required`
 
 ---
 
 ### `POST /oauth2/token`
-Intercambia authorization code por tokens, o refresca un refresh token.
+Exchange authorization code for tokens, or refresh a refresh token.
 
 **Content-Type:** `application/x-www-form-urlencoded`
 
@@ -83,7 +83,7 @@ grant_type=authorization_code
 &code_verifier={random_string}
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -104,14 +104,14 @@ grant_type=refresh_token
 &refresh_token={refresh_token}
 ```
 
-**Respuesta:** Igual que `authorization_code`.
+**Response:** Same as `authorization_code`.
 
-**Errores posibles:** `invalid_client`, `invalid_grant`, `unsupported_grant_type`, `invalid_request`, `server_error`
+**Possible errors:** `invalid_client`, `invalid_grant`, `unsupported_grant_type`, `invalid_request`, `server_error`
 
 ---
 
 ### `POST /oauth2/introspect`
-RFC 7662. Valida un token (access o refresh).
+RFC 7662. Validate a token (access or refresh).
 
 **Content-Type:** `application/x-www-form-urlencoded`
 
@@ -119,7 +119,7 @@ RFC 7662. Valida un token (access o refresh).
 token={access_token_or_refresh_token}
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -130,17 +130,17 @@ token={access_token_or_refresh_token}
     "scope": "openid email profile",
     "exp": 1750000000,
     "iat": 1749996400,
-    "sub": "uuid-del-usuario"
+    "sub": "user-uuid"
   }
 }
 ```
 
-Si el token es inválido o expirado: `{"active": false}`
+If token is invalid or expired: `{"active": false}`
 
 ---
 
 ### `POST /oauth2/revoke`
-RFC 7009. Revoca un refresh token y toda su familia.
+RFC 7009. Revoke a refresh token and its entire family.
 
 **Content-Type:** `application/x-www-form-urlencoded`
 
@@ -148,24 +148,24 @@ RFC 7009. Revoca un refresh token y toda su familia.
 token={refresh_token}
 ```
 
-**Respuesta:** Siempre 200 (incluso si el token no existe).
+**Response:** Always 200 (even if token doesn't exist).
 ```json
 {"status": "success", "data": {}}
 ```
 
 ---
 
-## 3. Autenticación (`/api/v1/auth`)
+## 3. Auth (`/api/v1/auth`)
 
 ### `POST /api/v1/auth/register/start`
-Inicia registro. Envía OTP al email.
+Start registration. Sends OTP to email.
 
 **Request:**
 ```json
 {"email": "user@example.com"}
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -181,22 +181,22 @@ Inicia registro. Envía OTP al email.
 }
 ```
 
-**Errores:** `EMAIL_ALREADY_REGISTERED`, `OTP_COOLDOWN_ACTIVE`
+**Errors:** `EMAIL_ALREADY_REGISTERED`, `OTP_COOLDOWN_ACTIVE`
 
 ---
 
 ### `POST /api/v1/auth/register/verify-email`
-Verifica el OTP recibido por email.
+Verify OTP received by email.
 
 **Request:**
 ```json
 {
-  "flow_id": "uuid-del-flow",
+  "flow_id": "flow-uuid",
   "otp": "123456"
 }
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -207,45 +207,45 @@ Verifica el OTP recibido por email.
 }
 ```
 
-**Errores:** `FLOW_NOT_FOUND`, `FLOW_INVALID_STATUS`, `OTP_EXPIRED`, `OTP_INVALID`, `OTP_ATTEMPTS_EXCEEDED`
+**Errors:** `FLOW_NOT_FOUND`, `FLOW_INVALID_STATUS`, `OTP_EXPIRED`, `OTP_INVALID`, `OTP_ATTEMPTS_EXCEEDED`
 
 ---
 
 ### `POST /api/v1/auth/register/profile`
-Completa el perfil y crea el usuario. Asigna rol `cliente`.
+Complete profile and create user. Assigns `client` role.
 
 **Request:**
 ```json
 {
-  "flow_id": "uuid-del-flow",
-  "nombres": "Juan",
-  "apellidos": "Pérez",
-  "documento_identidad": "V-12345678",
-  "rif": "J-12345678-9",
-  "telefono_whatsapp": "+584141234567",
-  "direccion_completa": "Calle 1, Edif 2, Apt 3",
+  "flow_id": "flow-uuid",
+  "first_name": "Juan",
+  "last_name": "Pérez",
+  "identity_document": "V-12345678",
+  "tax_id": "J-12345678-9",
+  "whatsapp_phone": "+584141234567",
+  "full_address": "Calle 1, Edif 2, Apt 3",
   "password": "MiPassword123!"
 }
 ```
 
-**Respuesta (201):**
+**Response (201):**
 ```json
 {
   "status": "success",
   "data": {
     "user_id": "uuid",
-    "status": "activo",
-    "tipo_cuenta": "cliente"
+    "status": "active",
+    "account_type": "client"
   }
 }
 ```
 
-**Errores:** `FLOW_NOT_FOUND`, `FLOW_INVALID_STATUS`, `EMAIL_ALREADY_REGISTERED`
+**Errors:** `FLOW_NOT_FOUND`, `FLOW_INVALID_STATUS`, `EMAIL_ALREADY_REGISTERED`
 
 ---
 
 ### `POST /api/v1/auth/login`
-Login con email/password. Genera PASETO access token + refresh token.
+Login with email/password. Generates PASETO access token + refresh token.
 
 **Request:**
 ```json
@@ -255,7 +255,7 @@ Login con email/password. Genera PASETO access token + refresh token.
 }
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -267,26 +267,20 @@ Login con email/password. Genera PASETO access token + refresh token.
 }
 ```
 
-**Cookies seteadas:**
+**Cookies set:**
 - `lcdpc_at` — PASETO access token (HttpOnly, Lax)
 - `lcdpc_rt` — Refresh token (HttpOnly, Strict)
 
-**Headers de deprecación:**
-- `Deprecation: true`
-- `Sunset: Sat, 13 Sep 2026`
-
-**Errores:** `INVALID_CREDENTIALS`, `ACCOUNT_INACTIVE`
-
-**Frontend:** Usar `Authorization: Bearer {access_token}` en requests subsecuentes. Cookies son fallback para compatibilidad.
+**Errors:** `INVALID_CREDENTIALS`, `ACCOUNT_INACTIVE`
 
 ---
 
 ### `GET /api/v1/auth/me`
-Retorna usuario autenticado actual.
+Get current authenticated user.
 
-**Auth:** Requerida (Bearer token o cookie `lcdpc_at`)
+**Auth:** Required (Bearer token or cookie `lcdpc_at`)
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -295,70 +289,61 @@ Retorna usuario autenticado actual.
     "user": {
       "id": "uuid",
       "email": "user@example.com",
-      "display_name": "Juan * Pérez",
-      "estado": "activo",
-      "tipo_cuenta": "cliente",
+      "display_name": "Juan Pérez",
+      "status": "active",
+      "account_type": "client",
       "onboarding_status": "active",
       "email_verified_at": "2025-06-25T10:00:00Z",
-      "roles": ["cliente"]
+      "profile_id": "uuid"
     },
-    "permissions": [
-      {
-        "resource_code": "productos",
-        "can_view": true,
-        "can_write": false,
-        "can_update": false,
-        "can_delete": false,
-        "can_all": false
-      }
-    ],
+    "permissions": ["product:view", "bundle:view"],
     "expires_in": 3542
   }
 }
 ```
 
-Si no autenticado: `{"authenticated": false, "user": null, "permissions": []}`
+If not authenticated: `{"authenticated": false, "user": null, "permissions": []}`
 
 ---
 
 ### `POST /api/v1/auth/refresh`
-Renueva access token usando refresh token.
+Renew access token using refresh token.
 
-**Auth:** Requerida (Bearer token o cookie)
+**Auth:** Required (Bearer token or cookie)
 
-**Request (opcional, puede usar cookie):**
+**Request (optional, can use cookie):**
 ```json
 {"refresh_token": "opaque-token"}
 ```
 
-**Respuesta:** Igual que login.
-**Errores:** `INVALID_REFRESH_TOKEN`
+**Response:** Same as login.
+**Errors:** `INVALID_REFRESH_TOKEN`
 
 ---
 
 ### `POST /api/v1/auth/logout`
-Revoca la sesión actual.
+Revoke current session.
 
-**Auth:** Requerida
+**Auth:** Required
 
-**Respuesta:**
+**Response:**
 ```json
 {"status": "success", "data": {"status": "logged_out"}}
 ```
 
-Limpia cookies `lcdpc_at` y `lcdpc_rt`.
+Clears `lcdpc_at` and `lcdpc_rt` cookies.
 
 ---
 
 ### `POST /api/v1/auth/forgot-password`
-Genera token de reseteo de password.
+Generate password reset token.
 
 **Request:**
 ```json
 {"email": "user@example.com"}
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -369,22 +354,22 @@ Genera token de reseteo de password.
 }
 ```
 
-Siempre retorna 200 (no revela si el email existe).
+Always returns 200 (doesn't reveal if email exists).
 
 ---
 
 ### `POST /api/v1/auth/reset-password`
-Resetea password con token recibido por email.
+Reset password with token received by email.
 
 **Request:**
 ```json
 {
   "token": "opaque-reset-token",
-  "new_password": "NuevoPassword456!"
+  "new_password": "NewPassword456!"
 }
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -395,14 +380,14 @@ Resetea password con token recibido por email.
 }
 ```
 
-**Errores:** `INVALID_OR_EXPIRED_RESET_TOKEN`
+**Errors:** `INVALID_OR_EXPIRED_RESET_TOKEN`
 
 ---
 
 ### `GET /api/v1/auth/security-policy`
-Consulta política de seguridad (público).
+Get security policy (public).
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -416,9 +401,9 @@ Consulta política de seguridad (público).
 ---
 
 ### `PUT /api/v1/auth/security-policy`
-Actualiza política de seguridad.
+Update security policy.
 
-**Auth:** Requiere permiso `security-policy:update`
+**Auth:** Requires `security-policy:update` permission
 
 **Request:**
 ```json
@@ -428,285 +413,341 @@ Actualiza política de seguridad.
 }
 ```
 
-**Errores:** `INVALID_RESET_TTL` (rango: 5-1440 minutos)
+**Errors:** `INVALID_RESET_TTL` (range: 5-1440 minutes)
 
 ---
 
-## 4. Productos (`/api/v1/productos`)
+## 4. Products (`/api/v1/products`)
 
-### `GET /api/v1/productos`
-Lista todos los productos. **Público.**
+### `GET /api/v1/products`
+List all products with pagination. **Public.**
 
-**Respuesta:**
-```json
-{
-  "status": "success",
-  "data": [
-    {
-      "producto_id": "uuid",
-      "nombre": "Coca-Cola 2L",
-      "sku": "CC-2L",
-      "tipo_medida_base": "Unidad",
-      "tipo_comercial_mayor": "Caja",
-      "unidades_por_caja": 6,
-      "unidades_por_bulto": 24,
-      "activo": true
-    }
-  ]
-}
-```
+**Query params:**
+| Param | Type | Description |
+|-------|------|-------------|
+| `limit` | int | Max items (default 10, max 100) |
+| `offset` | int | Skip items |
+| `category_id` | UUID | Filter by category |
+| `name` | string | Filter by name (partial match) |
+| `sku` | string | Filter by SKU |
+| `is_active` | bool | Filter by active status |
 
----
-
-### `GET /api/v1/productos/{id}`
-Obtiene un producto por ID. **Público.**
-
-**Respuesta:** Objeto producto individual.
-
----
-
-### `POST /api/v1/productos`
-Crea un producto.
-
-**Auth:** Requiere permiso `product:create`
-
-**Request:**
-```json
-{
-  "nombre": "Coca-Cola 2L",
-  "sku": "CC-2L",
-  "tipo_medida_base": "Unidad",
-  "tipo_comercial_mayor": "Caja",
-  "unidades_por_caja": 6,
-  "unidades_por_bulto": 24
-}
-```
-
-**Validaciones:**
-- Si `tipo_medida_base` = `"Unidad"`: `unidades_por_caja` y `unidades_por_bulto` requeridos y > 0
-- `unidades_por_bulto` debe ser >= `unidades_por_caja`
-
-**Respuesta (201):** Objeto producto.
-
----
-
-### `PUT /api/v1/productos/{id}`
-Actualiza un producto.
-
-**Auth:** Requiere permiso `product:update`
-
-**Request:** Igual que create.
-
----
-
-### `DELETE /api/v1/productos/{id}`
-Elimina un producto.
-
-**Auth:** Requiere permiso `product:delete`
-
-**Respuesta:**
-```json
-{"status": "success", "data": {"status": "deleted"}}
-```
-
----
-
-## 5. Combos (`/api/v1/combos`)
-
-### `GET /api/v1/combos`
-Lista todos los combos. **Público.**
-
-**Respuesta:**
-```json
-{
-  "status": "success",
-  "data": [
-    {
-      "combo_id": "uuid",
-      "codigo": "COMBO-001",
-      "nombre": "Combo Familiar",
-      "estado": "Publicado",
-      "sede_ids_habilitadas": ["uuid1", "uuid2"],
-      "precio_total": 25.99,
-      "precio_total_moneda": "USD",
-      "precio_promocional": 19.99,
-      "precio_promocional_moneda": "USD",
-      "items": [
-        {
-          "id": "uuid",
-          "combo_id": "uuid",
-          "producto_id": "uuid-producto",
-          "cantidad": 2
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-### `GET /api/v1/combos/{id}`
-Obtiene un combo por ID con sus items. **Público.**
-
----
-
-### `POST /api/v1/combos`
-Crea un combo con items.
-
-**Auth:** Requiere permiso `combo:create`
-
-**Request:**
-```json
-{
-  "codigo": "COMBO-001",
-  "nombre": "Combo Familiar",
-  "sede_ids_habilitadas": ["uuid1", "uuid2"],
-  "items": [
-    {"producto_id": "uuid", "cantidad": 2},
-    {"producto_id": "uuid2", "cantidad": 1}
-  ]
-}
-```
-
-Estado inicial: `Borrador`. Precio total: `0` (se calcula aparte o se actualiza via sync).
-
----
-
-### `PUT /api/v1/combos/{id}`
-Actualiza combo. Reemplaza items existentes.
-
-**Auth:** Requiere permiso `combo:update`
-
----
-
-### `POST /api/v1/combos/{id}/publicar`
-Cambia estado a `Publicado`.
-
-**Auth:** Requiere permiso `combo:publish`
-
-**Respuesta:** `{"status": "success", "data": {"status": "Publicado"}}`
-
----
-
-### `POST /api/v1/combos/{id}/pausar`
-Cambia estado a `Pausado`.
-
-**Auth:** Requiere permiso `combo:pause`
-
-**Respuesta:** `{"status": "success", "data": {"status": "Pausado"}}`
-
----
-
-### `DELETE /api/v1/combos/{id}`
-Elimina un combo.
-
-**Auth:** Requiere permiso `combo:delete`
-
----
-
-## 6. Precios (`/api/v1/precios`)
-
-### `GET /api/v1/precios/{id}`
-Obtiene un precio por ID. **Público.**
-
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
   "data": {
-    "precio_producto_sede_id": "uuid",
-    "producto_id": "uuid",
-    "sede_id": "uuid",
-    "precio1_unidad": 1.50,
-    "precio1_moneda": "USD",
-    "precio2_caja_bulto_pieza": 1.20,
-    "precio2_moneda": "USD",
-    "precio3_mayor_desde2": 1.00,
-    "precio3_moneda": "USD",
-    "precio4_mayorista": 0.85,
-    "precio4_moneda": "USD",
-    "precio4_requiere_acuerdo": false,
-    "vigente_desde": "2025-06-01T00:00:00Z",
-    "vigente_hasta": "2025-12-31T00:00:00Z"
+    "items": [
+      {
+        "product_id": "uuid",
+        "name": "Coca-Cola 2L",
+        "sku": "CC-2L",
+        "base_measure_type": "unit",
+        "wholesale_type": "case",
+        "units_per_case": 6,
+        "units_per_bundle": 24,
+        "is_active": true,
+        "img": "product-uuid.webp",
+        "category_id": "uuid"
+      }
+    ],
+    "total_count": 42,
+    "limit": 10,
+    "offset": 0
   }
 }
 ```
 
-**Niveles de precio:**
-1. `precio1_unidad` — Precio unitario al detal
-2. `precio2_caja_bulto_pieza` — Precio por caja/bulto/pieza
-3. `precio3_mayor_desde2` — Precio mayoreo desde 2 unidades
-4. `precio4_mayorista` — Precio mayorista (opcional, puede requerir acuerdo)
+---
+
+### `GET /api/v1/products/{id}`
+Get a product by ID. **Public.**
+
+**Response:** Single product object.
 
 ---
 
-### `GET /api/v1/precios/producto/{id}`
-Lista precios de un producto (todas las sedes). **Público.**
+### `POST /api/v1/products`
+Create a product.
+
+**Auth:** Requires `product:create`
+
+**Request (multipart/form-data):**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Product name |
+| `sku` | string | Yes | Unique SKU |
+| `base_measure_type` | string | Yes | `unit` or `weight` |
+| `wholesale_type` | string | Yes | `case`, `bundle`, `piece` |
+| `units_per_case` | int | If unit | Units per case |
+| `units_per_bundle` | int | If unit | Units per bundle |
+| `category_id` | UUID | No | Category FK |
+| `file` | file | No | Product image |
+
+**Response (201):** Product object.
 
 ---
 
-### `GET /api/v1/precios/sede/{id}`
-Lista precios de una sede (todos los productos). **Público.**
+### `PUT /api/v1/products/{id}`
+Update a product.
+
+**Auth:** Requires `product:update`
+
+**Request:** Same as create (multipart/form-data).
 
 ---
 
-### `POST /api/v1/precios`
-Crea un precio producto-sede.
+### `PUT /api/v1/products/{id}/image`
+Update only the product image.
 
-**Auth:** Requiere permiso `price:create`
+**Auth:** Requires `product:update`
+
+**Request (multipart/form-data):**
+| Field | Type | Required |
+|-------|------|----------|
+| `file` | file | Yes |
+
+**Response:** `{"status": "success", "data": {"img": "filename.webp"}}`
+
+---
+
+### `DELETE /api/v1/products/{id}`
+Delete a product.
+
+**Auth:** Requires `product:delete`
+
+**Response:** `{"status": "success", "data": {"status": "deleted"}}`
+
+---
+
+## 5. Bundles (`/api/v1/bundles`)
+
+### `GET /api/v1/bundles`
+List all bundles with pagination. **Public.**
+
+**Query params:**
+| Param | Type | Description |
+|-------|------|-------------|
+| `limit` | int | Max items (default 10, max 100) |
+| `offset` | int | Skip items |
+| `category_id` | UUID | Filter by category |
+| `name` | string | Filter by name |
+| `code` | string | Filter by code |
+| `status` | string | Filter by status (`Draft`, `Published`, `Paused`) |
+| `is_active` | bool | Filter by active status |
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "items": [
+      {
+        "bundle_id": "uuid",
+        "code": "COMBO-001",
+        "name": "Family Combo",
+        "status": "Published",
+        "branch_ids_enabled": ["uuid1", "uuid2"],
+        "total_price": 25.99,
+        "total_price_currency": "USD",
+        "promotional_price": 19.99,
+        "promotional_price_currency": "USD",
+        "img": "bundle-uuid.webp",
+        "category_id": "uuid",
+        "items": [
+          {
+            "id": "uuid",
+            "bundle_id": "uuid",
+            "product_id": "uuid-product",
+            "quantity": 2
+          }
+        ]
+      }
+    ],
+    "total_count": 15,
+    "limit": 10,
+    "offset": 0
+  }
+}
+```
+
+---
+
+### `GET /api/v1/bundles/{id}`
+Get a bundle by ID with its items. **Public.**
+
+---
+
+### `POST /api/v1/bundles`
+Create a bundle with items.
+
+**Auth:** Requires `bundle:create`
+
+**Request (multipart/form-data):**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `code` | string | Yes | Unique code |
+| `name` | string | Yes | Bundle name |
+| `status` | string | No | Default: `Draft` |
+| `branch_ids_enabled` | JSON array | No | Branch UUIDs |
+| `total_price` | decimal | No | Default: 0 |
+| `total_price_currency` | string | No | Default: `USD` |
+| `promotional_price` | decimal | No | Promotional price |
+| `promotional_price_currency` | string | No | Currency |
+| `category_id` | UUID | No | Category FK |
+| `items` | JSON array | No | `[{product_id, quantity}]` |
+| `file` | file | No | Bundle image |
+
+Initial status: `Draft`.
+
+---
+
+### `PUT /api/v1/bundles/{id}`
+Update a bundle. Replaces items if provided.
+
+**Auth:** Requires `bundle:update`
+
+**Request:** Same as create (multipart/form-data).
+
+---
+
+### `PUT /api/v1/bundles/{id}/image`
+Update only the bundle image.
+
+**Auth:** Requires `bundle:update`
+
+**Request (multipart/form-data):**
+| Field | Type | Required |
+|-------|------|----------|
+| `file` | file | Yes |
+
+---
+
+### `POST /api/v1/bundles/{id}/publish`
+Change status to `Published`.
+
+**Auth:** Requires `bundle:create`
+
+**Response:** `{"status": "success", "data": {"status": "Published"}}`
+
+---
+
+### `POST /api/v1/bundles/{id}/pause`
+Change status to `Paused`.
+
+**Auth:** Requires `bundle:create`
+
+**Response:** `{"status": "success", "data": {"status": "Paused"}}`
+
+---
+
+### `DELETE /api/v1/bundles/{id}`
+Delete a bundle.
+
+**Auth:** Requires `bundle:delete`
+
+---
+
+## 6. Prices (`/api/v1/prices`)
+
+### `GET /api/v1/prices/{id}`
+Get a price by ID. **Public.**
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "uuid",
+    "product_id": "uuid",
+    "branch_id": "uuid",
+    "price1_unit": 1.50,
+    "price1_currency": "USD",
+    "price2_case_bundle_piece": 1.20,
+    "price2_currency": "USD",
+    "price3_wholesale_from2": 1.00,
+    "price3_currency": "USD",
+    "price4_wholesale": 0.85,
+    "price4_currency": "USD",
+    "price4_requires_agreement": false,
+    "valid_from": "2025-06-01T00:00:00Z",
+    "valid_until": "2025-12-31T00:00:00Z"
+  }
+}
+```
+
+**Price levels:**
+1. `price1_unit` — Unit retail price
+2. `price2_case_bundle_piece` — Per case/bundle/piece
+3. `price3_wholesale_from2` — Wholesale from 2 units
+4. `price4_wholesale` — Bulk wholesale (optional, may require agreement)
+
+---
+
+### `GET /api/v1/prices/product/{id}`
+List prices for a product (all branches). **Public.**
+
+---
+
+### `GET /api/v1/prices/branch/{id}`
+List prices for a branch (all products). **Public.**
+
+---
+
+### `POST /api/v1/prices`
+Create a product-branch price.
+
+**Auth:** Requires `price:create`
 
 **Request:**
 ```json
 {
-  "producto_id": "uuid",
-  "sede_id": "uuid",
-  "precio1_unidad": 1.50,
-  "precio2_caja_bulto_pieza": 1.20,
-  "precio3_mayor_desde2": 1.00,
-  "precio4_mayorista": 0.85,
-  "precio4_requiere_acuerdo": false,
-  "vigente_desde": "2025-06-01T00:00:00Z",
-  "vigente_hasta": "2025-12-31T00:00:00Z"
+  "product_id": "uuid",
+  "branch_id": "uuid",
+  "price1_unit": 1.50,
+  "price2_case_bundle_piece": 1.20,
+  "price3_wholesale_from2": 1.00,
+  "price4_wholesale": 0.85,
+  "price4_requires_agreement": false,
+  "valid_from": "2025-06-01T00:00:00Z",
+  "valid_until": "2025-12-31T00:00:00Z"
 }
 ```
 
-Moneda se asigna automáticamente (`USD`).
+---
+
+### `PUT /api/v1/prices/{id}`
+Update a price.
+
+**Auth:** Requires `price:create`
 
 ---
 
-### `PUT /api/v1/precios/{id}`
-Actualiza un precio.
+### `DELETE /api/v1/prices/{id}`
+Delete a price.
 
-**Auth:** Requiere permiso `price:update`
-
----
-
-### `DELETE /api/v1/precios/{id}`
-Elimina un precio.
-
-**Auth:** Requiere permiso `price:delete`
+**Auth:** Requires `price:delete`
 
 ---
 
-## 7. Sedes (`/api/v1/sedes`)
+## 7. Branches (`/api/v1/branches`)
 
-### `GET /api/v1/sedes`
-Lista todas las sedes. **Público.**
+### `GET /api/v1/branches`
+List all branches. **Public.**
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
   "data": [
     {
       "id": "uuid",
-      "nombre_tienda": "LCDPC Centro",
+      "store_name": "LCDPC Centro",
       "rif": "J-12345678-9",
-      "direccion": "Av. Principal, Local 5",
-      "telefono_contacto": "+582121234567",
-      "telefono_contacto_secundario": null,
-      "horario_atencion": "Lun-Vie 8am-6pm, Sab 8am-12pm",
+      "address": "Av. Principal, Local 5",
+      "contact_phone": "+582121234567",
+      "secondary_contact_phone": null,
+      "business_hours": "Mon-Fri 8am-6pm, Sat 8am-12pm",
       "created_at_utc": "2025-06-01T00:00:00Z",
       "updated_at_utc": "2025-06-01T00:00:00Z"
     }
@@ -716,35 +757,175 @@ Lista todas las sedes. **Público.**
 
 ---
 
-### `POST /api/v1/sedes`
-Crea una sede.
+### `POST /api/v1/branches`
+Create a branch.
 
-**Auth:** Requiere permiso `sede:create`
+**Auth:** Requires `branch:create`
 
 **Request:**
 ```json
 {
-  "nombre_tienda": "LCDPC Centro",
+  "store_name": "LCDPC Centro",
   "rif": "J-12345678-9",
-  "direccion": "Av. Principal, Local 5",
-  "telefono_contacto": "+582121234567",
-  "telefono_contacto_secundario": "+584141234567",
-  "horario_atencion": "Lun-Vie 8am-6pm, Sab 8am-12pm"
+  "address": "Av. Principal, Local 5",
+  "contact_phone": "+582121234567",
+  "secondary_contact_phone": "+584141234567",
+  "business_hours": "Mon-Fri 8am-6pm, Sat 8am-12pm"
 }
 ```
 
 ---
 
-## 8. RBAC (`/api/v1/rbac`)
+## 8. Categories (`/api/v1/categories`)
+
+### `GET /api/v1/categories`
+List all categories. **Public.**
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "category_id": "uuid",
+      "name": "Combos",
+      "slug": "combos",
+      "sort_order": 1,
+      "is_active": true,
+      "created_at_utc": "2025-06-01T00:00:00Z",
+      "updated_at_utc": "2025-06-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `GET /api/v1/categories/{id}`
+Get a category by ID. **Public.**
+
+---
+
+### `POST /api/v1/categories`
+Create a category.
+
+**Auth:** Requires `category:create`
+
+**Request:**
+```json
+{
+  "name": "Salsas",
+  "slug": "salsas",
+  "sort_order": 5,
+  "is_active": true
+}
+```
+
+---
+
+### `PUT /api/v1/categories/{id}`
+Update a category.
+
+**Auth:** Requires `category:update`
+
+---
+
+### `DELETE /api/v1/categories/{id}`
+Delete a category.
+
+**Auth:** Requires `category:delete`
+
+---
+
+## 9. Staff (`/api/v1/staff`)
+
+### `GET /api/v1/staff`
+List staff members with pagination. **Public.**
+
+**Query params:** `limit`, `offset`
+
+**Response:**
+```json
+{
+  "status": "success",
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "email": "staff@example.com",
+        "name": "Juan Pérez",
+        "identity_document": "V-12345678",
+        "whatsapp_phone": "+584141234567",
+        "full_address": "Calle 1",
+        "branch_id": "uuid",
+        "status": "Active",
+        "onboarding_status": "active",
+        "role_code": "staff",
+        "created_at_utc": "2025-06-01T00:00:00Z"
+      }
+    ],
+    "total_count": 5,
+    "limit": 10,
+    "offset": 0
+  }
+}
+```
+
+---
+
+### `GET /api/v1/staff/{id}`
+Get a staff member by ID. **Public.**
+
+---
+
+### `POST /api/v1/staff`
+Create a staff member.
+
+**Auth:** Requires `staff:create`
+
+**Request:**
+```json
+{
+  "email": "staff@example.com",
+  "password": "TempPassword123!",
+  "first_name": "Juan",
+  "last_name": "Pérez",
+  "identity_document": "V-12345678",
+  "whatsapp_phone": "+584141234567",
+  "full_address": "Calle 1",
+  "branch_id": "uuid",
+  "role_code": "staff"
+}
+```
+
+`role_code` can be `staff` or `manager`.
+
+---
+
+### `PUT /api/v1/staff/{id}`
+Update a staff member.
+
+**Auth:** Requires `staff:update`
+
+---
+
+### `DELETE /api/v1/staff/{id}`
+Delete a staff member.
+
+**Auth:** Requires `staff:delete`
+
+---
+
+## 10. RBAC (`/api/v1/rbac`)
 
 ### Resources
 
 #### `GET /api/v1/rbac/resources`
-Lista todos los resources.
+List all resources.
 
-**Auth:** Requiere permiso `rbac:resource:view`
+**Auth:** Requires `rbac:resource:view`
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -756,14 +937,14 @@ Lista todos los resources.
 ```
 
 #### `GET /api/v1/rbac/resources/{id}`
-Obtiene un resource por ID.
+Get a resource by ID.
 
-**Auth:** Requiere permiso `rbac:resource:view`
+**Auth:** Requires `rbac:resource:view`
 
 #### `POST /api/v1/rbac/resources`
-Crea un resource.
+Create a resource.
 
-**Auth:** Requiere permiso `rbac:resource:create`
+**Auth:** Requires `rbac:resource:create`
 
 **Request:**
 ```json
@@ -771,39 +952,34 @@ Crea un resource.
 ```
 
 #### `PUT /api/v1/rbac/resources/{id}`
-Actualiza un resource.
+Update a resource.
 
-**Auth:** Requiere permiso `rbac:resource:update`
-
-**Request:**
-```json
-{"code": "product:create"}
-```
+**Auth:** Requires `rbac:resource:update`
 
 #### `DELETE /api/v1/rbac/resources/{id}`
-Elimina un resource.
+Delete a resource.
 
-**Auth:** Requiere permiso `rbac:resource:delete`
+**Auth:** Requires `rbac:resource:delete`
 
 ---
 
 ### Roles
 
 #### `GET /api/v1/rbac/roles`
-Lista todos los roles con sus resources asignados.
+List all roles with assigned resources.
 
-**Auth:** Requiere permiso `rbac:role:view`
+**Auth:** Requires `rbac:role:view`
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
   "data": [
     {
       "id": "uuid",
-      "code": "admin_global",
-      "name": "admin_global",
-      "description": "Administrador con alcance global",
+      "code": "global_admin",
+      "name": "global_admin",
+      "description": "Administrator with global scope",
       "resources": [
         {"id": "uuid", "code": "product:create"},
         {"id": "uuid", "code": "product:view"}
@@ -814,38 +990,38 @@ Lista todos los roles con sus resources asignados.
 ```
 
 #### `GET /api/v1/rbac/roles/{id}`
-Obtiene un rol por ID con sus resources.
+Get a role by ID with its resources.
 
-**Auth:** Requiere permiso `rbac:role:view`
+**Auth:** Requires `rbac:role:view`
 
 #### `POST /api/v1/rbac/roles`
-Crea un rol (sin resources aún).
+Create a role.
 
-**Auth:** Requiere permiso `rbac:role:create`
+**Auth:** Requires `rbac:role:create`
 
 **Request:**
 ```json
 {
-  "code": "admin_sede",
-  "name": "Administrador de Sede",
-  "description": "Administrador con alcance a sedes asignadas"
+  "code": "branch_admin",
+  "name": "Branch Administrator",
+  "description": "Administrator with branch scope"
 }
 ```
 
 #### `PUT /api/v1/rbac/roles/{id}`
-Actualiza code, name, description de un rol.
+Update role code, name, description.
 
-**Auth:** Requiere permiso `rbac:role:update`
+**Auth:** Requires `rbac:role:update`
 
 #### `DELETE /api/v1/rbac/roles/{id}`
-Elimina un rol.
+Delete a role.
 
-**Auth:** Requiere permiso `rbac:role:delete`
+**Auth:** Requires `rbac:role:delete`
 
 #### `POST /api/v1/rbac/roles/{id}/resources`
-Asigna 1 resource al rol.
+Assign 1 resource to the role.
 
-**Auth:** Requiere permiso `rbac:role:update`
+**Auth:** Requires `rbac:role:update`
 
 **Request:**
 ```json
@@ -853,20 +1029,20 @@ Asigna 1 resource al rol.
 ```
 
 #### `DELETE /api/v1/rbac/roles/{id}/resources/{resourceId}`
-Elimina 1 resource del rol.
+Remove 1 resource from the role.
 
-**Auth:** Requiere permiso `rbac:role:update`
+**Auth:** Requires `rbac:role:update`
 
 ---
 
 ### Profiles
 
 #### `GET /api/v1/rbac/profiles`
-Lista todos los profiles con sus roles asignados.
+List all profiles with assigned roles.
 
-**Auth:** Requiere permiso `rbac:profile:view`
+**Auth:** Requires `rbac:profile:view`
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -874,14 +1050,10 @@ Lista todos los profiles con sus roles asignados.
     {
       "id": "uuid",
       "user_id": "uuid",
-      "first_name": "Juan",
-      "last_name": "Pérez",
-      "identity_document": "V-12345678",
-      "rif": "J-12345678-9",
-      "whatsapp_phone": "+584141234567",
-      "full_address": "Calle 1, Edif 2, Apt 3",
+      "name": "Juan Pérez",
+      "code": "V-12345678",
       "roles": [
-        {"id": "uuid", "code": "cliente", "name": "cliente"}
+        {"id": "uuid", "code": "client", "name": "client"}
       ],
       "created_at_utc": "2025-06-01T00:00:00Z",
       "updated_at_utc": "2025-06-01T00:00:00Z"
@@ -891,41 +1063,37 @@ Lista todos los profiles con sus roles asignados.
 ```
 
 #### `GET /api/v1/rbac/profiles/{id}`
-Obtiene un profile por ID con sus roles.
+Get a profile by ID with its roles.
 
-**Auth:** Requiere permiso `rbac:profile:view`
+**Auth:** Requires `rbac:profile:view`
 
 #### `POST /api/v1/rbac/profiles`
-Crea un profile (sin roles aún).
+Create a profile.
 
-**Auth:** Requiere permiso `rbac:profile:create`
+**Auth:** Requires `rbac:profile:create`
 
 **Request:**
 ```json
 {
-  "first_name": "Juan",
-  "last_name": "Pérez",
-  "identity_document": "V-12345678",
-  "rif": "J-12345678-9",
-  "whatsapp_phone": "+584141234567",
-  "full_address": "Calle 1, Edif 2, Apt 3"
+  "name": "Juan Pérez",
+  "code": "V-12345678"
 }
 ```
 
 #### `PUT /api/v1/rbac/profiles/{id}`
-Actualiza datos del profile.
+Update profile data.
 
-**Auth:** Requiere permiso `rbac:profile:update`
+**Auth:** Requires `rbac:profile:update`
 
 #### `DELETE /api/v1/rbac/profiles/{id}`
-Elimina un profile.
+Delete a profile.
 
-**Auth:** Requiere permiso `rbac:profile:delete`
+**Auth:** Requires `rbac:profile:delete`
 
 #### `POST /api/v1/rbac/profiles/{id}/roles`
-Asigna 1 role al profile.
+Assign 1 role to the profile.
 
-**Auth:** Requiere permiso `rbac:profile:update`
+**Auth:** Requires `rbac:profile:update`
 
 **Request:**
 ```json
@@ -933,18 +1101,18 @@ Asigna 1 role al profile.
 ```
 
 #### `DELETE /api/v1/rbac/profiles/{id}/roles/{roleId}`
-Elimina 1 role del profile.
+Remove 1 role from the profile.
 
-**Auth:** Requiere permiso `rbac:profile:update`
+**Auth:** Requires `rbac:profile:update`
 
 ---
 
 ### Users
 
 #### `PUT /api/v1/users/{id}/profile`
-Asigna o cambia el profile de un usuario.
+Assign or change a user's profile.
 
-**Auth:** Requiere permiso `rbac:user:update`
+**Auth:** Requires `rbac:user:update`
 
 **Request:**
 ```json
@@ -953,29 +1121,29 @@ Asigna o cambia el profile de un usuario.
 
 ---
 
-## 9. Orders (`/api/v1/orders`)
+## 11. Orders (`/api/v1/orders`)
 
 ### `POST /api/v1/orders`
-Crea una orden con items.
+Create an order with items.
 
-**Auth:** Requiere permiso `order:create`
+**Auth:** Requires `order:create`
 
 **Request:**
 ```json
 {
-  "sede_id": "uuid",
+  "branch_id": "uuid",
   "client_user_id": "uuid",
-  "notes": "Entrega urgente",
+  "notes": "Urgent delivery",
   "items": [
     {
-      "item_type": "producto",
-      "producto_id": "uuid",
+      "item_type": "product",
+      "product_id": "uuid",
       "quantity": 5,
       "unit_price": 1.50
     },
     {
-      "item_type": "combo",
-      "combo_id": "uuid",
+      "item_type": "bundle",
+      "bundle_id": "uuid",
       "quantity": 2,
       "unit_price": 25.99
     }
@@ -983,136 +1151,83 @@ Crea una orden con items.
 }
 ```
 
-**Validaciones:**
-- Debe tener al menos 1 item
-- `item_type` debe ser `producto` o `combo`
-- Si `item_type` = `producto`: `producto_id` requerido, `combo_id` debe ser null
-- Si `item_type` = `combo`: `combo_id` requerido, `producto_id` debe ser null
+**Validations:**
+- Must have at least 1 item
+- `item_type` must be `product` or `bundle`
+- If `item_type` = `product`: `product_id` required, `bundle_id` must be null
+- If `item_type` = `bundle`: `bundle_id` required, `product_id` must be null
 
-**Respuesta (201):** Orden completa con items y price_total calculado.
+**Response (201):** Complete order with items and calculated price_total.
 
 ---
 
 ### `GET /api/v1/orders`
-Lista órdenes con filtros opcionales.
+List orders with optional filters.
 
-**Auth:** Requiere permiso `order:view`
+**Auth:** Requires `order:view`
 
 **Query params:**
-| Param | Tipo | Descripción |
+| Param | Type | Description |
 |-------|------|-------------|
-| `sede_id` | UUID | Filtrar por sede |
-| `client_user_id` | UUID | Filtrar por cliente |
-| `status` | string | Filtrar por estado |
-
-**Respuesta:**
-```json
-{
-  "status": "success",
-  "data": [
-    {
-      "id": "uuid",
-      "sede_id": "uuid",
-      "client_user_id": "uuid",
-      "status": "PENDING_REVIEW",
-      "price_total": 59.48,
-      "total_items": 7,
-      "currency": "USD",
-      "notes": "Entrega urgente",
-      "created_at_utc": "2026-06-27T12:00:00Z",
-      "updated_at_utc": "2026-06-27T12:00:00Z"
-    }
-  ]
-}
-```
+| `branch_id` | UUID | Filter by branch |
+| `client_user_id` | UUID | Filter by client |
+| `status` | string | Filter by status |
 
 ---
 
 ### `GET /api/v1/orders/{id}`
-Obtiene una orden por ID con sus items.
+Get an order by ID with its items.
 
-**Auth:** Requiere permiso `order:view`
-
-**Respuesta:**
-```json
-{
-  "status": "success",
-  "data": {
-    "id": "uuid",
-    "sede_id": "uuid",
-    "client_user_id": "uuid",
-    "status": "PENDING_REVIEW",
-    "price_total": 59.48,
-    "total_items": 7,
-    "currency": "USD",
-    "notes": "Entrega urgente",
-    "created_at_utc": "2026-06-27T12:00:00Z",
-    "updated_at_utc": "2026-06-27T12:00:00Z",
-    "items": [
-      {
-        "id": "uuid",
-        "order_id": "uuid",
-        "item_type": "producto",
-        "producto_id": "uuid",
-        "combo_id": null,
-        "quantity": 5,
-        "unit_price": 1.50,
-        "subtotal": 7.50,
-        "currency": "USD"
-      }
-    ]
-  }
-}
-```
+**Auth:** Requires `order:view`
 
 ---
 
 ### `PUT /api/v1/orders/{id}`
-Actualiza una orden (solo si está en estado editable: `PENDING_REVIEW` o `UNDER_REVIEW`).
+Update an order (only if in editable state: `PENDING_REVIEW` or `UNDER_REVIEW`).
 
-**Auth:** Requiere permiso `order:update`
+**Auth:** Requires `order:update`
 
 **Request:**
 ```json
 {
-  "notes": "Nota actualizada",
+  "notes": "Updated note",
   "items": [
-    {"item_type": "producto", "producto_id": "uuid", "quantity": 10, "unit_price": 1.50}
+    {"item_type": "product", "product_id": "uuid", "quantity": 10, "unit_price": 1.50}
   ]
 }
 ```
 
-Si se proporciona `items`, se reemplazan todos los items existentes y se recalculan los totales.
+If `items` is provided, all existing items are replaced and totals recalculated.
 
-**Errores:** `ORDER_NOT_EDITABLE`, `ORDER_NOT_FOUND`
+**Errors:** `ORDER_NOT_EDITABLE`, `ORDER_NOT_FOUND`
 
 ---
 
 ### `DELETE /api/v1/orders/{id}`
-Cancela una orden (cambia estado a `CANCELLED_BY_CUSTOMER`).
+Cancel an order (changes status to `CANCELLED_BY_CUSTOMER`).
 
-**Auth:** Requiere permiso `order:delete`
+**Auth:** Requires `order:delete`
 
-**Errores:** `ORDER_IN_TERMINAL_STATUS`, `ORDER_NOT_FOUND`
+**Errors:** `ORDER_IN_TERMINAL_STATUS`, `ORDER_NOT_FOUND`
 
 ---
 
 ### `POST /api/v1/orders/{id}/status`
-Cambia el estado de una orden.
+Change order status.
 
-**Auth:** Requiere permiso `order:status:change`
+**Auth:** Requires `order:status:change`
 
 **Request:**
 ```json
 {
   "to_status": "UNDER_REVIEW",
-  "notes": "Revisando disponibilidad"
+  "notes": "Checking availability"
 }
 ```
 
-**Transiciones válidas:**
-| Desde | Hacia |
-|-------|-------|
+**Valid transitions:**
+| From | To |
+|------|-----|
 | `PENDING_REVIEW` | `UNDER_REVIEW`, `REJECTED_BY_VALIDATION`, `CANCELLED_BY_CUSTOMER` |
 | `UNDER_REVIEW` | `APPROVED_FOR_FULFILLMENT`, `REJECTED_BY_VALIDATION`, `CANCELLED_BY_CUSTOMER` |
 | `APPROVED_FOR_FULFILLMENT` | `IN_PREPARATION`, `CANCELLED_BY_CUSTOMER` |
@@ -1125,16 +1240,16 @@ Cambia el estado de una orden.
 | `DELIVERED` | `COMPLETED` |
 | `PICKED_UP` | `COMPLETED` |
 
-**Errores:** `INVALID_TRANSITION`, `ORDER_NOT_FOUND`
+**Errors:** `INVALID_TRANSITION`, `ORDER_NOT_FOUND`
 
 ---
 
 ### `GET /api/v1/orders/{id}/history`
-Obtiene el historial de cambios de estado de una orden.
+Get order status change history.
 
-**Auth:** Requiere permiso `order:view`
+**Auth:** Requires `order:view`
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "status": "success",
@@ -1147,15 +1262,6 @@ Obtiene el historial de cambios de estado de una orden.
       "changed_by_user_id": "uuid",
       "notes": null,
       "created_at_utc": "2026-06-27T12:00:00Z"
-    },
-    {
-      "id": "uuid",
-      "order_id": "uuid",
-      "from_status": "PENDING_REVIEW",
-      "to_status": "UNDER_REVIEW",
-      "changed_by_user_id": "uuid",
-      "notes": "Revisando disponibilidad",
-      "created_at_utc": "2026-06-27T12:05:00Z"
     }
   ]
 }
@@ -1163,56 +1269,56 @@ Obtiene el historial de cambios de estado de una orden.
 
 ---
 
-## 10. Sync (`/api/v1/sync`)
+## 12. Sync (`/api/v1/sync`)
 
-### `POST /api/v1/sync/productos`
-Bulk upsert de productos (ON CONFLICT sku).
+### `POST /api/v1/sync/products`
+Bulk upsert products (ON CONFLICT sku).
 
-**Auth:** API Key en header `X-API-Key`
+**Auth:** API Key in `X-API-Key` header
 
 **Request:**
 ```json
 [
   {
-    "producto_id": "uuid",
-    "nombre": "Coca-Cola 2L",
+    "product_id": "uuid",
+    "name": "Coca-Cola 2L",
     "sku": "CC-2L",
-    "tipo_medida_base": "Unidad",
-    "tipo_comercial_mayor": "Caja",
-    "unidades_por_caja": 6,
-    "unidades_por_bulto": 24,
-    "activo": true
+    "base_measure_type": "unit",
+    "wholesale_type": "case",
+    "units_per_case": 6,
+    "units_per_bundle": 24,
+    "is_active": true
   }
 ]
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {"status": "success", "data": {"processed": 10, "errors": 0}}
 ```
 
 ---
 
-### `POST /api/v1/sync/combos`
-Bulk upsert de combos (ON CONFLICT codigo) + reemplazo de items.
+### `POST /api/v1/sync/bundles`
+Bulk upsert bundles (ON CONFLICT code) + replace items.
 
-**Auth:** API Key en header `X-API-Key`
+**Auth:** API Key in `X-API-Key` header
 
 **Request:**
 ```json
 [
   {
-    "combo_id": "uuid",
-    "codigo": "COMBO-001",
-    "nombre": "Combo Familiar",
-    "estado": "Publicado",
-    "sede_ids_habilitadas": ["uuid1"],
-    "precio_total": 25.99,
-    "precio_total_moneda": "USD",
-    "precio_promocional": 19.99,
-    "precio_promocional_moneda": "USD",
+    "bundle_id": "uuid",
+    "code": "COMBO-001",
+    "name": "Family Combo",
+    "status": "Published",
+    "branch_ids_enabled": ["uuid1"],
+    "total_price": 25.99,
+    "total_price_currency": "USD",
+    "promotional_price": 19.99,
+    "promotional_price_currency": "USD",
     "items": [
-      {"producto_id": "uuid", "cantidad": 2}
+      {"product_id": "uuid", "quantity": 2}
     ]
   }
 ]
@@ -1220,34 +1326,60 @@ Bulk upsert de combos (ON CONFLICT codigo) + reemplazo de items.
 
 ---
 
-## 9. Autenticación — Resumen de Patrones
+### `POST /api/v1/sync/products/{sku}/image`
+Upload/update image for a product by SKU.
 
-### Bearer Token (preferido)
+**Auth:** API Key in `X-API-Key` header
+
+**Request (multipart/form-data):**
+| Field | Type | Required |
+|-------|------|----------|
+| `file` | file | Yes |
+
+---
+
+### `POST /api/v1/sync/bundles/{code}/image`
+Upload/update image for a bundle by code.
+
+**Auth:** API Key in `X-API-Key` header
+
+**Request (multipart/form-data):**
+| Field | Type | Required |
+|-------|------|----------|
+| `file` | file | Yes |
+
+---
+
+## 13. Auth Patterns Summary
+
+### Bearer Token (preferred)
 ```
 Authorization: Bearer v2.local...
 ```
 
 ### Cookies (legacy fallback)
 - `lcdpc_at` — Access token (HttpOnly, Lax, MaxAge = expires_in)
-- `lcdpc_rt` — Refresh token (HttpOnly, Strict, MaxAge = 30 días)
+- `lcdpc_rt` — Refresh token (HttpOnly, Strict, MaxAge = 30 days)
 
-### API Key (solo sync)
+### API Key (sync only)
 ```
-X-API-Key: {api-key-seed}
+X-API-Key: {api-key-from-seed}
 ```
 
 ### Roles
-| Rol | Permisos |
-|-----|----------|
-| `admin_global` | Todos los resources |
-| `admin_sede` | CRUD productos, combos, precios, sedes, orders. Sin RBAC ni security-policy |
-| `cliente` | Solo lectura: `product:view`, `combo:view`, `price:view`, `sede:view`, `order:create`, `order:view` |
+| Role | Permissions |
+|------|-------------|
+| `global_admin` | All resources |
+| `branch_admin` | CRUD products, bundles, prices, branches, orders. No RBAC, no security-policy |
+| `manager` | Staff + product/bundle/price/order CRUD |
+| `staff` | View products/bundles/prices/branches/orders + create orders |
+| `client` | Read-only: `product:view`, `bundle:view`, `price:view`, `branch:view`, `order:create`, `order:view` |
 
 ---
 
-## 10. Errores — Formato JSend
+## 14. Error Format (JSend)
 
-### `fail` (4xx — error del cliente)
+### `fail` (4xx — client error)
 ```json
 {
   "status": "fail",
@@ -1255,7 +1387,7 @@ X-API-Key: {api-key-seed}
 }
 ```
 
-### `error` (4xx/5xx — error del servidor)
+### `error` (4xx/5xx — server error)
 ```json
 {
   "status": "error",
@@ -1263,21 +1395,21 @@ X-API-Key: {api-key-seed}
 }
 ```
 
-### Códigos de error comunes
-| Mensaje HTTP | Código interno | Significado |
-|--------------|---------------|-------------|
-| 400 | `INVALID_CREDENTIALS` | Email o password incorrecto |
-| 400 | `EMAIL_ALREADY_REGISTERED` | Email ya registrado |
-| 400 | `OTP_EXPIRED` | OTP venció |
-| 400 | `OTP_ATTEMPTS_EXCEEDED` | Demasiados intentos OTP |
-| 400 | `OTP_INVALID` | OTP incorrecto |
-| 400 | `FLOW_NOT_FOUND` | Flow de registro no existe |
-| 400 | `INVALID_REFRESH_TOKEN` | Refresh token inválido/expirado |
-| 400 | `INVALID_OR_EXPIRED_RESET_TOKEN` | Token de reseteo inválido |
-| 400 | `ORDER_NOT_FOUND` | Orden no existe |
-| 400 | `ORDER_NOT_EDITABLE` | Orden no está en estado editable |
-| 400 | `ORDER_IN_TERMINAL_STATUS` | Orden en estado terminal, no se puede cancelar |
-| 400 | `INVALID_TRANSITION` | Transición de estado no permitida |
-| 401 | `unauthorized` | Token no proporcionado o inválido |
-| 403 | `insufficient_permissions` | Rol insuficiente |
-| 404 | `NOT_FOUND` | Recurso no existe |
+### Common error codes
+| HTTP | Internal code | Meaning |
+|------|--------------|---------|
+| 400 | `INVALID_CREDENTIALS` | Wrong email or password |
+| 400 | `EMAIL_ALREADY_REGISTERED` | Email already registered |
+| 400 | `OTP_EXPIRED` | OTP expired |
+| 400 | `OTP_ATTEMPTS_EXCEEDED` | Too many OTP attempts |
+| 400 | `OTP_INVALID` | Wrong OTP |
+| 400 | `FLOW_NOT_FOUND` | Registration flow not found |
+| 400 | `INVALID_REFRESH_TOKEN` | Invalid/expired refresh token |
+| 400 | `INVALID_OR_EXPIRED_RESET_TOKEN` | Invalid reset token |
+| 400 | `ORDER_NOT_FOUND` | Order not found |
+| 400 | `ORDER_NOT_EDITABLE` | Order not in editable state |
+| 400 | `ORDER_IN_TERMINAL_STATUS` | Order in terminal status |
+| 400 | `INVALID_TRANSITION` | Invalid status transition |
+| 401 | `unauthorized` | Token missing or invalid |
+| 403 | `insufficient_permissions` | Insufficient role |
+| 404 | `NOT_FOUND` | Resource not found |

@@ -516,26 +516,25 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 		Status           string
 		OnboardingStatus string
 		EmailVerifiedAt  *time.Time
-		FirstName        *string
-		LastName         *string
+		Name             *string
 		ProfileID        uuid.UUID
 	}
 
 	err = s.pool.QueryRow(ctx, `
 		SELECT u.id, u.email, u.status, u.onboarding_status, u.email_verified_at_utc,
-		       p.first_name, p.last_name, p.id
+		       p.name, p.id
 		FROM users u
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE u.id = $1
 	`, session.UserID).Scan(&user.ID, &user.Email, &user.Status, &user.OnboardingStatus,
-		&user.EmailVerifiedAt, &user.FirstName, &user.LastName, &user.ProfileID)
+		&user.EmailVerifiedAt, &user.Name, &user.ProfileID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 
 	displayName := user.Email
-	if user.FirstName != nil && user.LastName != nil {
-		displayName = *user.FirstName + " * " + *user.LastName
+	if user.Name != nil {
+		displayName = *user.Name
 	}
 
 	userStatus := "active"

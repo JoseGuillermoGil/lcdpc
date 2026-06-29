@@ -53,7 +53,7 @@ High-signal guidance for OpenCode sessions in this repo.
 - Password hashing is PBKDF2-SHA256, 100k iterations, compatible with the previous C# hashes.
 - The OAuth2 server is custom-built (authorize, token, introspect, revoke). It is NOT using `golang.org/x/oauth2` as a server.
 - `golang.org/x/oauth2` is used only as a Google OAuth **client**.
-- Package structure: `internal/auth/` (auth + OAuth2), `internal/pricing/` (products, bundles, prices), `internal/branch/`, `internal/sync/`, `internal/email/`, `internal/db/`, `internal/rbac/` (RBAC store + CRUD), `internal/order/` (orders, items, status transitions).
+- Package structure: `internal/auth/` (auth + OAuth2), `internal/pricing/` (products, bundles, prices), `internal/branch/`, `internal/category/`, `internal/sync/`, `internal/email/`, `internal/db/`, `internal/rbac/` (RBAC store + CRUD), `internal/order/` (orders, items, status transitions), `internal/staff/`, `internal/admin/`, `internal/user/`.
 
 ## Frontend facts agents often guess wrong
 
@@ -137,11 +137,28 @@ High-signal guidance for OpenCode sessions in this repo.
 ```
 web/src/app/
   core/
-    auth/          — auth store, interceptor, init
+    auth/          — auth store, interceptor, init, guards
     models/        — TypeScript interfaces matching API structs
     services/      — API services (one per domain)
   pages/           — route-level components
+    landing-page/
+    search-page/
+    auth-page/
+    register-page/
+    admin/
+      dashboard/
+      products/
+      bundles/
+      orders/
+      staff/
   shared/          — reusable UI components
+    header/
+    footer/
+    hero/
+    catalog/
+    catalog-search/
+    advanced-search/
+    branches/
   components/      — alternative UI components (legacy)
 ```
 
@@ -180,7 +197,17 @@ web/src/app/
 - `(error)="onImageError($event)"` handler sets `/not-found.png` as fallback.
 
 ### Routing
-- Routes in `app.routes.ts`: `/` (landing), `/search`, `/login`, `/register`.
+- Routes in `app.routes.ts`:
+  - `/` — landing page
+  - `/search` — catalog search
+  - `/login` — auth page
+  - `/register` — registration page
+  - `/admin` — admin layout (guarded), children:
+    - `/admin/dashboard`
+    - `/admin/products` (requires `product:view`)
+    - `/admin/bundles` (requires `bundle:view`)
+    - `/admin/orders` (requires `order:view`)
+    - `/admin/staff` (requires `staff:view`)
 - English route names, English UI vocabulary.
 - Auth routes skip store shell (header/footer).
 
@@ -189,6 +216,8 @@ web/src/app/
 - `authInterceptor` handles 401 → refresh → retry.
 - `AuthStore` manages user state with signals.
 - `withCredentials: true` on all authenticated requests.
+- Guards: `adminGuard`, `permissionGuard(code)`.
+- Directive: `hasPermission` for conditional rendering.
 
 ---
 

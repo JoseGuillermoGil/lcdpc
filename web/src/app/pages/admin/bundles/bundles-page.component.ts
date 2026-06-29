@@ -112,7 +112,7 @@ export class BundlesPageComponent implements OnInit {
     (event.target as HTMLImageElement).src = '/not-found.png';
   }
 
-  statusSeverity(status: string): string {
+  statusSeverity(status: string): 'info' | 'success' | 'warn' | 'danger' {
     switch (status) {
       case 'Draft': return 'info';
       case 'Published': return 'success';

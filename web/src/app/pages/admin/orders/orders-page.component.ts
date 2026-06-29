@@ -91,7 +91,7 @@ export class OrdersPageComponent implements OnInit {
     return this.branches().find((b) => b.id === branchId)?.name ?? branchId.slice(0, 8);
   }
 
-  orderStatusSeverity(status: string): string {
+  orderStatusSeverity(status: string): 'info' | 'success' | 'warn' | 'danger' {
     switch (status) {
       case 'PENDING_REVIEW': return 'warn';
       case 'APPROVED': return 'info';
