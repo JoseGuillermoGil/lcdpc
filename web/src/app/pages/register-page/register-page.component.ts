@@ -107,6 +107,9 @@ export class RegisterPageComponent {
   protected readonly isRifValid = computed(() => this.rif().length === 0 || /^\d{5,9}$/.test(this.rif()));
   protected readonly whatsappPrefix = signal('0414');
   protected readonly isWhatsappValid = computed(() => /^\d{7}$/.test(this.whatsapp()));
+  protected readonly isWhatsappPrefixValid = computed(() =>
+    this.whatsappPrefixOptions.some((opt) => opt.value === this.whatsappPrefix())
+  );
   protected readonly isAddressValid = computed(() => this.address().trim().length >= 10);
   protected readonly isPasswordValid = computed(() => this.password().length >= 8);
   protected readonly isConfirmPasswordValid = computed(() => this.confirmPassword().length > 0 && this.confirmPassword() === this.password());
@@ -120,6 +123,7 @@ export class RegisterPageComponent {
       this.isLastNameValid() &&
       this.isCedulaValid() &&
       this.isRifValid() &&
+      this.isWhatsappPrefixValid() &&
       this.isWhatsappValid() &&
       this.isAddressValid() &&
       this.isPasswordValid() &&
@@ -369,7 +373,7 @@ export class RegisterPageComponent {
 
       await firstValueFrom(this.authStore.login(this.businessEmail(), this.password()));
 
-      this.router.navigateByUrl('/');
+      this.step.set(3);
     } catch (error) {
       this.apiError.set(this.resolveApiError(error, 'No se pudo completar el registro.'));
     } finally {
@@ -391,7 +395,7 @@ export class RegisterPageComponent {
     this.cedula.set('');
     this.rifType.set('J');
     this.rif.set('');
-    this.whatsappPrefix.set('');
+    this.whatsappPrefix.set('0414');
     this.whatsapp.set('');
     this.address.set('');
     this.email.set('');

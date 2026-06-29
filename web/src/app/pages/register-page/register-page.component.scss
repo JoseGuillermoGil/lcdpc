@@ -625,16 +625,19 @@ p-inputotp {
   color: #fff;
   font-weight: 700;
   min-height: 2.9rem;
+  cursor: pointer;
 }
 
 :host ::ng-deep .submit-btn:hover {
   background: #f27405;
   border-color: #f27405;
+  cursor: pointer;
 }
 
 :host ::ng-deep .dark-btn {
   background: #1a1c1d;
   border-color: #1a1c1d;
+  cursor: pointer;
 }
 
 :host ::ng-deep .dark-btn:hover {
@@ -646,6 +649,8 @@ p-inputotp {
   width: 100%;
   color: #5d5f5f;
   border-color: var(--border);
+  cursor: pointer;
+  min-height: 2.9rem;
 }
 
 :host ::ng-deep .submit-btn:disabled {
@@ -653,6 +658,11 @@ p-inputotp {
 }
 
 .actions-row {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.actions-buttons {
   display: grid;
   gap: 0.75rem;
 }
@@ -852,6 +862,10 @@ p-inputotp {
   }
 
   .actions-row {
+    grid-template-columns: 1fr;
+  }
+
+  .actions-buttons {
     grid-template-columns: 1fr 1fr;
   }
 

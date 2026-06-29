@@ -175,18 +175,15 @@
                           <label for="firstName">Nombres *</label>
                         </p-floatlabel>
                       </p-inputgroup>
+                      @if (submitAttempted() && !isFirstNameValid()) {
+                        <small class="field-error">Ingresa un nombre válido (solo letras).</small>
+                      }
                     </div>
                     <div class="field-wrap" [class.invalid]="submitAttempted() && !isLastNameValid()">
                       <p-inputgroup styleClass="icon-inputgroup">
                         <p-inputgroup-addon>
                           <i class="pi pi-user" aria-hidden="true"></i>
                         </p-inputgroup-addon>
-                    @if (submitAttempted() && !isPasswordValid()) {
-                      <small class="field-error">La contraseña debe tener al menos 8 caracteres.</small>
-                    }
-                    @if (submitAttempted() && isPasswordMismatch()) {
-                      <small class="field-error">Las contraseñas no coinciden.</small>
-                    }
                         <p-floatlabel variant="over">
                           <input
                             id="lastName"
@@ -202,6 +199,9 @@
                           <label for="lastName">Apellidos *</label>
                         </p-floatlabel>
                       </p-inputgroup>
+                      @if (submitAttempted() && !isLastNameValid()) {
+                        <small class="field-error">Ingresa un apellido válido (solo letras).</small>
+                      }
                     </div>
                   </div>
 
@@ -236,6 +236,9 @@
                           <label for="cedula">Cédula *</label>
                         </p-floatlabel>
                       </p-inputgroup>
+                      @if (submitAttempted() && !isCedulaValid()) {
+                        <small class="field-error">La cédula debe tener entre 6 y 8 dígitos.</small>
+                      }
                     </div>
 
                     <div class="field-wrap" [class.invalid]="submitAttempted() && !isRifValid()">
@@ -268,6 +271,9 @@
                           <label for="rif">RIF</label>
                         </p-floatlabel>
                       </p-inputgroup>
+                      @if (submitAttempted() && !isRifValid()) {
+                        <small class="field-error">El RIF debe tener entre 5 y 9 dígitos.</small>
+                      }
                     </div>
                   </div>
 
@@ -305,6 +311,9 @@
                         <label for="whatsapp">Teléfono WhatsApp *</label>
                       </p-floatlabel>
                     </p-inputgroup>
+                    @if (submitAttempted() && !isWhatsappValid()) {
+                      <small class="field-error">El teléfono debe tener 7 dígitos.</small>
+                    }
                   </div>
 
                   <div class="field-wrap" [class.invalid]="submitAttempted() && !isAddressValid()">
@@ -323,6 +332,9 @@
                         <label for="address">Dirección completa *</label>
                       </p-floatlabel>
                     </p-inputgroup>
+                    @if (submitAttempted() && !isAddressValid()) {
+                      <small class="field-error">La dirección debe tener al menos 10 caracteres.</small>
+                    }
                   </div>
 
                   <div class="field-grid two-cols">
@@ -369,8 +381,11 @@
                     </div>
                   </div>
 
-                  @if (submitAttempted() && !canSubmit()) {
-                    <small class="field-error">Completa correctamente todos los campos obligatorios.</small>
+                  @if (submitAttempted() && !isPasswordValid()) {
+                    <small class="field-error">La contraseña debe tener al menos 8 caracteres.</small>
+                  }
+                  @if (submitAttempted() && isPasswordMismatch()) {
+                    <small class="field-error">Las contraseñas no coinciden.</small>
                   }
 
                   <div class="remember-row" [class.invalid]="submitAttempted() && !acceptedTerms()">
@@ -383,24 +398,29 @@
                     ></p-checkbox>
                     <label for="terms">Acepto términos y condiciones *</label>
                   </div>
+                  @if (submitAttempted() && !acceptedTerms()) {
+                    <small class="field-error">Debes aceptar los términos y condiciones.</small>
+                  }
 
                   <div class="actions-row">
                     <p class="required-note">Los campos marcados con (*) son obligatorios para poder continuar.</p>
-                    <p-button
-                      type="button"
-                      label="Atrás"
-                      styleClass="back-btn"
-                      [outlined]="true"
-                      [disabled]="isSubmittingProfile()"
-                      (onClick)="goToStepOne()"
-                    ></p-button>
-                    <p-button
-                      type="submit"
-                      label="Continuar"
-                      styleClass="submit-btn"
-                      [loading]="isSubmittingProfile()"
-                      [disabled]="!canSubmit() || isSubmittingProfile()"
-                    ></p-button>
+                    <div class="actions-buttons">
+                      <p-button
+                        type="button"
+                        label="Atrás"
+                        styleClass="back-btn"
+                        [outlined]="true"
+                        [disabled]="isSubmittingProfile()"
+                        (onClick)="goToStepOne()"
+                      ></p-button>
+                      <p-button
+                        type="submit"
+                        label="Continuar"
+                        styleClass="submit-btn"
+                        [loading]="isSubmittingProfile()"
+                        [disabled]="!canSubmit() || isSubmittingProfile()"
+                      ></p-button>
+                    </div>
                   </div>
 
                   @if (apiError()) {

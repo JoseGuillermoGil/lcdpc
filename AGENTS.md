@@ -253,6 +253,10 @@ web/src/app/
 - Hero: full-width carousel with overlay text
 - Mobile nav: fixed bottom bar with icon buttons
 
+### UI rules
+- All buttons must have `cursor: pointer` on hover. PrimeNG buttons may need explicit `cursor: pointer` in `::ng-deep` styles.
+- Be precise with layout — align related elements (e.g. action buttons) using sub-grids, not by mixing unrelated elements in the same grid row.
+
 ### Image handling
 - All product/bundle images: `loading="lazy"` attribute
 - Fallback: `/not-found.png` via `(error)="onImageError($event)"`
