@@ -1,40 +1,45 @@
-<div class="admin-shell">
+<div class="admin-shell" [class.sidebar-collapsed]="collapsed()">
   <aside class="admin-sidebar">
     <div class="sidebar-header">
-      <a routerLink="/admin/dashboard" class="sidebar-brand">LCDPC Admin</a>
+      @if (!collapsed()) {
+        <a routerLink="/admin/dashboard" class="sidebar-brand">LCDPC Admin</a>
+      }
+      <button class="sidebar-toggle" (click)="toggleSidebar()" [attr.aria-label]="collapsed() ? 'Expandir sidebar' : 'Colapsar sidebar'">
+        <span class="pi" [ngClass]="collapsed() ? 'pi-chevron-right' : 'pi-chevron-left'"></span>
+      </button>
     </div>
 
     <nav class="sidebar-nav">
       <a routerLink="/admin/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
         <span class="pi pi-chart-bar"></span>
-        <span>Dashboard</span>
+        <span class="nav-label">Dashboard</span>
       </a>
 
       @if (canViewProducts()) {
         <a routerLink="/admin/products" routerLinkActive="active">
           <span class="pi pi-box"></span>
-          <span>Productos</span>
+          <span class="nav-label">Productos</span>
         </a>
       }
 
       @if (canViewBundles()) {
         <a routerLink="/admin/bundles" routerLinkActive="active">
           <span class="pi pi-gift"></span>
-          <span>Combos</span>
+          <span class="nav-label">Combos</span>
         </a>
       }
 
       @if (canViewOrders()) {
         <a routerLink="/admin/orders" routerLinkActive="active">
           <span class="pi pi-shopping-cart"></span>
-          <span>Ordenes</span>
+          <span class="nav-label">Ordenes</span>
         </a>
       }
 
       @if (canViewStaff()) {
         <a routerLink="/admin/staff" routerLinkActive="active">
           <span class="pi pi-users"></span>
-          <span>Personal</span>
+          <span class="nav-label">Personal</span>
         </a>
       }
     </nav>
@@ -42,11 +47,11 @@
     <div class="sidebar-footer">
       <a routerLink="/" class="back-to-store">
         <span class="pi pi-arrow-left"></span>
-        <span>Volver a la tienda</span>
+        <span class="nav-label">Volver a la tienda</span>
       </a>
       <div class="sidebar-user">
         <span class="pi pi-user"></span>
-        <span>{{ userName() }}</span>
+        <span class="nav-label">{{ userName() }}</span>
       </div>
     </div>
   </aside>

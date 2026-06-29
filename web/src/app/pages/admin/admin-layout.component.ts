@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthStore } from '../../core/auth/auth.store';
 
@@ -12,6 +12,8 @@ import { AuthStore } from '../../core/auth/auth.store';
 })
 export class AdminLayoutComponent {
   private readonly authStore = inject(AuthStore);
+
+  protected readonly collapsed = signal(true);
 
   protected readonly userName = computed(() => this.authStore.currentUser()?.displayName ?? 'Admin');
 
@@ -27,4 +29,8 @@ export class AdminLayoutComponent {
   protected readonly canViewStaff = computed(() =>
     this.authStore.hasPermission('staff:view')
   );
+
+  protected toggleSidebar(): void {
+    this.collapsed.update((v) => !v);
+  }
 }

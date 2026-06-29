@@ -19,12 +19,9 @@
     </div>
 
     <div class="field">
-      <p-floatlabel>
-        <p-select id="category" [options]="categoryStore.categoryOptions()" [(ngModel)]="form.category_id"
-                  optionLabel="label" optionValue="value" placeholder="Sin categoría"
-                  [showClear]="true" [style]="{'width':'100%'}" />
-        <label for="category">Categoría</label>
-      </p-floatlabel>
+      <p-select id="category" [options]="categoryStore.categoryOptions()" [(ngModel)]="form.category_id"
+                optionLabel="label" optionValue="value" placeholder="Categoría"
+                [showClear]="true" [style]="{'width':'100%'}" />
     </div>
 
     <div class="items-section">
@@ -66,7 +63,7 @@
   </div>
 
   <ng-template pTemplate="footer">
-    <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="close()"></p-button>
+    <p-button label="Cancelar" severity="secondary" (onClick)="close()"></p-button>
     <p-button [label]="isEditMode ? 'Guardar Cambios' : 'Crear Combo'"
               icon="pi pi-check" [loading]="saving()" (onClick)="save()"></p-button>
   </ng-template>

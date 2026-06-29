@@ -59,26 +59,20 @@
 
     <div class="field-row">
       <div class="field">
-        <p-floatlabel>
-          <p-select id="branch" [options]="branches" [(ngModel)]="branchId"
-                    optionLabel="name" optionValue="id"
-                    placeholder="Seleccionar sucursal" [style]="{'width':'100%'}" />
-          <label for="branch">Sucursal *</label>
-        </p-floatlabel>
+        <p-select id="branch" [options]="branches" [(ngModel)]="branchId"
+                  optionLabel="name" optionValue="id"
+                  placeholder="Sucursal *" [style]="{'width':'100%'}" />
       </div>
       <div class="field">
-        <p-floatlabel>
-          <p-select id="role" [options]="roleOptions" [(ngModel)]="roleCode"
-                    optionLabel="label" optionValue="value"
-                    [style]="{'width':'100%'}" />
-          <label for="role">Rol *</label>
-        </p-floatlabel>
+        <p-select id="role" [options]="roleOptions" [(ngModel)]="roleCode"
+                  optionLabel="label" optionValue="value"
+                  placeholder="Rol *" [style]="{'width':'100%'}" />
       </div>
     </div>
   </div>
 
   <ng-template pTemplate="footer">
-    <p-button label="Cancelar" severity="secondary" [text]="true" (onClick)="close()"></p-button>
+    <p-button label="Cancelar" severity="secondary" (onClick)="close()"></p-button>
     <p-button [label]="isEditMode ? 'Guardar Cambios' : 'Crear Miembro'"
               icon="pi pi-check" [loading]="saving()" (onClick)="save()"></p-button>
   </ng-template>
