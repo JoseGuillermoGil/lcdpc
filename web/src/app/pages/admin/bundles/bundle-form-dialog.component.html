@@ -20,10 +20,10 @@
 
     <div class="field">
       <p-floatlabel>
-        <p-select id="category" [options]="categories" [(ngModel)]="form.category_id"
-                  optionLabel="name" optionValue="categoryId" placeholder="Sin categoria"
+        <p-select id="category" [options]="categoryStore.categoryOptions()" [(ngModel)]="form.category_id"
+                  optionLabel="label" optionValue="value" placeholder="Sin categoría"
                   [showClear]="true" [style]="{'width':'100%'}" />
-        <label for="category">Categoria</label>
+        <label for="category">Categoría</label>
       </p-floatlabel>
     </div>
 

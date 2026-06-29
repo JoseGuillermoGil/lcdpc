@@ -9,8 +9,8 @@ import { SelectModule } from 'primeng/select';
 import { CheckboxModule } from 'primeng/checkbox';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { Product, CreateProductRequest } from '../../../core/models/product.model';
-import { Category } from '../../../core/models/category.model';
 import { ProductApiService } from '../../../core/services/product-api.service';
+import { CategoryStore } from '../../../core/stores/category.store';
 
 @Component({
   selector: 'app-product-form-dialog',
@@ -26,13 +26,13 @@ import { ProductApiService } from '../../../core/services/product-api.service';
 export class ProductFormDialogComponent implements OnChanges {
   @Input() visible = false;
   @Input() product: Product | null = null;
-  @Input() categories: Category[] = [];
 
   @Output() visibleChange = new EventEmitter<boolean>();
   @Output() saved = new EventEmitter<void>();
   @Output() closed = new EventEmitter<void>();
 
   private readonly productApi = inject(ProductApiService);
+  readonly categoryStore = inject(CategoryStore);
 
   protected readonly saving = signal(false);
   protected submitted = false;

@@ -16,7 +16,7 @@
     </ng-template>
     <ng-template pTemplate="end">
       <p-select [options]="statusOptions" [(ngModel)]="filterStatus" optionLabel="label" optionValue="value" placeholder="Todos los estados" [showClear]="true" (onChange)="applyFilters()"></p-select>
-      <p-select [options]="categoryOptions()" [(ngModel)]="filterCategoryId" optionLabel="label" optionValue="value" placeholder="Todas las categorias" [showClear]="true" (onChange)="applyFilters()"></p-select>
+      <p-select [options]="categoryStore.categoryOptions()" [(ngModel)]="filterCategoryId" optionLabel="label" optionValue="value" placeholder="Todas las categorias" [showClear]="true" (onChange)="applyFilters()"></p-select>
     </ng-template>
   </p-toolbar>
 
@@ -77,7 +77,6 @@
 <app-bundle-form-dialog
   [visible]="dialogVisible()"
   [bundle]="selectedBundle()"
-  [categories]="categories()"
   (visibleChange)="dialogVisible.set($event)"
   (saved)="onDialogClose(true)"
   (closed)="onDialogClose(false)"

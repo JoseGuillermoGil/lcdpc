@@ -15,9 +15,8 @@ import { TooltipModule } from 'primeng/tooltip';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { ProductApiService } from '../../../core/services/product-api.service';
-import { CategoryApiService } from '../../../core/services/category-api.service';
+import { CategoryStore } from '../../../core/stores/category.store';
 import { Product } from '../../../core/models/product.model';
-import { Category } from '../../../core/models/category.model';
 import { ProductFormDialogComponent } from './product-form-dialog.component';
 
 @Component({
@@ -36,7 +35,7 @@ import { ProductFormDialogComponent } from './product-form-dialog.component';
 export class ProductsPageComponent implements OnInit {
   private readonly authStore = inject(AuthStore);
   private readonly productApi = inject(ProductApiService);
-  private readonly categoryApi = inject(CategoryApiService);
+  readonly categoryStore = inject(CategoryStore);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
 
@@ -45,7 +44,6 @@ export class ProductsPageComponent implements OnInit {
   protected readonly canDelete = computed(() => this.authStore.hasPermission('product:delete'));
 
   protected readonly products = signal<Product[]>([]);
-  protected readonly categories = signal<Category[]>([]);
   protected readonly loading = signal(false);
   protected readonly totalCount = signal(0);
   protected readonly pageSize = 10;
@@ -53,10 +51,6 @@ export class ProductsPageComponent implements OnInit {
   protected filterName = '';
   protected filterCategoryId: string | null = null;
   protected filterIsActive: boolean | null = null;
-
-  protected readonly categoryOptions = computed(() =>
-    this.categories().map((c) => ({ label: c.name, value: c.categoryId }))
-  );
 
   protected readonly activeOptions = [
     { label: 'Activo', value: true },
@@ -67,9 +61,7 @@ export class ProductsPageComponent implements OnInit {
   protected readonly selectedProduct = signal<Product | null>(null);
 
   ngOnInit(): void {
-    this.categoryApi.list().subscribe({
-      next: (cats) => this.categories.set(cats),
-    });
+    this.categoryStore.load();
   }
 
   loadProducts(event: any): void {
@@ -101,8 +93,7 @@ export class ProductsPageComponent implements OnInit {
   }
 
   getCategoryName(categoryId: string | null): string {
-    if (!categoryId) return 'Sin categoria';
-    return this.categories().find((c) => c.categoryId === categoryId)?.name ?? 'Sin categoria';
+    return this.categoryStore.getCategoryName(categoryId);
   }
 
   onImageError(event: Event): void {

@@ -2,10 +2,9 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
-import { Category } from '../../core/models/category.model';
 import { ProductApiService } from '../../core/services/product-api.service';
 import { BundleApiService } from '../../core/services/bundle-api.service';
-import { CategoryApiService } from '../../core/services/category-api.service';
+import { CategoryStore } from '../../core/stores/category.store';
 import { BranchApiService } from '../../core/services/branch-api.service';
 import { BranchesComponent } from '../../shared/branches/branches.component';
 import { CatalogComponent } from '../../shared/catalog/catalog.component';
@@ -19,11 +18,6 @@ type HeroSlide = {
   alt: string;
 };
 
-type CategoryFilter = {
-  id: string;
-  label: string;
-};
-
 type ProductCard = {
   id: string;
   name: string;
@@ -31,6 +25,7 @@ type ProductCard = {
   description: string;
   imageUrl: string;
   alt: string;
+  categoryId: string;
   category: string;
   badge?: string;
   featured?: boolean;
@@ -55,14 +50,13 @@ export class LandingPageComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly productApi = inject(ProductApiService);
   private readonly bundleApi = inject(BundleApiService);
-  private readonly categoryApi = inject(CategoryApiService);
+  readonly categoryStore = inject(CategoryStore);
   private readonly branchApi = inject(BranchApiService);
 
   protected readonly activeHeroIndex = signal(0);
   protected readonly search = signal('');
   protected readonly selectedCategoryId = signal('all');
   protected readonly products = signal<ProductCard[]>([]);
-  protected readonly categories = signal<CategoryFilter[]>([{ id: 'all', label: 'Todos' }]);
   protected readonly branches = signal<BranchCard[]>([]);
 
   protected readonly heroSlides: HeroSlide[] = [
@@ -91,7 +85,7 @@ export class LandingPageComponent implements OnInit {
     const category = this.selectedCategoryId();
 
     return this.products().filter((product) => {
-      const matchesCategory = category === 'all' || product.category === category;
+      const matchesCategory = category === 'all' || product.categoryId === category;
       const matchesTerm =
         term.length === 0 ||
         [product.name, product.description, product.category, product.badge ?? '']
@@ -104,21 +98,14 @@ export class LandingPageComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.categoryStore.load();
+
     forkJoin({
-      categories: this.categoryApi.list(),
       products: this.productApi.list(),
       bundles: this.bundleApi.list(),
       branches: this.branchApi.list()
     }).subscribe({
-      next: ({ categories, products, bundles, branches }) => {
-        const categoryFilters: CategoryFilter[] = [
-          { id: 'all', label: 'Todos' },
-          ...categories.map((c) => ({ id: c.categoryId, label: c.name }))
-        ];
-        this.categories.set(categoryFilters);
-
-        const categoryMap = new Map(categories.map((c) => [c.categoryId, c.name]));
-
+      next: ({ products, bundles, branches }) => {
         const bundleCards: ProductCard[] = bundles.items
           .filter((b) => b.status === 'Published')
           .map((b) => ({
@@ -128,7 +115,8 @@ export class LandingPageComponent implements OnInit {
             description: `Código: ${b.code}`,
             imageUrl: this.bundleApi.resolveImageUrl(b.img) ?? NOT_FOUND_IMAGE,
             alt: b.name,
-            category: b.categoryId ? (categoryMap.get(b.categoryId) ?? 'Sin categoría') : 'Sin categoría',
+            categoryId: b.categoryId ?? '',
+            category: this.categoryStore.getCategoryName(b.categoryId),
             featured: true,
             quantity: 1
           }));
@@ -142,7 +130,8 @@ export class LandingPageComponent implements OnInit {
             description: `${p.baseMeasureType} — ${p.wholesaleCommercialType}`,
             imageUrl: this.productApi.resolveImageUrl(p.img) ?? NOT_FOUND_IMAGE,
             alt: p.name,
-            category: p.categoryId ? (categoryMap.get(p.categoryId) ?? 'Sin categoría') : 'Sin categoría',
+            categoryId: p.categoryId ?? '',
+            category: this.categoryStore.getCategoryName(p.categoryId),
             quantity: 1
           }));
 
@@ -160,7 +149,6 @@ export class LandingPageComponent implements OnInit {
       },
       error: () => {
         this.products.set([]);
-        this.categories.set([{ id: 'all', label: 'Todos' }]);
         this.branches.set([]);
       }
     });

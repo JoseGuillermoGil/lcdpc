@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ProductApiService } from '../../core/services/product-api.service';
 import { BundleApiService } from '../../core/services/bundle-api.service';
-import { CategoryApiService } from '../../core/services/category-api.service';
+import { CategoryStore } from '../../core/stores/category.store';
 import { AdvancedSearchComponent, SearchResultItem } from '../../shared/advanced-search/advanced-search.component';
 import { CatalogSearchComponent } from '../../shared/catalog-search/catalog-search.component';
 
@@ -21,12 +21,13 @@ export class SearchPageComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly productApi = inject(ProductApiService);
   private readonly bundleApi = inject(BundleApiService);
-  private readonly categoryApi = inject(CategoryApiService);
+  readonly categoryStore = inject(CategoryStore);
 
   protected query = this.route.snapshot.queryParamMap.get('q')?.trim() || '';
   protected readonly searchResults = signal<SearchResultItem[]>([]);
 
   ngOnInit(): void {
+    this.categoryStore.load();
     this.loadData();
   }
 
@@ -35,13 +36,10 @@ export class SearchPageComponent implements OnInit {
     const filter = search ? { search, limit: 50 } : { limit: 50 };
 
     forkJoin({
-      categories: this.categoryApi.list(),
       products: this.productApi.list(filter),
       bundles: this.bundleApi.list(filter)
     }).subscribe({
-      next: ({ categories, products, bundles }) => {
-        const categoryMap = new Map(categories.map((c) => [c.categoryId, c.name]));
-
+      next: ({ products, bundles }) => {
         const bundleItems: SearchResultItem[] = bundles.items
           .filter((b) => b.status === 'Published')
           .map((b) => ({
@@ -51,7 +49,7 @@ export class SearchPageComponent implements OnInit {
             description: `Código: ${b.code}`,
             imageUrl: this.bundleApi.resolveImageUrl(b.img) ?? NOT_FOUND_IMAGE,
             alt: b.name,
-            tags: [b.categoryId ? (categoryMap.get(b.categoryId) ?? 'Combos') : 'Combos'],
+            tags: [this.categoryStore.getCategoryName(b.categoryId)],
             unitLabel: 'Precio Total Combo',
             featured: true
           }));
@@ -65,7 +63,7 @@ export class SearchPageComponent implements OnInit {
             description: `${p.baseMeasureType} — ${p.wholesaleCommercialType}`,
             imageUrl: this.productApi.resolveImageUrl(p.img) ?? NOT_FOUND_IMAGE,
             alt: p.name,
-            tags: [p.categoryId ? (categoryMap.get(p.categoryId) ?? 'Productos') : 'Productos'],
+            tags: [this.categoryStore.getCategoryName(p.categoryId)],
             unitLabel: p.baseMeasureType
           }));
 

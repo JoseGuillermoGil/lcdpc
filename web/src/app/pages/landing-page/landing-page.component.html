@@ -8,7 +8,7 @@
 ></app-hero>
 
 <app-catalog
-  [categories]="categories()"
+  [categories]="categoryStore.filterOptions()"
   [selectedCategoryId]="selectedCategoryId()"
   [products]="filteredProducts()"
   (categorySelect)="selectCategory($event)"

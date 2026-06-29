@@ -8,10 +8,10 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { Bundle, CreateBundleRequest, BundleItemRequest } from '../../../core/models/bundle.model';
-import { Category } from '../../../core/models/category.model';
 import { Product } from '../../../core/models/product.model';
 import { BundleApiService } from '../../../core/services/bundle-api.service';
 import { ProductApiService } from '../../../core/services/product-api.service';
+import { CategoryStore } from '../../../core/stores/category.store';
 
 @Component({
   selector: 'app-bundle-form-dialog',
@@ -26,7 +26,6 @@ import { ProductApiService } from '../../../core/services/product-api.service';
 export class BundleFormDialogComponent implements OnChanges {
   @Input() visible = false;
   @Input() bundle: Bundle | null = null;
-  @Input() categories: Category[] = [];
 
   @Output() visibleChange = new EventEmitter<boolean>();
   @Output() saved = new EventEmitter<void>();
@@ -34,6 +33,7 @@ export class BundleFormDialogComponent implements OnChanges {
 
   private readonly bundleApi = inject(BundleApiService);
   private readonly productApi = inject(ProductApiService);
+  readonly categoryStore = inject(CategoryStore);
 
   protected readonly saving = signal(false);
   protected readonly products = signal<Product[]>([]);

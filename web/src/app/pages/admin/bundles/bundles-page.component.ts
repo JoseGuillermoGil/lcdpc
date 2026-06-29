@@ -15,9 +15,8 @@ import { TooltipModule } from 'primeng/tooltip';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { BundleApiService } from '../../../core/services/bundle-api.service';
-import { CategoryApiService } from '../../../core/services/category-api.service';
+import { CategoryStore } from '../../../core/stores/category.store';
 import { Bundle } from '../../../core/models/bundle.model';
-import { Category } from '../../../core/models/category.model';
 import { BundleFormDialogComponent } from './bundle-form-dialog.component';
 
 @Component({
@@ -36,7 +35,7 @@ import { BundleFormDialogComponent } from './bundle-form-dialog.component';
 export class BundlesPageComponent implements OnInit {
   private readonly authStore = inject(AuthStore);
   private readonly bundleApi = inject(BundleApiService);
-  private readonly categoryApi = inject(CategoryApiService);
+  readonly categoryStore = inject(CategoryStore);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
 
@@ -45,7 +44,6 @@ export class BundlesPageComponent implements OnInit {
   protected readonly canDelete = computed(() => this.authStore.hasPermission('bundle:delete'));
 
   protected readonly bundles = signal<Bundle[]>([]);
-  protected readonly categories = signal<Category[]>([]);
   protected readonly loading = signal(false);
   protected readonly totalCount = signal(0);
   protected readonly pageSize = 10;
@@ -54,10 +52,6 @@ export class BundlesPageComponent implements OnInit {
   protected filterCode = '';
   protected filterStatus: string | null = null;
   protected filterCategoryId: string | null = null;
-
-  protected readonly categoryOptions = computed(() =>
-    this.categories().map((c) => ({ label: c.name, value: c.categoryId }))
-  );
 
   protected readonly statusOptions = [
     { label: 'Draft', value: 'Draft' },
@@ -69,9 +63,7 @@ export class BundlesPageComponent implements OnInit {
   protected readonly selectedBundle = signal<Bundle | null>(null);
 
   ngOnInit(): void {
-    this.categoryApi.list().subscribe({
-      next: (cats) => this.categories.set(cats),
-    });
+    this.categoryStore.load();
   }
 
   loadBundles(event: any): void {
@@ -104,8 +96,7 @@ export class BundlesPageComponent implements OnInit {
   }
 
   getCategoryName(categoryId: string | null): string {
-    if (!categoryId) return 'Sin categoria';
-    return this.categories().find((c) => c.categoryId === categoryId)?.name ?? 'Sin categoria';
+    return this.categoryStore.getCategoryName(categoryId);
   }
 
   onImageError(event: Event): void {
