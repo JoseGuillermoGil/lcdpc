@@ -316,19 +316,24 @@ func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileReques
 
 	userID := uuid.New()
 	_, err = tx.Exec(ctx, `
-		INSERT INTO users (id, email, password_hash, onboarding_status, email_verified_at_utc, status, created_at_utc)
-		VALUES ($1, $2, $3, 'active', $4, 'Active', now())
-	`, userID, normalizedEmail, pwHash, flow.VerifiedAtUtc)
+		INSERT INTO users (id, email, password_hash, onboarding_status, email_verified_at_utc, status, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc)
+		VALUES ($1, $2, $3, 'active', $4, 'Active', $5, $6, $7, $8, now())
+	`, userID, normalizedEmail, pwHash, flow.VerifiedAtUtc, req.IdentityDocument,
+		nullString(req.TaxID), req.WhatsAppPhone, req.FullAddress)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 
+	profileName := req.FirstName
+	if req.LastName != "" {
+		profileName = req.FirstName + " " + req.LastName
+	}
+
 	profileID := uuid.New()
 	_, err = tx.Exec(ctx, `
-		INSERT INTO profiles (id, user_id, first_name, last_name, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
-	`, profileID, userID, req.FirstName, req.LastName, req.IdentityDocument,
-		nullString(req.TaxID), req.WhatsAppPhone, req.FullAddress)
+		INSERT INTO profiles (id, user_id, name, code, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, $4, now(), now())
+	`, profileID, userID, profileName, req.IdentityDocument)
 	if err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
 	}

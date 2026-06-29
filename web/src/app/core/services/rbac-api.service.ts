@@ -40,12 +40,8 @@ interface RoleGoData {
 interface ProfileGoData {
   id: string;
   user_id?: string;
-  first_name: string;
-  last_name: string;
-  identity_document: string;
-  tax_id: string | null;
-  whatsapp_phone: string;
-  full_address: string;
+  name: string;
+  code: string;
   roles: RoleEntry[];
   created_at_utc: string;
   updated_at_utc: string;
@@ -257,12 +253,8 @@ export class RbacApiService {
     return {
       id: raw.id,
       userId: raw.user_id,
-      firstName: raw.first_name,
-      lastName: raw.last_name,
-      identityDocument: raw.identity_document,
-      taxId: raw.tax_id,
-      whatsappPhone: raw.whatsapp_phone,
-      fullAddress: raw.full_address,
+      name: raw.name,
+      code: raw.code,
       roles: raw.roles,
       createdAtUtc: raw.created_at_utc,
       updatedAtUtc: raw.updated_at_utc,

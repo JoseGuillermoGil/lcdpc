@@ -44,35 +44,23 @@ type AssignResourceRequest struct {
 }
 
 type ProfileResponse struct {
-	ID               uuid.UUID   `json:"id"`
-	UserID           *uuid.UUID  `json:"user_id,omitempty"`
-	FirstName        string      `json:"first_name"`
-	LastName         string      `json:"last_name"`
-	IdentityDocument string      `json:"identity_document"`
-	TaxID            *string     `json:"tax_id"`
-	WhatsAppPhone    string      `json:"whatsapp_phone"`
-	FullAddress      string      `json:"full_address"`
-	Roles            []RoleEntry `json:"roles"`
-	CreatedAt        time.Time   `json:"created_at_utc"`
-	UpdatedAt        time.Time   `json:"updated_at_utc"`
+	ID        uuid.UUID   `json:"id"`
+	UserID    *uuid.UUID  `json:"user_id,omitempty"`
+	Name      string      `json:"name"`
+	Code      string      `json:"code"`
+	Roles     []RoleEntry `json:"roles"`
+	CreatedAt time.Time   `json:"created_at_utc"`
+	UpdatedAt time.Time   `json:"updated_at_utc"`
 }
 
 type CreateProfileRequest struct {
-	FirstName        string  `json:"first_name"`
-	LastName         string  `json:"last_name"`
-	IdentityDocument string  `json:"identity_document"`
-	TaxID            *string `json:"tax_id"`
-	WhatsAppPhone    string  `json:"whatsapp_phone"`
-	FullAddress      string  `json:"full_address"`
+	Name string `json:"name" validate:"required"`
+	Code string `json:"code" validate:"required"`
 }
 
 type UpdateProfileRequest struct {
-	FirstName        string  `json:"first_name"`
-	LastName         string  `json:"last_name"`
-	IdentityDocument string  `json:"identity_document"`
-	TaxID            *string `json:"tax_id"`
-	WhatsAppPhone    string  `json:"whatsapp_phone"`
-	FullAddress      string  `json:"full_address"`
+	Name string `json:"name"`
+	Code string `json:"code"`
 }
 
 type AssignRoleRequest struct {

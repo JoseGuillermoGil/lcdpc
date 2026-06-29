@@ -43,12 +43,8 @@ export interface AssignResourceRequest {
 export interface Profile {
   id: string;
   userId?: string;
-  firstName: string;
-  lastName: string;
-  identityDocument: string;
-  taxId: string | null;
-  whatsappPhone: string;
-  fullAddress: string;
+  name: string;
+  code: string;
   roles: RoleEntry[];
   createdAtUtc: string;
   updatedAtUtc: string;
@@ -61,21 +57,13 @@ export interface RoleEntry {
 }
 
 export interface CreateProfileRequest {
-  first_name: string;
-  last_name: string;
-  identity_document: string;
-  tax_id: string | null;
-  whatsapp_phone: string;
-  full_address: string;
+  name: string;
+  code: string;
 }
 
 export interface UpdateProfileRequest {
-  first_name: string;
-  last_name: string;
-  identity_document: string;
-  tax_id: string | null;
-  whatsapp_phone: string;
-  full_address: string;
+  name: string;
+  code: string;
 }
 
 export interface AssignRoleRequest {

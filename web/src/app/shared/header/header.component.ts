@@ -37,7 +37,8 @@ export class HeaderComponent {
       'product:create', 'product:update', 'product:delete',
       'bundle:create', 'bundle:update', 'bundle:delete',
       'order:view', 'order:create', 'order:update', 'order:delete',
-      'rbac:resource:view'
+      'rbac:resource:view',
+      'staff:view'
     )
   );
 

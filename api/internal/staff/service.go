@@ -1,0 +1,373 @@
+package staff
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lcdpc/lcdpc-go/internal/rbac"
+	"golang.org/x/crypto/pbkdf2"
+)
+
+type Service struct {
+	pool  *pgxpool.Pool
+	store *rbac.Store
+}
+
+func NewService(pool *pgxpool.Pool, store *rbac.Store) *Service {
+	return &Service{pool: pool, store: store}
+}
+
+type StaffMember struct {
+	UserID           uuid.UUID  `json:"user_id"`
+	Email            string     `json:"email"`
+	Status           string     `json:"status"`
+	BranchID         *uuid.UUID `json:"branch_id"`
+	BranchName       *string    `json:"branch_name"`
+	IdentityDocument string     `json:"identity_document"`
+	WhatsAppPhone    string     `json:"whatsapp_phone"`
+	ProfileID        uuid.UUID  `json:"profile_id"`
+	ProfileName      string     `json:"profile_name"`
+	ProfileCode      string     `json:"profile_code"`
+	RoleCode         string     `json:"role_code"`
+	RoleName         string     `json:"role_name"`
+	CreatedAtUtc     time.Time  `json:"created_at_utc"`
+}
+
+type CreateStaffRequest struct {
+	Email            string    `json:"email" validate:"required"`
+	Password         string    `json:"password" validate:"required"`
+	Name             string    `json:"name" validate:"required"`
+	Code             string    `json:"code" validate:"required"`
+	IdentityDocument string    `json:"identity_document" validate:"required"`
+	WhatsAppPhone    string    `json:"whatsapp_phone" validate:"required"`
+	FullAddress      string    `json:"full_address" validate:"required"`
+	BranchID         uuid.UUID `json:"branch_id" validate:"required"`
+	RoleCode         string    `json:"role_code" validate:"required"`
+}
+
+type UpdateStaffRequest struct {
+	Name             string     `json:"name"`
+	Code             string     `json:"code"`
+	IdentityDocument string     `json:"identity_document"`
+	WhatsAppPhone    string     `json:"whatsapp_phone"`
+	FullAddress      string     `json:"full_address"`
+	BranchID         *uuid.UUID `json:"branch_id"`
+	RoleCode         *string    `json:"role_code"`
+	Status           *string    `json:"status"`
+}
+
+type StaffFilter struct {
+	Limit    int
+	Offset   int
+	BranchID *uuid.UUID
+	RoleCode *string
+	Search   *string
+}
+
+var excludedRoles = []string{"global_admin", "branch_admin", "client"}
+
+func (f StaffFilter) GetLimit() int {
+	if f.Limit <= 0 {
+		return 10
+	}
+	if f.Limit > 100 {
+		return 100
+	}
+	return f.Limit
+}
+
+func (f StaffFilter) GetOffset() int {
+	if f.Offset < 0 {
+		return 0
+	}
+	return f.Offset
+}
+
+func (s *Service) List(ctx context.Context, filter StaffFilter) ([]StaffMember, int, error) {
+	countQuery := `
+		SELECT COUNT(*)
+		FROM users u
+		JOIN profiles p ON p.user_id = u.id
+		JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
+		JOIN roles r ON r.id = pra.role_id
+		WHERE r.code NOT IN ('global_admin', 'branch_admin', 'client')
+	`
+	dataQuery := `
+		SELECT u.id, u.email, u.status, u.branch_id, b.store_name,
+		       u.identity_document, u.whatsapp_phone,
+		       p.id, p.name, p.code,
+		       r.code, r.name, u.created_at_utc
+		FROM users u
+		JOIN profiles p ON p.user_id = u.id
+		JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
+		JOIN roles r ON r.id = pra.role_id
+		LEFT JOIN branches b ON b.id = u.branch_id
+		WHERE r.code NOT IN ('global_admin', 'branch_admin', 'client')
+	`
+
+	var args []interface{}
+	argIdx := 1
+
+	if filter.BranchID != nil {
+		clause := fmt.Sprintf(` AND u.branch_id = $%d`, argIdx)
+		countQuery += clause
+		dataQuery += clause
+		args = append(args, *filter.BranchID)
+		argIdx++
+	}
+	if filter.RoleCode != nil {
+		clause := fmt.Sprintf(` AND r.code = $%d`, argIdx)
+		countQuery += clause
+		dataQuery += clause
+		args = append(args, *filter.RoleCode)
+		argIdx++
+	}
+	if filter.Search != nil && *filter.Search != "" {
+		clause := fmt.Sprintf(` AND (p.name ILIKE '%%' || $%d || '%%' OR u.email ILIKE '%%' || $%d || '%%')`, argIdx, argIdx)
+		countQuery += clause
+		dataQuery += clause
+		args = append(args, *filter.Search)
+		argIdx++
+	}
+
+	var totalCount int
+	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, fmt.Errorf("count staff: %w", err)
+	}
+
+	dataQuery += ` ORDER BY u.created_at_utc DESC`
+	dataQuery += fmt.Sprintf(` LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+	args = append(args, filter.GetLimit(), filter.GetOffset())
+
+	rows, err := s.pool.Query(ctx, dataQuery, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list staff: %w", err)
+	}
+	defer rows.Close()
+
+	var members []StaffMember
+	for rows.Next() {
+		var m StaffMember
+		if err := rows.Scan(
+			&m.UserID, &m.Email, &m.Status, &m.BranchID, &m.BranchName,
+			&m.IdentityDocument, &m.WhatsAppPhone,
+			&m.ProfileID, &m.ProfileName, &m.ProfileCode,
+			&m.RoleCode, &m.RoleName, &m.CreatedAtUtc,
+		); err != nil {
+			return nil, 0, fmt.Errorf("scan staff: %w", err)
+		}
+		members = append(members, m)
+	}
+	return members, totalCount, nil
+}
+
+func (s *Service) GetByID(ctx context.Context, userID uuid.UUID) (*StaffMember, error) {
+	var m StaffMember
+	err := s.pool.QueryRow(ctx, `
+		SELECT u.id, u.email, u.status, u.branch_id, b.store_name,
+		       u.identity_document, u.whatsapp_phone,
+		       p.id, p.name, p.code,
+		       r.code, r.name, u.created_at_utc
+		FROM users u
+		JOIN profiles p ON p.user_id = u.id
+		JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
+		JOIN roles r ON r.id = pra.role_id
+		LEFT JOIN branches b ON b.id = u.branch_id
+		WHERE u.id = $1
+	`, userID).Scan(
+		&m.UserID, &m.Email, &m.Status, &m.BranchID, &m.BranchName,
+		&m.IdentityDocument, &m.WhatsAppPhone,
+		&m.ProfileID, &m.ProfileName, &m.ProfileCode,
+		&m.RoleCode, &m.RoleName, &m.CreatedAtUtc,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get staff: %w", err)
+	}
+	return &m, nil
+}
+
+func (s *Service) Create(ctx context.Context, req CreateStaffRequest) (*StaffMember, error) {
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, fmt.Errorf("generate salt: %w", err)
+	}
+	hash := pbkdf2.Key([]byte(req.Password), salt, 100_000, 32, sha256.New)
+	pwHash := fmt.Sprintf("PBKDF2$100000$SHA256$%s$%s",
+		base64.StdEncoding.EncodeToString(salt),
+		base64.StdEncoding.EncodeToString(hash))
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	userID := uuid.New()
+	_, err = tx.Exec(ctx, `
+		INSERT INTO users (id, email, password_hash, onboarding_status, status, identity_document, whatsapp_phone, full_address, branch_id, created_at_utc)
+		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, $6, $7, now())
+	`, userID, req.Email, pwHash, req.IdentityDocument, req.WhatsAppPhone, req.FullAddress, req.BranchID)
+	if err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
+	}
+
+	profileID := uuid.New()
+	_, err = tx.Exec(ctx, `
+		INSERT INTO profiles (id, user_id, name, code, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, $4, now(), now())
+	`, profileID, userID, req.Name, req.Code)
+	if err != nil {
+		return nil, fmt.Errorf("create profile: %w", err)
+	}
+
+	var roleID uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT id FROM roles WHERE code = $1`, req.RoleCode).Scan(&roleID)
+	if err != nil {
+		return nil, fmt.Errorf("get role %s: %w", req.RoleCode, err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO profile_role_assignments (id, profile_id, role_id, active, created_at_utc)
+		VALUES ($1, $2, $3, true, now())
+	`, uuid.New(), profileID, roleID)
+	if err != nil {
+		return nil, fmt.Errorf("assign role: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+
+	if err := s.store.ReloadAll(ctx, s.pool); err != nil {
+		return nil, fmt.Errorf("reload rbac: %w", err)
+	}
+
+	return s.GetByID(ctx, userID)
+}
+
+func (s *Service) Update(ctx context.Context, userID uuid.UUID, req UpdateStaffRequest) (*StaffMember, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Update user fields
+	if req.IdentityDocument != "" || req.WhatsAppPhone != "" || req.FullAddress != "" || req.BranchID != nil || req.Status != nil {
+		_, err = tx.Exec(ctx, `
+			UPDATE users SET
+				identity_document = COALESCE(NULLIF($2, ''), identity_document),
+				whatsapp_phone = COALESCE(NULLIF($3, ''), whatsapp_phone),
+				full_address = COALESCE(NULLIF($4, ''), full_address),
+				branch_id = COALESCE($5, branch_id),
+				status = COALESCE($6, status)
+			WHERE id = $1
+		`, userID, req.IdentityDocument, req.WhatsAppPhone, req.FullAddress, req.BranchID, req.Status)
+		if err != nil {
+			return nil, fmt.Errorf("update user: %w", err)
+		}
+	}
+
+	// Get profile ID
+	var profileID uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, userID).Scan(&profileID)
+	if err != nil {
+		return nil, fmt.Errorf("get profile: %w", err)
+	}
+
+	// Update profile fields
+	if req.Name != "" || req.Code != "" {
+		_, err = tx.Exec(ctx, `
+			UPDATE profiles SET
+				name = COALESCE(NULLIF($2, ''), name),
+				code = COALESCE(NULLIF($3, ''), code),
+				updated_at_utc = now()
+			WHERE id = $1
+		`, profileID, req.Name, req.Code)
+		if err != nil {
+			return nil, fmt.Errorf("update profile: %w", err)
+		}
+	}
+
+	// Update role if changed
+	if req.RoleCode != nil && *req.RoleCode != "" {
+		// Remove old assignment
+		_, _ = tx.Exec(ctx, `DELETE FROM profile_role_assignments WHERE profile_id = $1`, profileID)
+
+		var roleID uuid.UUID
+		err = tx.QueryRow(ctx, `SELECT id FROM roles WHERE code = $1`, *req.RoleCode).Scan(&roleID)
+		if err != nil {
+			return nil, fmt.Errorf("get role %s: %w", *req.RoleCode, err)
+		}
+
+		_, err = tx.Exec(ctx, `
+			INSERT INTO profile_role_assignments (id, profile_id, role_id, active, created_at_utc)
+			VALUES ($1, $2, $3, true, now())
+		`, uuid.New(), profileID, roleID)
+		if err != nil {
+			return nil, fmt.Errorf("assign role: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit: %w", err)
+	}
+
+	if err := s.store.ReloadAll(ctx, s.pool); err != nil {
+		return nil, fmt.Errorf("reload rbac: %w", err)
+	}
+
+	return s.GetByID(ctx, userID)
+}
+
+func (s *Service) Delete(ctx context.Context, userID uuid.UUID) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Delete profile_role_assignments
+	var profileID uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, userID).Scan(&profileID)
+	if err != nil {
+		return fmt.Errorf("get profile: %w", err)
+	}
+
+	_, _ = tx.Exec(ctx, `DELETE FROM profile_role_assignments WHERE profile_id = $1`, profileID)
+
+	// Delete profile
+	_, err = tx.Exec(ctx, `DELETE FROM profiles WHERE id = $1`, profileID)
+	if err != nil {
+		return fmt.Errorf("delete profile: %w", err)
+	}
+
+	// Delete user
+	tag, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("NOT_FOUND")
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	if err := s.store.ReloadAll(ctx, s.pool); err != nil {
+		return fmt.Errorf("reload rbac: %w", err)
+	}
+
+	return nil
+}

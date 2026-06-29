@@ -17,6 +17,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/order"
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
 	"github.com/lcdpc/lcdpc-go/internal/rbac"
+	"github.com/lcdpc/lcdpc-go/internal/staff"
 	"github.com/lcdpc/lcdpc-go/internal/sync"
 )
 
@@ -29,6 +30,7 @@ func NewServer(
 	pricingSvc *pricing.Service,
 	branchSvc *branch.Service,
 	categorySvc *category.Service,
+	staffSvc *staff.Service,
 	syncSvc *sync.Service,
 	rbacStore *rbac.Store,
 	rbacSvc *rbac.Service,
@@ -53,6 +55,7 @@ func NewServer(
 	priceH := handler.NewPriceHandler(pricingSvc)
 	branchH := handler.NewBranchHandler(branchSvc)
 	categoryH := handler.NewCategoryHandler(categorySvc)
+	staffH := handler.NewStaffHandler(staffSvc)
 	syncH := handler.NewSyncHandler(syncSvc)
 	healthH := handler.NewHealthHandler(pool)
 	rbacH := rbac.NewHandler(rbacSvc)
@@ -224,6 +227,33 @@ func NewServer(
 			r.Use(middleware.RequireAuth())
 			r.Use(middleware.RequirePermission(rbacStore, "category:delete"))
 			r.Delete("/{id}", categoryH.Delete)
+		})
+	})
+
+	// Staff
+	r.Route("/api/v1/staff", func(r chi.Router) {
+		r.Get("/", staffH.List)
+		r.Get("/{id}", staffH.GetByID)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "staff:create"))
+			r.Post("/", staffH.Create)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "staff:update"))
+			r.Put("/{id}", staffH.Update)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "staff:delete"))
+			r.Delete("/{id}", staffH.Delete)
 		})
 	})
 

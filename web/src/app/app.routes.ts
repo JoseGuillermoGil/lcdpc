@@ -8,6 +8,7 @@ import { DashboardPageComponent } from './pages/admin/dashboard/dashboard-page.c
 import { ProductsPageComponent } from './pages/admin/products/products-page.component';
 import { BundlesPageComponent } from './pages/admin/bundles/bundles-page.component';
 import { OrdersPageComponent } from './pages/admin/orders/orders-page.component';
+import { StaffPageComponent } from './pages/admin/staff/staff-page.component';
 import { adminGuard } from './core/auth/admin.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 
@@ -26,6 +27,7 @@ export const routes: Routes = [
 			{ path: 'products', component: ProductsPageComponent, canActivate: [permissionGuard('product:view')] },
 			{ path: 'bundles', component: BundlesPageComponent, canActivate: [permissionGuard('bundle:view')] },
 			{ path: 'orders', component: OrdersPageComponent, canActivate: [permissionGuard('order:view')] },
+			{ path: 'staff', component: StaffPageComponent, canActivate: [permissionGuard('staff:view')] },
 		]
 	}
 ];

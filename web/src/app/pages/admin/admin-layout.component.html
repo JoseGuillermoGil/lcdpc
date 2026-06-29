@@ -30,6 +30,13 @@
           <span>Ordenes</span>
         </a>
       }
+
+      @if (canViewStaff()) {
+        <a routerLink="/admin/staff" routerLinkActive="active">
+          <span class="pi pi-users"></span>
+          <span>Personal</span>
+        </a>
+      }
     </nav>
 
     <div class="sidebar-footer">

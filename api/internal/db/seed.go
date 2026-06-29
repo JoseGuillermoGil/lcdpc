@@ -64,18 +64,22 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 
 	userID := uuid.New()
 	_, err = pool.Exec(ctx, `
-		INSERT INTO users (id, email, password_hash, onboarding_status, status, created_at_utc)
-		VALUES ($1, $2, $3, 'active', 'Active', now())
-	`, userID, email, pwHash)
+		INSERT INTO users (id, email, password_hash, onboarding_status, status, identity_document, whatsapp_phone, full_address, created_at_utc)
+		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, $6, now())
+	`, userID, email, pwHash, cfg.SuperUserIdentityDocument, cfg.SuperUserWhatsAppPhone, cfg.SuperUserFullAddress)
 	if err != nil {
 		return err
 	}
 
+	profileName := cfg.SuperUserFirstName
+	if cfg.SuperUserLastName != "" {
+		profileName = cfg.SuperUserFirstName + " " + cfg.SuperUserLastName
+	}
+
 	_, err = pool.Exec(ctx, `
-		INSERT INTO profiles (id, user_id, first_name, last_name, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
-	`, uuid.New(), userID, cfg.SuperUserFirstName, cfg.SuperUserLastName,
-		cfg.SuperUserIdentityDocument, nil, cfg.SuperUserWhatsAppPhone, cfg.SuperUserFullAddress)
+		INSERT INTO profiles (id, user_id, name, code, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, $4, now(), now())
+	`, uuid.New(), userID, profileName, cfg.SuperUserIdentityDocument)
 	if err != nil {
 		return err
 	}

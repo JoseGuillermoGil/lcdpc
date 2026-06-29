@@ -20,6 +20,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/order"
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
 	"github.com/lcdpc/lcdpc-go/internal/rbac"
+	"github.com/lcdpc/lcdpc-go/internal/staff"
 	"github.com/lcdpc/lcdpc-go/internal/sync"
 )
 
@@ -101,11 +102,12 @@ func main() {
 	pricingSvc := pricing.NewService(pool)
 	branchSvc := branch.NewService(pool)
 	categorySvc := category.NewService(pool)
+	staffSvc := staff.NewService(pool, rbacStore)
 	syncSvc := sync.NewService(pool)
 	rbacSvc := rbac.NewService(pool, rbacStore)
 	orderSvc := order.NewService(pool)
 
-	router := httpserver.NewServer(cfg, pool, authSvc, oauth2Svc, keySvc, pricingSvc, branchSvc, categorySvc, syncSvc, rbacStore, rbacSvc, orderSvc)
+	router := httpserver.NewServer(cfg, pool, authSvc, oauth2Svc, keySvc, pricingSvc, branchSvc, categorySvc, staffSvc, syncSvc, rbacStore, rbacSvc, orderSvc)
 
 	addr := ":" + cfg.Port
 	srv := &http.Server{
