@@ -43,6 +43,8 @@ export class OrdersPageComponent implements OnInit {
   protected readonly orders = signal<Order[]>([]);
   protected readonly branches = signal<{ id: string; name: string }[]>([]);
   protected readonly loading = signal(false);
+  protected readonly totalCount = signal(0);
+  protected readonly pageSize = 10;
 
   protected selectedStatus: string | null = null;
   protected selectedBranch: string | null = null;
@@ -69,22 +71,29 @@ export class OrdersPageComponent implements OnInit {
     this.branchApi.list().subscribe({
       next: (branches) => this.branches.set(branches.map((b) => ({ id: b.id, name: b.storeName }))),
     });
-    this.loadOrders();
   }
 
-  loadOrders(): void {
+  loadOrders(event: any): void {
+    const offset = event.first ?? 0;
+    const limit = event.rows ?? this.pageSize;
     this.loading.set(true);
-    const filter: Record<string, any> = { limit: 100 };
+
+    const filter: Record<string, any> = { limit, offset };
     if (this.selectedStatus) filter['status'] = this.selectedStatus;
     if (this.selectedBranch) filter['branch_id'] = this.selectedBranch;
 
     this.orderApi.list(filter).subscribe({
-      next: (orders) => {
-        this.orders.set(orders);
+      next: (res) => {
+        this.orders.set(res.items);
+        this.totalCount.set(res.totalCount);
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
     });
+  }
+
+  applyFilters(): void {
+    this.loadOrders({ first: 0, rows: this.pageSize });
   }
 
   getBranchName(branchId: string): string {
@@ -146,7 +155,7 @@ export class OrdersPageComponent implements OnInit {
       next: () => {
         this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Estado actualizado' });
         this.statusDialogVisible.set(false);
-        this.loadOrders();
+        this.applyFilters();
       },
       error: () => {
         this.messageService.add({ severity: 'error', summary: 'Error', detail: 'No se pudo cambiar el estado' });
@@ -166,7 +175,7 @@ export class OrdersPageComponent implements OnInit {
         this.orderApi.delete(order.id).subscribe({
           next: () => {
             this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Orden eliminada' });
-            this.loadOrders();
+            this.applyFilters();
           },
           error: () => {
             this.messageService.add({ severity: 'error', summary: 'Error', detail: 'No se pudo eliminar la orden' });

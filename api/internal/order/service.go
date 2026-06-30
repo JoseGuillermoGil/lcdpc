@@ -111,43 +111,48 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Order, error) {
 	return o, nil
 }
 
-func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, error) {
-	query := `SELECT id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc FROM orders WHERE 1=1`
+func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, int, error) {
+	countQuery := `SELECT COUNT(*) FROM orders WHERE 1=1`
+	dataQuery := `SELECT id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc FROM orders WHERE 1=1`
 	args := []interface{}{}
 	argIdx := 1
 
 	if filter.BranchID != nil {
-		query += fmt.Sprintf(" AND branch_id = $%d", argIdx)
+		clause := fmt.Sprintf(" AND branch_id = $%d", argIdx)
+		countQuery += clause
+		dataQuery += clause
 		args = append(args, *filter.BranchID)
 		argIdx++
 	}
 	if filter.ClientUserID != nil {
-		query += fmt.Sprintf(" AND client_user_id = $%d", argIdx)
+		clause := fmt.Sprintf(" AND client_user_id = $%d", argIdx)
+		countQuery += clause
+		dataQuery += clause
 		args = append(args, *filter.ClientUserID)
 		argIdx++
 	}
 	if filter.Status != nil {
-		query += fmt.Sprintf(" AND status = $%d", argIdx)
+		clause := fmt.Sprintf(" AND status = $%d", argIdx)
+		countQuery += clause
+		dataQuery += clause
 		args = append(args, *filter.Status)
 		argIdx++
 	}
 
-	query += " ORDER BY created_at_utc DESC"
-
-	if filter.Limit != nil {
-		query += fmt.Sprintf(" LIMIT $%d", argIdx)
-		args = append(args, *filter.Limit)
-		argIdx++
-	}
-	if filter.Offset != nil {
-		query += fmt.Sprintf(" OFFSET $%d", argIdx)
-		args = append(args, *filter.Offset)
-		argIdx++
+	var totalCount int
+	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
+		return nil, 0, fmt.Errorf("count orders: %w", err)
 	}
 
-	rows, err := s.pool.Query(ctx, query, args...)
+	dataQuery += " ORDER BY created_at_utc DESC"
+	limit := filter.GetLimit()
+	offset := filter.GetOffset()
+	dataQuery += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+	args = append(args, limit, offset)
+
+	rows, err := s.pool.Query(ctx, dataQuery, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list orders: %w", err)
+		return nil, 0, fmt.Errorf("list orders: %w", err)
 	}
 	defer rows.Close()
 
@@ -156,11 +161,11 @@ func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, error)
 		var o Order
 		if err := rows.Scan(&o.ID, &o.BranchID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
 			&o.Currency, &o.Notes, &o.CreatedAtUtc, &o.UpdatedAtUtc); err != nil {
-			return nil, fmt.Errorf("scan order: %w", err)
+			return nil, 0, fmt.Errorf("scan order: %w", err)
 		}
 		orders = append(orders, o)
 	}
-	return orders, nil
+	return orders, totalCount, nil
 }
 
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderRequest) (*Order, error) {

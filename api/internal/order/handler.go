@@ -74,23 +74,23 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		filter.Status = &status
 	}
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
-			filter.Limit = &limit
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			filter.Limit = limit
 		}
 	}
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if offset, err := strconv.Atoi(offsetStr); err == nil && offset >= 0 {
-			filter.Offset = &offset
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			filter.Offset = offset
 		}
 	}
 
-	result, err := h.svc.List(r.Context(), filter)
+	items, total, err := h.svc.List(r.Context(), filter)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.Success(w, result)
+	response.Paginated(w, items, total, filter.GetLimit(), filter.GetOffset())
 }
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {

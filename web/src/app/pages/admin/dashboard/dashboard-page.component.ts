@@ -29,15 +29,15 @@ export class DashboardPageComponent implements OnInit {
     forkJoin({
       products: this.productApi.list({ limit: 1, is_active: true }),
       bundles: this.bundleApi.list({ limit: 1 }),
-      orders: this.orderApi.list({ limit: 100 }),
-      pendingOrders: this.orderApi.list({ limit: 100, status: 'PENDING_REVIEW' }),
+      orders: this.orderApi.list({ limit: 1 }),
+      pendingOrders: this.orderApi.list({ limit: 1, status: 'PENDING_REVIEW' }),
     }).subscribe({
       next: ({ products, bundles, orders, pendingOrders }) => {
         this.stats.set({
           totalProducts: products.totalCount,
           totalBundles: bundles.totalCount,
-          totalOrders: orders.length,
-          pendingOrders: pendingOrders.length,
+          totalOrders: orders.totalCount,
+          pendingOrders: pendingOrders.totalCount,
         });
         this.loading.set(false);
       },

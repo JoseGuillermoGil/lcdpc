@@ -311,6 +311,15 @@ web/src/app/
 - Toast messages via `MessageService` (Spanish: "Exito", "Error").
 - All `ConfirmationService` and `MessageService` provided locally in component `providers: []`.
 
+#### Pagination pattern (PrimeNG lazy table)
+All paginated list pages must follow the products page pattern — **never** use an external `<p-paginator>` outside `<p-table>`:
+- `p-table` must have `[lazy]="true" [paginator]="true" [rows]="pageSize" (onLazyLoad)="loadItems($event)"` — the paginator lives inside the table.
+- `pageSize` is a constant (`const pageSize = 10`), not a signal.
+- `loadItems(event)` receives `{ first, rows }` from the table's `onLazyLoad` event, computes `offset = event.first`, `limit = event.rows`.
+- `totalCount` is a signal populated from `res.totalCount`.
+- When filters change, `applyFilters()` calls `loadItems({ first: 0, rows: this.pageSize })` to reset to page 1.
+- No `<p-paginator>` is rendered separately; the table handles pagination UI natively.
+
 ### Order status flow
 - `PENDING_REVIEW` → `APPROVED` | `REJECTED` | `CANCELLED`
 - `APPROVED` → `IN_PREPARATION` | `CANCELLED`

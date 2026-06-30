@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Inject, Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { API_BASE_URL } from '../../pages/auth-page/auth-api-go.service';
+import { PaginatedResponse } from '../models/pagination.model';
 import {
   CreateOrderRequest,
   Order,
@@ -44,6 +45,13 @@ interface OrderItemGoData {
   currency: string;
 }
 
+interface PaginatedGoData<T> {
+  items: T[];
+  total_count: number;
+  limit: number;
+  offset: number;
+}
+
 interface StatusHistoryGoData {
   id: string;
   order_id: string;
@@ -65,7 +73,7 @@ export class OrderApiService {
     this.baseUrl = apiBaseUrl.replace(/\/$/, '');
   }
 
-  list(filter?: OrderFilter): Observable<Order[]> {
+  list(filter?: OrderFilter): Observable<PaginatedResponse<Order>> {
     const params: Record<string, string> = {};
     if (filter?.branch_id) params['branch_id'] = filter.branch_id;
     if (filter?.client_user_id) params['client_user_id'] = filter.client_user_id;
@@ -74,8 +82,13 @@ export class OrderApiService {
     if (filter?.offset != null) params['offset'] = String(filter.offset);
 
     return this.http
-      .get<JsendEnvelope<OrderGoData[]>>(`${this.baseUrl}/api/v1/orders/`, { params })
-      .pipe(map((res) => res.data.map((o) => this.mapOrder(o))));
+      .get<JsendEnvelope<PaginatedGoData<OrderGoData>>>(`${this.baseUrl}/api/v1/orders/`, { params, withCredentials: true })
+      .pipe(map((res) => ({
+        items: res.data.items.map((o) => this.mapOrder(o)),
+        totalCount: res.data.total_count,
+        limit: res.data.limit,
+        offset: res.data.offset,
+      })));
   }
 
   getById(id: string): Observable<Order> {

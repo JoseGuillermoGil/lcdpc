@@ -67,10 +67,30 @@ type StatusHistoryEntry struct {
 	CreatedAtUtc     time.Time `json:"created_at_utc"`
 }
 
+const DefaultLimit = 10
+const MaxLimit = 100
+
 type OrderFilter struct {
 	BranchID     *uuid.UUID
 	ClientUserID *uuid.UUID
 	Status       *string
-	Limit        *int
-	Offset       *int
+	Limit        int
+	Offset       int
+}
+
+func (f OrderFilter) GetLimit() int {
+	if f.Limit <= 0 {
+		return DefaultLimit
+	}
+	if f.Limit > MaxLimit {
+		return MaxLimit
+	}
+	return f.Limit
+}
+
+func (f OrderFilter) GetOffset() int {
+	if f.Offset < 0 {
+		return 0
+	}
+	return f.Offset
 }

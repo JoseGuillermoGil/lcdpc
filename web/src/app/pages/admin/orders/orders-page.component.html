@@ -4,17 +4,19 @@
   </div>
 
   <div class="filters">
-    <p-select [options]="statusOptions" [(ngModel)]="selectedStatus"
-              optionLabel="label" optionValue="value"
-              placeholder="Todos los estados" [showClear]="true"
-              (onChange)="loadOrders()"></p-select>
-    <p-select [options]="branches()" [(ngModel)]="selectedBranch"
-              optionLabel="name" optionValue="id"
-              placeholder="Todas las sucursales" [showClear]="true"
-              (onChange)="loadOrders()"></p-select>
+      <p-select [options]="statusOptions" [(ngModel)]="selectedStatus"
+                optionLabel="label" optionValue="value"
+                placeholder="Todos los estados" [showClear]="true"
+                (onChange)="applyFilters()"></p-select>
+      <p-select [options]="branches()" [(ngModel)]="selectedBranch"
+                optionLabel="name" optionValue="id"
+                placeholder="Todas las sucursales" [showClear]="true"
+                (onChange)="applyFilters()"></p-select>
   </div>
 
-  <p-table [value]="orders()" styleClass="admin-table" [loading]="loading()">
+  <p-table [value]="orders()" [lazy]="true" [paginator]="true"
+           [rows]="pageSize" [totalRecords]="totalCount()" [loading]="loading()"
+           (onLazyLoad)="loadOrders($event)" styleClass="admin-table">
     <ng-template pTemplate="header">
       <tr>
         <th>ID</th>
