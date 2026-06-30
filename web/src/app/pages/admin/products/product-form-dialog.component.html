@@ -1,47 +1,47 @@
 <p-dialog [header]="isEditMode ? 'Editar Producto' : 'Nuevo Producto'"
           [visible]="visible" (visibleChange)="visibleChange.emit($event)"
-          [modal]="true" [dismissableMask]="true" [style]="{width: '650px'}"
+          [modal]="true" [dismissableMask]="true" [draggable]="false" [style]="{width: '650px'}"
           [contentStyle]="{'max-height': '70vh', 'overflow': 'auto'}"
           (onHide)="close()">
-  <div class="product-form">
+  <div class="form-fields" [style]="{paddingTop: '20px'}">
     <div class="field">
       <p-floatlabel>
-        <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" />
+        <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" placeholder=" " />
         <label for="name">Nombre *</label>
       </p-floatlabel>
     </div>
 
     <div class="field">
       <p-floatlabel>
-        <input pInputText id="sku" [(ngModel)]="form.sku" [class.ng-invalid]="submitted && !form.sku" style="width: 100%" />
+        <input pInputText id="sku" [(ngModel)]="form.sku" [class.ng-invalid]="submitted && !form.sku" style="width: 100%" placeholder=" " />
         <label for="sku">SKU *</label>
-      </p-floatlabel>
-    </div>
-
-    <div class="field">
-      <p-floatlabel>
-        <input pInputText id="commercialType" [(ngModel)]="form.wholesale_commercial_type" style="width: 100%" />
-        <label for="commercialType">Tipo Comercial *</label>
       </p-floatlabel>
     </div>
 
     <div class="field-row">
       <div class="field">
+        <p-select id="brand" [options]="brands()" [(ngModel)]="form.brand_id"
+                  optionLabel="label" optionValue="value" placeholder="Marca *"
+                  [showClear]="false" [style]="{'width':'100%'}" />
+      </div>
+      <div class="field">
         <p-select id="category" [options]="categoryStore.categoryOptions()" [(ngModel)]="form.category_id"
                   optionLabel="label" optionValue="value" placeholder="Categoría"
                   [showClear]="true" [style]="{'width':'100%'}" />
       </div>
+    </div>
+
+    <div class="field-row">
       <div class="field">
         <p-select id="branch" [options]="branches()" [(ngModel)]="form.branch_id"
                   optionLabel="label" optionValue="value" placeholder="Sucursal"
                   [showClear]="true" [style]="{'width':'100%'}" />
       </div>
-    </div>
-
-    <div class="field">
-      <p-select id="baseUnit" [options]="measurementUnits()" [(ngModel)]="form.base_unit_id"
-                optionLabel="label" optionValue="value" placeholder="Unidad base"
-                [showClear]="true" [style]="{'width':'100%'}" (onChange)="onBaseUnitChange()" />
+      <div class="field">
+        <p-select id="baseUnit" [options]="measurementUnits()" [(ngModel)]="form.base_unit_id"
+                  optionLabel="label" optionValue="value" placeholder="Unidad base"
+                  [showClear]="true" [style]="{'width':'100%'}" (onChange)="onBaseUnitChange()" />
+      </div>
     </div>
 
     <div class="field">
@@ -85,8 +85,8 @@
                       [showClear]="true" [style]="{'width':'100%'}" appendTo="body" />
           </div>
           <div class="field">
-            <p-inputNumber [(ngModel)]="price.amount" [min]="0" placeholder="Monto"
-                           [style]="{'width':'100%'}" />
+            <p-inputNumber [(ngModel)]="price.amount" [min]="0" [minFractionDigits]="2" [maxFractionDigits]="4"
+                           placeholder="Monto" [style]="{'width':'100%'}" />
           </div>
         </div>
       }

@@ -27,7 +27,7 @@ export class DashboardPageComponent implements OnInit {
 
   ngOnInit(): void {
     forkJoin({
-      products: this.productApi.list({ limit: 1 }),
+      products: this.productApi.list({ limit: 1, is_active: true }),
       bundles: this.bundleApi.list({ limit: 1 }),
       orders: this.orderApi.list({ limit: 100 }),
       pendingOrders: this.orderApi.list({ limit: 100, status: 'PENDING_REVIEW' }),

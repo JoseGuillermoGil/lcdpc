@@ -1,3 +1,19 @@
+export interface BranchSchedule {
+  id: string;
+  branchId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  createdAtUtc: string;
+  updatedAtUtc: string;
+}
+
+export interface CreateScheduleRequest {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
 export interface Branch {
   id: string;
   storeName: string;
@@ -5,7 +21,7 @@ export interface Branch {
   address: string;
   contactPhone: string;
   secondaryContactPhone: string | null;
-  businessHours: string;
+  schedules: BranchSchedule[];
   createdAtUtc: string;
   updatedAtUtc: string;
 }
@@ -16,5 +32,5 @@ export interface CreateBranchRequest {
   address: string;
   contact_phone: string;
   secondary_contact_phone?: string;
-  business_hours: string;
+  schedules: CreateScheduleRequest[];
 }

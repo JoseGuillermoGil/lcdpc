@@ -28,7 +28,6 @@
         <th>Nombre</th>
         <th>SKU</th>
         <th>Categoria</th>
-        <th>Medida</th>
         <th style="width: 80px">Activo</th>
         <th style="width: 120px">Acciones</th>
       </tr>
@@ -42,7 +41,6 @@
         <td>{{ product.name }}</td>
         <td><code>{{ product.sku }}</code></td>
         <td>{{ getCategoryName(product.categoryId) }}</td>
-        <td>{{ product.baseMeasureType }}</td>
         <td>
           <p-tag [value]="product.isActive ? 'Activo' : 'Inactivo'"
                  [severity]="product.isActive ? 'success' : 'danger'" />
@@ -51,6 +49,15 @@
           @if (canUpdate()) {
             <p-button icon="pi pi-pencil" [text]="true" [rounded]="true"
                       (onClick)="openEditDialog(product)" pTooltip="Editar"></p-button>
+          }
+          @if (canUpdate()) {
+            @if (product.isActive) {
+              <p-button icon="pi pi-eye-slash" [text]="true" [rounded]="true" severity="danger"
+                        (onClick)="toggleActive(product)" pTooltip="Desactivar"></p-button>
+            } @else {
+              <p-button icon="pi pi-eye" [text]="true" [rounded]="true" severity="success"
+                        (onClick)="toggleActive(product)" pTooltip="Activar"></p-button>
+            }
           }
           @if (canDelete()) {
             <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger"
@@ -61,7 +68,7 @@
     </ng-template>
     <ng-template pTemplate="emptymessage">
       <tr>
-        <td colspan="7" class="empty-state">No hay productos registrados</td>
+        <td colspan="6" class="empty-state">No hay productos registrados</td>
       </tr>
     </ng-template>
   </p-table>

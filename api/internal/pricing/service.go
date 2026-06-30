@@ -20,41 +20,41 @@ func NewService(pool *pgxpool.Pool) *Service {
 // Product
 
 type Product struct {
-	ProductID               uuid.UUID  `json:"product_id"`
-	Name                    string     `json:"name"`
-	Sku                     string     `json:"sku"`
-	WholesaleCommercialType string     `json:"wholesale_commercial_type"`
-	IsActive                bool       `json:"is_active"`
-	Img                     *string    `json:"img"`
-	CategoryID              *uuid.UUID `json:"category_id"`
-	BranchID                *uuid.UUID `json:"branch_id"`
-	BaseUnitID              *uuid.UUID `json:"base_unit_id"`
-	Stock                   int        `json:"stock"`
-	StockAvailable          int        `json:"stock_available"`
-	StockBlocked            int        `json:"stock_blocked"`
+	ProductID      uuid.UUID  `json:"product_id"`
+	Name           string     `json:"name"`
+	Sku            string     `json:"sku"`
+	IsActive       bool       `json:"is_active"`
+	Img            *string    `json:"img"`
+	BrandID        uuid.UUID  `json:"brand_id"`
+	CategoryID     *uuid.UUID `json:"category_id"`
+	BranchID       *uuid.UUID `json:"branch_id"`
+	BaseUnitID     *uuid.UUID `json:"base_unit_id"`
+	Stock          int        `json:"stock"`
+	StockAvailable int        `json:"stock_available"`
+	StockBlocked   int        `json:"stock_blocked"`
 }
 
 type CreateProductRequest struct {
-	Name                    string     `json:"name" validate:"required"`
-	Sku                     string     `json:"sku" validate:"required"`
-	WholesaleCommercialType string     `json:"wholesale_commercial_type" validate:"required"`
-	Img                     *string    `json:"img"`
-	CategoryID              *uuid.UUID `json:"category_id"`
-	BranchID                *uuid.UUID `json:"branch_id"`
-	BaseUnitID              *uuid.UUID `json:"base_unit_id"`
-	Stock                   *int       `json:"stock"`
-	StockAvailable          *int       `json:"stock_available"`
-	StockBlocked            *int       `json:"stock_blocked"`
+	Name        string     `json:"name" validate:"required"`
+	Sku         string     `json:"sku" validate:"required"`
+	Img         *string    `json:"img"`
+	BrandID     uuid.UUID  `json:"brand_id" validate:"required"`
+	CategoryID  *uuid.UUID `json:"category_id"`
+	BranchID    *uuid.UUID `json:"branch_id"`
+	BaseUnitID  *uuid.UUID `json:"base_unit_id"`
+	Stock       *int       `json:"stock"`
+	StockAvailable *int    `json:"stock_available"`
+	StockBlocked   *int    `json:"stock_blocked"`
 }
 
 func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (*Product, error) {
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO products (product_id, name, sku, wholesale_commercial_type, is_active, img, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked)
-		VALUES ($1, $2, $3, $4, true, $5, $6, $7, $8, COALESCE($9, 0), COALESCE($10, 0), COALESCE($11, 0))
-		RETURNING product_id, name, sku, wholesale_commercial_type, is_active, img, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
-	`, uuid.New(), req.Name, req.Sku, req.WholesaleCommercialType, req.Img, req.CategoryID, req.BranchID, req.BaseUnitID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
-		&p.ProductID, &p.Name, &p.Sku, &p.WholesaleCommercialType, &p.IsActive, &p.Img, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked,
+		INSERT INTO products (product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked)
+		VALUES ($1, $2, $3, true, $4, $5, $6, $7, $8, COALESCE($9, 0), COALESCE($10, 0), COALESCE($11, 0))
+		RETURNING product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
+	`, uuid.New(), req.Name, req.Sku, req.Img, req.BrandID, req.CategoryID, req.BranchID, req.BaseUnitID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
+		&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create product: %w", err)
@@ -65,9 +65,9 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 func (s *Service) GetProductByID(ctx context.Context, id uuid.UUID) (*Product, error) {
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT product_id, name, sku, wholesale_commercial_type, is_active, img, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
+		SELECT product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
 		FROM products WHERE product_id = $1
-	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.WholesaleCommercialType, &p.IsActive, &p.Img, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked)
+	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
 	}
@@ -84,7 +84,7 @@ func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]
 	}
 
 	countQuery := `SELECT COUNT(*) FROM products WHERE 1=1`
-	dataQuery := `SELECT product_id, name, sku, wholesale_commercial_type, is_active, img, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked FROM products WHERE 1=1`
+	dataQuery := `SELECT product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked FROM products WHERE 1=1`
 	var args []interface{}
 	argIdx := 1
 
@@ -142,7 +142,7 @@ func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]
 	products := make([]Product, 0)
 	for rows.Next() {
 		var p Product
-		if err := rows.Scan(&p.ProductID, &p.Name, &p.Sku, &p.WholesaleCommercialType, &p.IsActive, &p.Img, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked); err != nil {
+		if err := rows.Scan(&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked); err != nil {
 			return nil, 0, fmt.Errorf("scan product: %w", err)
 		}
 		products = append(products, p)
@@ -153,11 +153,11 @@ func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]
 func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreateProductRequest) (*Product, error) {
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
-		UPDATE products SET name = $2, sku = $3, wholesale_commercial_type = $4, img = $5, category_id = $6, branch_id = $7, base_unit_id = $8, stock = $9, stock_available = $10, stock_blocked = $11
+		UPDATE products SET name = $2, sku = $3, img = $4, brand_id = $5, category_id = $6, branch_id = $7, base_unit_id = $8, stock = $9, stock_available = $10, stock_blocked = $11
 		WHERE product_id = $1
-		RETURNING product_id, name, sku, wholesale_commercial_type, is_active, img, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
-	`, id, req.Name, req.Sku, req.WholesaleCommercialType, req.Img, req.CategoryID, req.BranchID, req.BaseUnitID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
-		&p.ProductID, &p.Name, &p.Sku, &p.WholesaleCommercialType, &p.IsActive, &p.Img, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked,
+		RETURNING product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
+	`, id, req.Name, req.Sku, req.Img, req.BrandID, req.CategoryID, req.BranchID, req.BaseUnitID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
+		&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update product: %w", err)
@@ -171,6 +171,22 @@ func (s *Service) DeleteProduct(ctx context.Context, id uuid.UUID) error {
 		return fmt.Errorf("delete product: %w", err)
 	}
 	return nil
+}
+
+func (s *Service) ToggleProductActive(ctx context.Context, id uuid.UUID) (*Product, error) {
+	p := &Product{}
+	err := s.pool.QueryRow(ctx, `
+		UPDATE products SET is_active = NOT is_active
+		WHERE product_id = $1
+		RETURNING product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
+	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("toggle product active: %w", err)
+	}
+	return p, nil
 }
 
 func (s *Service) UpdateProductImage(ctx context.Context, id uuid.UUID, img string) (string, error) {

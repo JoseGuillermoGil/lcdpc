@@ -17,6 +17,7 @@ import { ProductApiService } from '../../../core/services/product-api.service';
 import { PriceApiService } from '../../../core/services/price-api.service';
 import { ConversionFactorApiService } from '../../../core/services/conversion-factor-api.service';
 import { BranchApiService } from '../../../core/services/branch-api.service';
+import { BrandApiService } from '../../../core/services/brand-api.service';
 import { MeasurementUnitApiService } from '../../../core/services/measurement-unit-api.service';
 import { PriceCategoryApiService } from '../../../core/services/price-category-api.service';
 import { CategoryStore } from '../../../core/stores/category.store';
@@ -56,12 +57,14 @@ export class ProductFormDialogComponent implements OnChanges {
   private readonly priceApi = inject(PriceApiService);
   private readonly conversionApi = inject(ConversionFactorApiService);
   private readonly branchApi = inject(BranchApiService);
+  private readonly brandApi = inject(BrandApiService);
   private readonly unitApi = inject(MeasurementUnitApiService);
   private readonly priceCategoryApi = inject(PriceCategoryApiService);
   readonly categoryStore = inject(CategoryStore);
 
   protected readonly saving = signal(false);
   protected readonly branches = signal<{ label: string; value: string }[]>([]);
+  protected readonly brands = signal<{ label: string; value: string }[]>([]);
   protected readonly allUnits = signal<MeasurementUnit[]>([]);
   protected readonly measurementUnits = signal<{ label: string; value: string }[]>([]);
   protected readonly priceCategories = signal<{ label: string; value: string }[]>([]);
@@ -118,7 +121,7 @@ export class ProductFormDialogComponent implements OnChanges {
         this.form = {
           name: this.product.name,
           sku: this.product.sku,
-          wholesale_commercial_type: this.product.wholesaleCommercialType,
+          brand_id: this.product.brandId,
           category_id: this.product.categoryId,
           branch_id: this.product.branchId,
           base_unit_id: this.product.baseUnitId,
@@ -141,11 +144,13 @@ export class ProductFormDialogComponent implements OnChanges {
   private loadData(): void {
     forkJoin({
       branches: this.branchApi.list(),
+      brands: this.brandApi.list(),
       units: this.unitApi.list(),
       categories: this.priceCategoryApi.list(),
     }).subscribe({
-      next: ({ branches, units, categories }) => {
+      next: ({ branches, brands, units, categories }) => {
         this.branches.set(branches.map((b) => ({ label: b.storeName, value: b.id })));
+        this.brands.set(brands.map((b) => ({ label: b.name, value: b.id })));
         this.allUnits.set(units);
         this.measurementUnits.set(units.map((u) => ({
           label: u.symbol ? `${u.name} (${u.symbol})` : u.name,
@@ -261,7 +266,7 @@ export class ProductFormDialogComponent implements OnChanges {
 
   save(): void {
     this.submitted = true;
-    if (!this.form.name || !this.form.sku || !this.form.wholesale_commercial_type) {
+    if (!this.form.name || !this.form.sku) {
       return;
     }
 
@@ -379,7 +384,7 @@ export class ProductFormDialogComponent implements OnChanges {
     return {
       name: '',
       sku: '',
-      wholesale_commercial_type: '',
+      brand_id: '',
       category_id: null,
       branch_id: null,
       base_unit_id: null,

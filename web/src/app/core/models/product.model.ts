@@ -2,9 +2,9 @@ export interface Product {
   productId: string;
   name: string;
   sku: string;
-  wholesaleCommercialType: string;
   isActive: boolean;
   img: string | null;
+  brandId: string;
   categoryId: string | null;
   branchId: string | null;
   stock: number;
@@ -16,8 +16,8 @@ export interface Product {
 export interface CreateProductRequest {
   name: string;
   sku: string;
-  wholesale_commercial_type: string;
   img?: string | null;
+  brand_id: string;
   category_id?: string | null;
   branch_id?: string | null;
   stock?: number;

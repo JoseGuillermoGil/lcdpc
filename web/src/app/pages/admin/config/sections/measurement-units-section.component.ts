@@ -32,9 +32,11 @@ export class MeasurementUnitsSectionComponent implements OnInit {
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
 
+  protected readonly canRead = computed(() => this.authStore.hasPermission('measurement_unit:view'));
   protected readonly canCreate = computed(() => this.authStore.hasPermission('measurement_unit:create'));
   protected readonly canUpdate = computed(() => this.authStore.hasPermission('measurement_unit:update'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('measurement_unit:delete'));
+  protected readonly canModify = computed(() => this.canUpdate() || this.canDelete());
 
   protected readonly items = signal<MeasurementUnit[]>([]);
   protected readonly classifications = signal<MeasurementUnitClassification[]>([]);

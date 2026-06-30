@@ -20,24 +20,24 @@ import { MeasurementUnitApiService } from '../../../../core/services/measurement
   template: `
     <p-dialog [header]="isEditMode ? 'Editar Unidad de Medida' : 'Nueva Unidad de Medida'"
               [visible]="visible" (visibleChange)="visibleChange.emit($event)"
-              [modal]="true" [dismissableMask]="true" [style]="{width: 'min(500px, 95vw)'}"
+              [modal]="true" [dismissableMask]="true" [draggable]="false" [style]="{width: 'min(500px, 95vw)'}"
               (onHide)="close()">
-      <div class="form-fields">
+      <div class="form-fields" [style]="{paddingTop: '20px'}">
         <div class="field">
           <p-floatlabel>
-            <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" />
+            <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" placeholder=" " />
             <label for="name">Nombre *</label>
           </p-floatlabel>
         </div>
         <div class="field">
           <p-floatlabel>
-            <input pInputText id="code" [(ngModel)]="form.code" [class.ng-invalid]="submitted && !form.code" style="width: 100%" />
+            <input pInputText id="code" [(ngModel)]="form.code" [class.ng-invalid]="submitted && !form.code" style="width: 100%" placeholder=" " />
             <label for="code">Codigo *</label>
           </p-floatlabel>
         </div>
         <div class="field">
           <p-floatlabel>
-            <input pInputText id="symbol" [(ngModel)]="form.symbol" style="width: 100%" />
+            <input pInputText id="symbol" [(ngModel)]="form.symbol" style="width: 100%" placeholder=" " />
             <label for="symbol">Simbolo</label>
           </p-floatlabel>
         </div>
@@ -54,7 +54,7 @@ import { MeasurementUnitApiService } from '../../../../core/services/measurement
       </ng-template>
     </p-dialog>
   `,
-  styles: [`.form-fields { display: flex; flex-direction: column; gap: 1.25rem; } .field { display: flex; flex-direction: column; gap: 0.25rem; }`],
+  styles: [`.form-fields { display: flex; flex-direction: column; gap: 1.75rem; } .field { display: flex; flex-direction: column; gap: 0.25rem; }`],
 })
 export class MeasurementUnitFormDialogComponent implements OnChanges {
   @Input() visible = false;

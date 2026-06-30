@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { InputTextModule } from 'primeng/inputtext';
-import { InputNumberModule } from 'primeng/inputnumber';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { Category, CreateCategoryRequest } from '../../../../core/models/category.model';
 import { CategoryApiService } from '../../../../core/services/category-api.service';
@@ -14,30 +13,24 @@ import { CategoryApiService } from '../../../../core/services/category-api.servi
   standalone: true,
   imports: [
     CommonModule, FormsModule, ButtonModule, DialogModule,
-    InputTextModule, InputNumberModule, FloatLabelModule,
+    InputTextModule, FloatLabelModule,
   ],
   template: `
     <p-dialog [header]="isEditMode ? 'Editar Categoria' : 'Nueva Categoria'"
               [visible]="visible" (visibleChange)="visibleChange.emit($event)"
               [modal]="true" [dismissableMask]="true" [style]="{width: 'min(500px, 95vw)'}"
-              (onHide)="close()">
-      <div class="form-fields">
+              (onHide)="close()" [draggable]="false">
+      <div class="form-fields" [style]="{paddingTop: '20px'}">
         <div class="field">
           <p-floatlabel>
-            <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" />
+            <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" placeholder=" " />
             <label for="name">Nombre *</label>
           </p-floatlabel>
         </div>
         <div class="field">
           <p-floatlabel>
-            <input pInputText id="slug" [(ngModel)]="form.slug" [class.ng-invalid]="submitted && !form.slug" style="width: 100%" />
+            <input pInputText id="slug" [(ngModel)]="form.slug" [class.ng-invalid]="submitted && !form.slug" style="width: 100%" placeholder=" " />
             <label for="slug">Slug *</label>
-          </p-floatlabel>
-        </div>
-        <div class="field">
-          <p-floatlabel>
-            <p-inputNumber id="sort" [(ngModel)]="form.sort_order" [style]="{'width':'100%'}" />
-            <label for="sort">Orden</label>
           </p-floatlabel>
         </div>
       </div>
@@ -48,7 +41,7 @@ import { CategoryApiService } from '../../../../core/services/category-api.servi
       </ng-template>
     </p-dialog>
   `,
-  styles: [`.form-fields { display: flex; flex-direction: column; gap: 1.25rem; } .field { display: flex; flex-direction: column; gap: 0.25rem; }`],
+  styles: [`.form-fields { display: flex; flex-direction: column; gap: 1.75rem; } .field { display: flex; flex-direction: column; gap: 0.25rem; }`],
 })
 export class CategoryFormDialogComponent implements OnChanges {
   @Input() visible = false;
@@ -62,7 +55,7 @@ export class CategoryFormDialogComponent implements OnChanges {
 
   protected readonly saving = signal(false);
   protected submitted = false;
-  protected form: CreateCategoryRequest & { is_active?: boolean } = this.emptyForm();
+  protected form: CreateCategoryRequest = this.emptyForm();
 
   protected get isEditMode(): boolean {
     return this.category !== null;
@@ -74,8 +67,6 @@ export class CategoryFormDialogComponent implements OnChanges {
         this.form = {
           name: this.category.name,
           slug: this.category.slug,
-          sort_order: this.category.sortOrder,
-          is_active: this.category.isActive,
         };
       } else {
         this.form = this.emptyForm();
@@ -104,6 +95,6 @@ export class CategoryFormDialogComponent implements OnChanges {
   }
 
   private emptyForm() {
-    return { name: '', slug: '', sort_order: 0, is_active: true };
+    return { name: '', slug: '' };
   }
 }

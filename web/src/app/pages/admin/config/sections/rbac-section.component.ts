@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, input, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { TableModule } from 'primeng/table';
@@ -11,6 +11,7 @@ import { SelectModule } from 'primeng/select';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
+import { TabsModule } from 'primeng/tabs';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AuthStore } from '../../../../core/auth/auth.store';
 import { RbacApiService } from '../../../../core/services/rbac-api.service';
@@ -26,6 +27,7 @@ import {
     CommonModule, FormsModule, ButtonModule, TableModule,
     TagModule, DialogModule, InputTextModule, FloatLabelModule,
     SelectModule, ConfirmDialogModule, ToastModule, TooltipModule,
+    TabsModule,
   ],
   providers: [ConfirmationService, MessageService],
   templateUrl: './rbac-section.component.html',
@@ -40,8 +42,6 @@ export class RbacSectionComponent implements OnInit {
   protected readonly canCreate = computed(() => this.authStore.hasPermission('rbac:resource:create'));
   protected readonly canUpdate = computed(() => this.authStore.hasPermission('rbac:resource:update'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('rbac:resource:delete'));
-
-  readonly activeTab = input<string>('profiles', { alias: 'activeTab' });
 
   // Resources
   protected readonly resources = signal<Resource[]>([]);

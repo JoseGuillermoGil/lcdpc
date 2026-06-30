@@ -15,9 +15,9 @@ interface ProductGoData {
   product_id: string;
   name: string;
   sku: string;
-  wholesale_commercial_type: string;
   is_active: boolean;
   img: string | null;
+  brand_id: string;
   category_id: string | null;
   branch_id: string | null;
   stock: number;
@@ -73,36 +73,26 @@ export class ProductApiService {
   }
 
   create(req: CreateProductRequest, file?: File): Observable<Product> {
+    const formData = new FormData();
+    formData.append('data', JSON.stringify(req));
     if (file) {
-      const formData = new FormData();
-      formData.append('data', JSON.stringify(req));
       formData.append('file', file);
-      return this.http
-        .post<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/`, formData, {
-          withCredentials: true,
-        })
-        .pipe(map((res) => this.map(res.data)));
     }
     return this.http
-      .post<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/`, req, {
+      .post<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/`, formData, {
         withCredentials: true,
       })
       .pipe(map((res) => this.map(res.data)));
   }
 
   update(id: string, req: CreateProductRequest, file?: File): Observable<Product> {
+    const formData = new FormData();
+    formData.append('data', JSON.stringify(req));
     if (file) {
-      const formData = new FormData();
-      formData.append('data', JSON.stringify(req));
       formData.append('file', file);
-      return this.http
-        .put<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/${id}`, formData, {
-          withCredentials: true,
-        })
-        .pipe(map((res) => this.map(res.data)));
     }
     return this.http
-      .put<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/${id}`, req, {
+      .put<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/${id}`, formData, {
         withCredentials: true,
       })
       .pipe(map((res) => this.map(res.data)));
@@ -114,6 +104,14 @@ export class ProductApiService {
         withCredentials: true,
       })
       .pipe(map(() => undefined));
+  }
+
+  toggleActive(id: string): Observable<Product> {
+    return this.http
+      .patch<JsendEnvelope<ProductGoData>>(`${this.baseUrl}/api/v1/products/${id}/toggle-active`, {}, {
+        withCredentials: true,
+      })
+      .pipe(map((res) => this.map(res.data)));
   }
 
   updateImage(id: string, file: File): Observable<{ img: string }> {
@@ -139,9 +137,9 @@ export class ProductApiService {
       productId: raw.product_id,
       name: raw.name,
       sku: raw.sku,
-      wholesaleCommercialType: raw.wholesale_commercial_type,
       isActive: raw.is_active,
       img: raw.img,
+      brandId: raw.brand_id,
       categoryId: raw.category_id,
       branchId: raw.branch_id,
       stock: raw.stock,

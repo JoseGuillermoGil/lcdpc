@@ -29,9 +29,11 @@ export class PriceCategoriesSectionComponent implements OnInit {
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
 
+  protected readonly canRead = computed(() => this.authStore.hasPermission('price_category:view'));
   protected readonly canCreate = computed(() => this.authStore.hasPermission('price_category:create'));
   protected readonly canUpdate = computed(() => this.authStore.hasPermission('price_category:update'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('price_category:delete'));
+  protected readonly canModify = computed(() => this.canUpdate() || this.canDelete());
 
   protected readonly items = signal<PriceCategory[]>([]);
   protected readonly loading = signal(false);

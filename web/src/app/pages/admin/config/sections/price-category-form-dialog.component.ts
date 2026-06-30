@@ -18,18 +18,18 @@ import { PriceCategoryApiService } from '../../../../core/services/price-categor
   template: `
     <p-dialog [header]="isEditMode ? 'Editar Categoria de Precio' : 'Nueva Categoria de Precio'"
               [visible]="visible" (visibleChange)="visibleChange.emit($event)"
-              [modal]="true" [dismissableMask]="true" [style]="{width: 'min(500px, 95vw)'}"
-              (onHide)="close()">
-      <div class="form-fields">
+              [modal]="true" [dismissableMask]="true" [style]="{width: 'min(500px, 95vw)', paddingTop: '20px'}"
+              (onHide)="close()" [draggable]="false">
+      <div class="form-fields" [style]="{paddingTop: '20px'}">
         <div class="field">
           <p-floatlabel>
-            <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" />
+            <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" placeholder=" " />
             <label for="name">Nombre *</label>
           </p-floatlabel>
         </div>
         <div class="field">
           <p-floatlabel>
-            <input pInputText id="code" [(ngModel)]="form.code" [class.ng-invalid]="submitted && !form.code" style="width: 100%" />
+            <input pInputText id="code" [(ngModel)]="form.code" [class.ng-invalid]="submitted && !form.code" style="width: 100%" placeholder=" " />
             <label for="code">Codigo *</label>
           </p-floatlabel>
         </div>
@@ -41,7 +41,7 @@ import { PriceCategoryApiService } from '../../../../core/services/price-categor
       </ng-template>
     </p-dialog>
   `,
-  styles: [`.form-fields { display: flex; flex-direction: column; gap: 1.25rem; } .field { display: flex; flex-direction: column; gap: 0.25rem; }`],
+  styles: [`.form-fields { display: flex; flex-direction: column; gap: 1.75rem; } .field { display: flex; flex-direction: column; gap: 0.25rem; }`],
 })
 export class PriceCategoryFormDialogComponent implements OnChanges {
   @Input() visible = false;

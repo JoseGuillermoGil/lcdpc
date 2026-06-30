@@ -3,7 +3,6 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { TableModule } from 'primeng/table';
-import { TagModule } from 'primeng/tag';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
@@ -17,7 +16,7 @@ import { CategoryFormDialogComponent } from './category-form-dialog.component';
   selector: 'app-categories-section',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, ButtonModule, TableModule, TagModule,
+    CommonModule, FormsModule, ButtonModule, TableModule,
     ConfirmDialogModule, ToastModule, TooltipModule,
     CategoryFormDialogComponent,
   ],
@@ -30,9 +29,11 @@ export class CategoriesSectionComponent implements OnInit {
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
 
+  protected readonly canRead = computed(() => this.authStore.hasPermission('category:view'));
   protected readonly canCreate = computed(() => this.authStore.hasPermission('category:create'));
   protected readonly canUpdate = computed(() => this.authStore.hasPermission('category:update'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('category:delete'));
+  protected readonly canModify = computed(() => this.canUpdate() || this.canDelete());
 
   protected readonly categories = signal<Category[]>([]);
   protected readonly loading = signal(false);
@@ -68,20 +69,6 @@ export class CategoriesSectionComponent implements OnInit {
       this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Categoria guardada' });
       this.load();
     }
-  }
-
-  toggleActive(category: Category): void {
-    this.categoryApi.update(category.categoryId, {
-      name: category.name,
-      slug: category.slug,
-      sort_order: category.sortOrder,
-      is_active: !category.isActive,
-    }).subscribe({
-      next: () => {
-        this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Estado actualizado' });
-        this.load();
-      },
-    });
   }
 
   confirmDelete(category: Category): void {

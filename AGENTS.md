@@ -44,6 +44,8 @@ High-signal guidance for OpenCode sessions in this repo.
 - CORS must keep `AllowCredentials()` for auth to work cross-origin.
 - Seeders run on startup (superuser, oauth2 client, api token). Do not introduce migration runners unless asked.
 - API responses use JSend format (`{"status":"success","data":{}}`).
+- All `code` fields (brands, categories, price_categories, measurement_units, etc.) must be UPPERCASE. The only exception is RBAC permission codes (`resource:action`), which are lowercase.
+- If a user lacks permission for an action, module, or view, the corresponding button, menu item, or page access must not be rendered in the frontend. Use `computed()` + `authStore.hasPermission()` to gate visibility.
 
 ## Backend facts agents often guess wrong
 
@@ -113,11 +115,50 @@ High-signal guidance for OpenCode sessions in this repo.
 - Public GET routes at top level.
 - Authenticated routes: `PASETOAuth → RequireAuth → RequirePermission(store, "resource:action")`.
 - Route structure: `/api/v1/{resource}/` for CRUD.
+- Toggle endpoints (e.g., activate/deactivate) use `PATCH /{id}/toggle-action` with a dedicated service method that flips the boolean via `NOT is_active` in SQL. Never send the full entity to toggle a single field.
 
 ### RBAC
 - Resources are code-based permissions (e.g., `product:create`, `bundle:update`).
 - `RequirePermission(rbacStore, "resource:action")` middleware for protected endpoints.
 - New resources must be seeded in migrations.
+
+#### Permission matrix
+
+| Resource | create | view | update | delete | Extra |
+|---|---|---|---|---|---|
+| `product` | ✅ | ✅ | ✅ | ✅ | |
+| `bundle` | ✅ | ✅ | ✅ | ✅ | `publish`, `pause` |
+| `price` | ✅ | ✅ | ✅ | ✅ | |
+| `brand` | ✅ | ✅ | ✅ | ✅ | |
+| `category` | ✅ | ✅ | ✅ | ✅ | |
+| `price_category` | ✅ | ✅ | ✅ | ✅ | |
+| `measurement_unit` | ✅ | ✅ | ✅ | ✅ | |
+| `branch` | ✅ | ✅ | — | — | |
+| `staff` | ✅ | ✅ | ✅ | ✅ | |
+| `order` | ✅ | ✅ | ✅ | ✅ | `status:change` |
+| `rbac:resource` | ✅ | ✅ | ✅ | ✅ | |
+| `rbac:role` | ✅ | ✅ | ✅ | ✅ | |
+| `rbac:profile` | ✅ | ✅ | ✅ | ✅ | |
+| `rbac:user` | — | — | ✅ | — | |
+| `security-policy` | — | ✅ | ✅ | — | |
+
+#### Route → permission mapping
+
+- **Products**: GET public, POST `product:create`, PUT `product:update`, DELETE `product:delete`
+- **Bundles**: GET public, POST `bundle:create`, publish `bundle:publish`, pause `bundle:pause`, PUT `bundle:update`, DELETE `bundle:delete`
+- **Prices**: GET public, POST `price:create`, PUT `price:update`, DELETE `price:delete`
+- **Brands**: GET list public, GET by id `brand:view`, POST `brand:create`, PUT `brand:update`, DELETE `brand:delete`
+- **Categories**: GET public, POST `category:create`, PUT `category:update`, DELETE `category:delete`
+- **Price Categories**: GET public, POST `price_category:create`, PUT `price_category:update`, DELETE `price_category:delete`
+- **Measurement Units**: GET public, POST `measurement_unit:create`, PUT `measurement_unit:update`, DELETE `measurement_unit:delete`
+- **Measurement Unit Classifications**: GET public, POST/PUT/DELETE `measurement_unit:create/update/delete`
+- **Conversion Factors**: GET public, POST/PUT/DELETE `measurement_unit:create/update/delete`
+- **Branches**: GET public, POST `branch:create`. Branches have schedules in `branch_schedules` table (day_of_week 0-6 where 0=Lunes, start_time, end_time as TIME). Multiple ranges per day allowed. `business_hours` column was removed in migration 000025.
+- **Staff**: GET public, POST `staff:create`, PUT `staff:update`, DELETE `staff:delete`
+- **Orders**: GET/POST/PUT/DELETE `order:view/create/delete`, status change `order:status:change`
+- **RBAC**: all endpoints require matching `rbac:resource/role/profile:view/create/update/delete`
+- **Auth**: login/register/public, `/me`+`/refresh`+`/logout` auth-only, `/security-policy` PUT `security-policy:update`
+- **Sync**: API Key protected
 
 ### Response format
 - All responses use JSend: `{"status":"success","data":{}}` or `{"status":"error","message":"..."}`.
@@ -137,21 +178,30 @@ High-signal guidance for OpenCode sessions in this repo.
 ```
 web/src/app/
   core/
-    auth/          — auth store, interceptor, init, guards
-    models/        — TypeScript interfaces matching API structs
-    services/      — API services (one per domain)
+    auth/          — auth store, interceptor, init, guards, hasPermission directive
+    models/        — TypeScript interfaces matching API structs (13 files)
+    services/      — API services (one per domain, 12 files)
+    stores/        — domain stores with signals (e.g. CategoryStore)
   pages/           — route-level components
     landing-page/
     search-page/
-    auth-page/
-    register-page/
+    auth-page/     — login + AuthApiService (defines API_BASE_URL token)
+    register-page/ — multi-step OTP registration flow
     admin/
+      admin-layout.component  — collapsible sidebar with permission-gated menu groups
       dashboard/
-      products/
-      bundles/
-      orders/
-      staff/
-  shared/          — reusable UI components
+      products/    — list + form dialog (with prices & conversions sub-forms)
+      bundles/     — list + form dialog (with items sub-form)
+      orders/      — list + detail dialog + status change dialog
+      staff/       — list + form dialog
+      classifications/ — measurement unit classifications CRUD
+      config/      — section-based config page (?section= query param)
+        sections/
+          categories-section
+          price-categories-section
+          measurement-units-section
+          rbac-section (profiles, roles, resources with nested assignment dialogs)
+  shared/          — reusable UI components (PrimeNG-based)
     header/
     footer/
     hero/
@@ -159,7 +209,7 @@ web/src/app/
     catalog-search/
     advanced-search/
     branches/
-  components/      — alternative UI components (legacy)
+  components/      — legacy plain-HTML versions of hero, catalog, branches (no PrimeNG)
 ```
 
 ### Models (`core/models/`)
@@ -213,11 +263,65 @@ web/src/app/
 
 ### Auth
 - PASETO v2.local tokens via HTTP-only cookies.
-- `authInterceptor` handles 401 → refresh → retry.
-- `AuthStore` manages user state with signals.
+- `authInterceptor` handles 401 → refresh → retry. Skips auth endpoints (`/api/v1/auth/login`, `/refresh`, `/register/*`, `/forgot-password`, `/reset-password`).
+- `AuthStore` manages user state with signals: `currentUser`, `permissions`, `isAuthenticated`, `isLoaded`, `expiresAt`.
+- `AuthStore` has `hasPermission(code)` and `hasAnyPermission(...codes)` for RBAC checks, `isExpiringSoon()` for refresh timing.
 - `withCredentials: true` on all authenticated requests.
-- Guards: `adminGuard`, `permissionGuard(code)`.
-- Directive: `hasPermission` for conditional rendering.
+- Guards: `adminGuard` (checks specific admin permission list), `permissionGuard(code)` (single permission), `authGuard` (tries session restore via `me()`).
+- Directive: `hasPermission` for conditional rendering in templates.
+- `API_BASE_URL` injection token is defined in `pages/auth-page/auth-api-go.service.ts`, not in `core/services/`.
+- `AuthApiService` handles login, logout, refresh, me, and multi-step registration (start → verify-email → complete).
+- `initializeAuth()` factory in `core/auth/auth-init.ts` runs as `APP_INITIALIZER` to restore session on app boot.
+
+### Stores (`core/stores/`)
+- Domain stores manage read-only data caches with signals.
+- `CategoryStore` — loads categories once, provides `categoryMap`, `categoryOptions`, `filterOptions`, `getCategoryName(id)`.
+- Pattern: `signal()` for data, `computed()` for derived state, `load()` with dedup (`loaded` flag).
+- Used by both `pages/` and `shared/` components.
+
+### Config page pattern (`pages/admin/config/`)
+- Section-based admin page navigated via `?section=` query param.
+- Two groups: `rbac` (profiles, roles, resources) and `inventario` (categories, price-categories, measurement-units).
+- Permission-gated visibility per group.
+- Each section is a standalone component in `config/sections/`.
+- Sections that manage entities use a table + form dialog pattern.
+- RBAC section manages three entities (resources, roles, profiles) with nested assignment dialogs (assign resource→role, assign role→profile).
+
+### Form dialog pattern
+- Reusable dialog components with `@Input() visible`, `@Input() item/entity`, `@Output() saved`, `@Output() closed`.
+- Implements `OnChanges` to reset/populate form on visibility change.
+- `isEditMode` getter checks if `item` input is set.
+- `saving` signal for loading state during save.
+- Calls parent `saved.emit()` on success, parent reloads list and shows toast.
+- Inline templates for simple dialogs (categories, price-categories, measurement-units, classifications, staff).
+- Separate HTML templates for complex dialogs (products, bundles, orders).
+
+#### Form dialog styling standards
+- Dialog padding-top: always add `paddingTop: '20px'` to dialog `[style]` so the first floatlabel is visible.
+- Floatlabel inputs: every `p-floatlabel` input must have `placeholder=" "` (space) so PrimeNG detects pre-filled values via `ngModel`.
+- Vertical gap: `.form-fields` uses `gap: 1.75rem` between fields for comfortable label spacing.
+
+### Admin CRUD page pattern
+- Each admin page: list component + form dialog component.
+- List component injects: `AuthStore` (permissions), domain API service, `CategoryStore` (if needed), `ConfirmationService`, `MessageService`.
+- Permission signals: `canCreate`, `canUpdate`, `canDelete` via `computed()` + `authStore.hasPermission()`.
+- Table data loaded via signal, with `loadItems(event)` for pagination.
+- Filters: component properties + `applyFilters()` method.
+- Delete: `confirmDelete()` using PrimeNG `ConfirmationService`.
+- Toast messages via `MessageService` (Spanish: "Exito", "Error").
+- All `ConfirmationService` and `MessageService` provided locally in component `providers: []`.
+
+### Order status flow
+- `PENDING_REVIEW` → `APPROVED` | `REJECTED` | `CANCELLED`
+- `APPROVED` → `IN_PREPARATION` | `CANCELLED`
+- `IN_PREPARATION` → `READY`
+- `READY` → `DELIVERED`
+- Status transitions managed in `orders-page.component.ts` with a dialog.
+
+### Bundle status flow
+- `Draft` → `Published` (via `bundleApi.publish()`)
+- `Published` → `Paused` (via `bundleApi.pause()`)
+- Status displayed with PrimeNG `p-tag`: Draft=info, Published=success, Paused=warn.
 
 ---
 
@@ -243,7 +347,7 @@ web/src/app/
 - Preset: `Aura` (configured in `app.config.ts`)
 - Prefix: `p`
 - Dark mode: disabled (`darkModeSelector: 'none'`)
-- Components used: `p-card`, `p-tag`, `p-button`, `p-select`, `p-inputgroup`, `p-inputtext`, `p-stepper`, `p-floatlabel`, `p-checkbox`, `p-password`, `p-inputotp`, `p-carousel`
+- Components used: `p-card`, `p-tag`, `p-button`, `p-select`, `p-inputgroup`, `p-inputtext`, `p-stepper`, `p-floatlabel`, `p-checkbox`, `p-password`, `p-inputotp`, `p-carousel`, `p-datepicker`
 
 ### Layout patterns
 - Page background: radial gradient with accent colors + linear gradient
@@ -256,6 +360,58 @@ web/src/app/
 ### UI rules
 - All buttons must have `cursor: pointer` on hover. PrimeNG buttons may need explicit `cursor: pointer` in `::ng-deep` styles.
 - Be precise with layout — align related elements (e.g. action buttons) using sub-grids, not by mixing unrelated elements in the same grid row.
+- All dialogs must have `[draggable]="false"` — they should not be draggable.
+
+### Form dialog template (canonical structure)
+
+Use `category-form-dialog.component.ts` as the reference for all simple form dialogs. Key structure:
+
+```typescript
+@Component({
+  selector: 'app-<entity>-form-dialog',
+  standalone: true,
+  imports: [
+    CommonModule, FormsModule, ButtonModule, DialogModule,
+    InputTextModule, FloatLabelModule,
+  ],
+  template: `
+    <p-dialog [header]="isEditMode ? 'Editar <Entity>' : 'Nuevo <Entity>'"
+              [visible]="visible" (visibleChange)="visibleChange.emit($event)"
+              [modal]="true" [dismissableMask]="true" [draggable]="false" [style]="{width: 'min(500px, 95vw)'}"
+              (onHide)="close()">
+      <div class="form-fields" [style]="{paddingTop: '20px'}">
+        <div class="field">
+          <p-floatlabel>
+            <input pInputText id="name" [(ngModel)]="form.name"
+                   [class.ng-invalid]="submitted && !form.name" style="width: 100%" placeholder=" " />
+            <label for="name">Nombre *</label>
+          </p-floatlabel>
+        </div>
+      </div>
+      <ng-template pTemplate="footer">
+        <p-button label="Cancelar" severity="secondary" (onClick)="close()"></p-button>
+        <p-button [label]="isEditMode ? 'Guardar Cambios' : 'Crear <Entity>'"
+                  icon="pi pi-check" [loading]="saving()" (onClick)="save()"></p-button>
+      </ng-template>
+    </p-dialog>
+  `,
+  styles: [`.form-fields { display: flex; flex-direction: column; gap: 1.75rem; } .field { display: flex; flex-direction: column; gap: 0.25rem; }`],
+})
+```
+
+Rules derived from this template:
+- `@Input() visible` + `@Output() visibleChange` for dialog visibility (two-way binding).
+- `@Input() entity: Entity | null = null` — null means create mode.
+- `@Output() saved` + `@Output() closed` for parent communication.
+- `saving` signal, `submitted` boolean, `form` typed as `CreateRequest & { extra? }`.
+- `isEditMode` getter checks `entity !== null`.
+- `ngOnChanges` resets form when dialog opens (checks `changes['entity'] || changes['visible']`).
+- `save()` validates → sets saving → calls create or update → emits `saved`.
+- `close()` emits `closed` (parent handles visibility).
+- `emptyForm()` private method returns default form values.
+- Always use `p-floatlabel` with `placeholder=" "` (space) on inputs.
+- Dialog `[style]` must include `paddingTop: '20px'` so the first floatlabel is visible.
+- Use `InputTextModule` only (no `InputNumberModule` unless numeric fields are required).
 
 ### Image handling
 - All product/bundle images: `loading="lazy"` attribute

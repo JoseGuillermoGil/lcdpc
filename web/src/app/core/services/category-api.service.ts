@@ -14,8 +14,6 @@ interface CategoryGoData {
   category_id: string;
   name: string;
   slug: string;
-  sort_order: number;
-  is_active: boolean;
   created_at_utc: string;
   updated_at_utc: string;
 }
@@ -72,8 +70,6 @@ export class CategoryApiService {
       categoryId: raw.category_id,
       name: raw.name,
       slug: raw.slug,
-      sortOrder: raw.sort_order,
-      isActive: raw.is_active,
       createdAtUtc: raw.created_at_utc,
       updatedAtUtc: raw.updated_at_utc,
     };

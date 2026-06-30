@@ -18,15 +18,14 @@ func NewService(pool *pgxpool.Pool) *Service {
 }
 
 type SyncProductRequest struct {
-	ProductID               uuid.UUID  `json:"product_id"`
-	Name                    string     `json:"name"`
-	Sku                     string     `json:"sku"`
-	WholesaleCommercialType string     `json:"wholesale_commercial_type"`
-	IsActive                bool       `json:"is_active"`
-	BaseUnitID              *uuid.UUID `json:"base_unit_id"`
-	Stock                   *int       `json:"stock"`
-	StockAvailable          *int       `json:"stock_available"`
-	StockBlocked            *int       `json:"stock_blocked"`
+	ProductID    uuid.UUID  `json:"product_id"`
+	Name         string     `json:"name"`
+	Sku          string     `json:"sku"`
+	IsActive     bool       `json:"is_active"`
+	BaseUnitID   *uuid.UUID `json:"base_unit_id"`
+	Stock        *int       `json:"stock"`
+	StockAvailable *int     `json:"stock_available"`
+	StockBlocked   *int     `json:"stock_blocked"`
 }
 
 type SyncBundleRequest struct {
@@ -65,17 +64,16 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 	result := &SyncResult{}
 	for _, p := range products {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO products (product_id, name, sku, wholesale_commercial_type, is_active, base_unit_id, stock, stock_available, stock_blocked)
-			VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0), COALESCE($8, 0), COALESCE($9, 0))
+			INSERT INTO products (product_id, name, sku, is_active, base_unit_id, stock, stock_available, stock_blocked)
+			VALUES ($1, $2, $3, $4, $5, COALESCE($6, 0), COALESCE($7, 0), COALESCE($8, 0))
 			ON CONFLICT (sku) DO UPDATE SET
 				name = EXCLUDED.name,
-				wholesale_commercial_type = EXCLUDED.wholesale_commercial_type,
 				is_active = EXCLUDED.is_active,
 				base_unit_id = EXCLUDED.base_unit_id,
 				stock = EXCLUDED.stock,
 				stock_available = EXCLUDED.stock_available,
 				stock_blocked = EXCLUDED.stock_blocked
-		`, p.ProductID, p.Name, p.Sku, p.WholesaleCommercialType, p.IsActive, p.BaseUnitID, p.Stock, p.StockAvailable, p.StockBlocked)
+		`, p.ProductID, p.Name, p.Sku, p.IsActive, p.BaseUnitID, p.Stock, p.StockAvailable, p.StockBlocked)
 		if err != nil {
 			result.Errors++
 			continue

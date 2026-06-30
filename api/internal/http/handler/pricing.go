@@ -186,6 +186,27 @@ func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, map[string]string{"status": "deleted"})
 }
 
+func (h *ProductHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	result, err := h.svc.ToggleProductActive(r.Context(), id)
+	if err != nil {
+		if err.Error() == "NOT_FOUND" {
+			response.Error(w, http.StatusNotFound, "product not found")
+			return
+		}
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(w, result)
+}
+
 func (h *ProductHandler) UpdateImage(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)

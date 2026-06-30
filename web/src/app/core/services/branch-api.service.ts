@@ -2,12 +2,22 @@ import { HttpClient } from '@angular/common/http';
 import { Inject, Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { API_BASE_URL } from '../../pages/auth-page/auth-api-go.service';
-import { Branch, CreateBranchRequest } from '../models/branch.model';
+import { Branch, BranchSchedule, CreateBranchRequest } from '../models/branch.model';
 
 interface JsendEnvelope<T> {
   status: 'success' | 'fail' | 'error';
   data: T;
   message?: string;
+}
+
+interface ScheduleGoData {
+  id: string;
+  branch_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  created_at_utc: string;
+  updated_at_utc: string;
 }
 
 interface BranchGoData {
@@ -17,7 +27,7 @@ interface BranchGoData {
   address: string;
   contact_phone: string;
   secondary_contact_phone: string | null;
-  business_hours: string;
+  schedules: ScheduleGoData[];
   created_at_utc: string;
   updated_at_utc: string;
 }
@@ -55,7 +65,19 @@ export class BranchApiService {
       address: raw.address,
       contactPhone: raw.contact_phone,
       secondaryContactPhone: raw.secondary_contact_phone,
-      businessHours: raw.business_hours,
+      schedules: (raw.schedules ?? []).map((s) => this.mapSchedule(s)),
+      createdAtUtc: raw.created_at_utc,
+      updatedAtUtc: raw.updated_at_utc,
+    };
+  }
+
+  private mapSchedule(raw: ScheduleGoData): BranchSchedule {
+    return {
+      id: raw.id,
+      branchId: raw.branch_id,
+      dayOfWeek: raw.day_of_week,
+      startTime: raw.start_time,
+      endTime: raw.end_time,
       createdAtUtc: raw.created_at_utc,
       updatedAtUtc: raw.updated_at_utc,
     };

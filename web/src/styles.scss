@@ -172,6 +172,13 @@ input {
 	}
 }
 
+.tab-toolbar {
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 0.75rem;
+	padding-top: 0.75rem;
+}
+
 .product-thumb,
 .bundle-thumb {
 	width: 40px;

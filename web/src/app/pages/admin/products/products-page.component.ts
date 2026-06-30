@@ -140,4 +140,32 @@ export class ProductsPageComponent implements OnInit {
       },
     });
   }
+
+  toggleActive(product: Product): void {
+    const newStatus = !product.isActive;
+    const action = newStatus ? 'activar' : 'desactivar';
+    this.confirmationService.confirm({
+      message: `${action.charAt(0).toUpperCase() + action.slice(1)} producto "${product.name}"?`,
+      header: `Confirmar ${action}`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: action.charAt(0).toUpperCase() + action.slice(1),
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: newStatus ? '' : 'p-button-danger',
+      accept: () => {
+        this.productApi.toggleActive(product.productId).subscribe({
+          next: () => {
+            this.messageService.add({
+              severity: 'success',
+              summary: 'Exito',
+              detail: `Producto ${newStatus ? 'activado' : 'desactivado'}`,
+            });
+            this.applyFilters();
+          },
+          error: () => {
+            this.messageService.add({ severity: 'error', summary: 'Error', detail: `No se pudo ${action} el producto` });
+          },
+        });
+      },
+    });
+  }
 }

@@ -1,9 +1,10 @@
-<div class="section-toolbar">
+<div class="tab-toolbar">
   @if (canCreate()) {
     <p-button label="Nueva Unidad" icon="pi pi-plus" size="small" (onClick)="openCreate()"></p-button>
   }
 </div>
 
+@if (canRead()) {
 <p-table [value]="items()" [loading]="loading()" styleClass="admin-table">
   <ng-template pTemplate="header">
     <tr>
@@ -11,7 +12,9 @@
       <th>Codigo</th>
       <th>Simbolo</th>
       <th>Clasificacion</th>
-      <th style="width: 120px">Acciones</th>
+      @if (canModify()) {
+        <th style="width: 120px">Acciones</th>
+      }
     </tr>
   </ng-template>
   <ng-template pTemplate="body" let-item>
@@ -20,6 +23,7 @@
       <td><code>{{ item.code }}</code></td>
       <td>{{ item.symbol ?? '—' }}</td>
       <td>{{ getClassificationName(item.classificationId) }}</td>
+      @if (canModify()) {
       <td>
         @if (canUpdate()) {
           <p-button icon="pi pi-pencil" [text]="true" [rounded]="true"
@@ -30,14 +34,16 @@
                     (onClick)="confirmDelete(item)" pTooltip="Eliminar"></p-button>
         }
       </td>
+      }
     </tr>
   </ng-template>
   <ng-template pTemplate="emptymessage">
     <tr>
-      <td colspan="5" class="empty-state">No hay unidades de medida registradas</td>
+      <td [attr.colspan]="canModify() ? 5 : 4" class="empty-state">No hay unidades de medida registradas</td>
     </tr>
   </ng-template>
 </p-table>
+}
 
 <app-measurement-unit-form-dialog
   [visible]="dialogVisible()"

@@ -11,6 +11,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/configs"
 	"github.com/lcdpc/lcdpc-go/internal/auth"
 	"github.com/lcdpc/lcdpc-go/internal/branch"
+	"github.com/lcdpc/lcdpc-go/internal/brand"
 	"github.com/lcdpc/lcdpc-go/internal/category"
 	"github.com/lcdpc/lcdpc-go/internal/http/handler"
 	"github.com/lcdpc/lcdpc-go/internal/http/middleware"
@@ -29,6 +30,7 @@ func NewServer(
 	keySvc *auth.KeyService,
 	pricingSvc *pricing.Service,
 	branchSvc *branch.Service,
+	brandSvc *brand.Service,
 	categorySvc *category.Service,
 	staffSvc *staff.Service,
 	syncSvc *sync.Service,
@@ -58,6 +60,7 @@ func NewServer(
 	measurementUnitClassificationH := handler.NewMeasurementUnitClassificationHandler(pricingSvc)
 	conversionFactorH := handler.NewConversionFactorHandler(pricingSvc)
 	branchH := handler.NewBranchHandler(branchSvc)
+	brandH := handler.NewBrandHandler(brandSvc)
 	categoryH := handler.NewCategoryHandler(categorySvc)
 	staffH := handler.NewStaffHandler(staffSvc)
 	syncH := handler.NewSyncHandler(syncSvc)
@@ -138,6 +141,7 @@ func NewServer(
 				r.Use(middleware.RequirePermission(rbacStore, "product:update"))
 				r.Put("/{id}", productH.Update)
 				r.Put("/{id}/image", productH.UpdateImage)
+				r.Patch("/{id}/toggle-active", productH.ToggleActive)
 			})
 
 			r.Group(func(r chi.Router) {
@@ -158,8 +162,16 @@ func NewServer(
 			r.Use(middleware.RequirePermission(rbacStore, "bundle:create"))
 
 			r.Post("/", bundleH.Create)
-			r.Post("/{id}/publish", bundleH.Publish)
-			r.Post("/{id}/pause", bundleH.Pause)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "bundle:publish"))
+				r.Post("/{id}/publish", bundleH.Publish)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "bundle:pause"))
+				r.Post("/{id}/pause", bundleH.Pause)
+			})
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission(rbacStore, "bundle:update"))
@@ -182,10 +194,16 @@ func NewServer(
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
 			r.Use(middleware.RequireAuth())
-			r.Use(middleware.RequirePermission(rbacStore, "price:create"))
 
-			r.Post("/", priceH.Create)
-			r.Put("/{id}", priceH.Update)
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "price:create"))
+				r.Post("/", priceH.Create)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "price:update"))
+				r.Put("/{id}", priceH.Update)
+			})
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission(rbacStore, "price:delete"))
@@ -202,13 +220,17 @@ func NewServer(
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
 			r.Use(middleware.RequireAuth())
-			r.Use(middleware.RequirePermission(rbacStore, "price:create"))
+			r.Use(middleware.RequirePermission(rbacStore, "price_category:create"))
 
 			r.Post("/", priceCategoryH.Create)
-			r.Put("/{id}", priceCategoryH.Update)
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission(rbacStore, "price:delete"))
+				r.Use(middleware.RequirePermission(rbacStore, "price_category:update"))
+				r.Put("/{id}", priceCategoryH.Update)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "price_category:delete"))
 				r.Delete("/{id}", priceCategoryH.Delete)
 			})
 		})
@@ -222,13 +244,17 @@ func NewServer(
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
 			r.Use(middleware.RequireAuth())
-			r.Use(middleware.RequirePermission(rbacStore, "product:create"))
+			r.Use(middleware.RequirePermission(rbacStore, "measurement_unit:create"))
 
 			r.Post("/", measurementUnitH.Create)
-			r.Put("/{id}", measurementUnitH.Update)
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission(rbacStore, "product:delete"))
+				r.Use(middleware.RequirePermission(rbacStore, "measurement_unit:update"))
+				r.Put("/{id}", measurementUnitH.Update)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "measurement_unit:delete"))
 				r.Delete("/{id}", measurementUnitH.Delete)
 			})
 		})
@@ -242,13 +268,17 @@ func NewServer(
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
 			r.Use(middleware.RequireAuth())
-			r.Use(middleware.RequirePermission(rbacStore, "product:create"))
+			r.Use(middleware.RequirePermission(rbacStore, "measurement_unit:create"))
 
 			r.Post("/", measurementUnitClassificationH.Create)
-			r.Put("/{id}", measurementUnitClassificationH.Update)
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission(rbacStore, "product:delete"))
+				r.Use(middleware.RequirePermission(rbacStore, "measurement_unit:update"))
+				r.Put("/{id}", measurementUnitClassificationH.Update)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "measurement_unit:delete"))
 				r.Delete("/{id}", measurementUnitClassificationH.Delete)
 			})
 		})
@@ -262,13 +292,17 @@ func NewServer(
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
 			r.Use(middleware.RequireAuth())
-			r.Use(middleware.RequirePermission(rbacStore, "product:create"))
+			r.Use(middleware.RequirePermission(rbacStore, "measurement_unit:create"))
 
 			r.Post("/", conversionFactorH.Create)
-			r.Put("/{id}", conversionFactorH.Update)
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission(rbacStore, "product:delete"))
+				r.Use(middleware.RequirePermission(rbacStore, "measurement_unit:update"))
+				r.Put("/{id}", conversionFactorH.Update)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "measurement_unit:delete"))
 				r.Delete("/{id}", conversionFactorH.Delete)
 			})
 		})
@@ -283,6 +317,37 @@ func NewServer(
 			r.Use(middleware.RequireAuth())
 			r.Use(middleware.RequirePermission(rbacStore, "branch:create"))
 			r.Post("/", branchH.Create)
+		})
+	})
+
+	// Brands
+	r.Route("/api/v1/brands", func(r chi.Router) {
+		r.Get("/", brandH.List)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "brand:view"))
+
+			r.Get("/{id}", brandH.GetByID)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "brand:create"))
+
+			r.Post("/", brandH.Create)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "brand:update"))
+				r.Put("/{id}", brandH.Update)
+			})
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "brand:delete"))
+				r.Delete("/{id}", brandH.Delete)
+			})
 		})
 	})
 

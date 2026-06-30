@@ -53,71 +53,34 @@
         @if (configExpanded() && !collapsed()) {
           <div class="nav-group-children">
             @if (canViewRbac()) {
-              <button class="nav-subgroup-toggle" [class.expanded]="rbacExpanded()" (click)="toggleRbac()">
+              <a routerLink="/admin/config"
+                 [queryParams]="{ section: 'rbac' }"
+                 routerLinkActive="active"
+                 [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }"
+                 (click)="collapseAll()">
                 <span class="pi pi-shield"></span>
                 <span class="nav-label">RBAC</span>
-                <span class="pi pi-chevron-down toggle-chevron-sm"></span>
-              </button>
-
-              @if (rbacExpanded()) {
-                <div class="nav-subgroup-children">
-                  <a routerLink="/admin/config"
-                     [queryParams]="{ section: 'profiles' }"
-                     routerLinkActive="active"
-                     [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }">
-                    <span class="pi pi-id-card"></span>
-                    <span class="nav-label">Perfiles</span>
-                  </a>
-                  <a routerLink="/admin/config"
-                     [queryParams]="{ section: 'roles' }"
-                     routerLinkActive="active"
-                     [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }">
-                    <span class="pi pi-key"></span>
-                    <span class="nav-label">Roles</span>
-                  </a>
-                  <a routerLink="/admin/config"
-                     [queryParams]="{ section: 'resources' }"
-                     routerLinkActive="active"
-                     [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }">
-                    <span class="pi pi-lock"></span>
-                    <span class="nav-label">Recursos</span>
-                  </a>
-                </div>
-              }
+              </a>
             }
-
             @if (canViewInventario()) {
-              <button class="nav-subgroup-toggle" [class.expanded]="inventarioExpanded()" (click)="toggleInventario()">
+              <a routerLink="/admin/config"
+                 [queryParams]="{ section: 'inventario' }"
+                 routerLinkActive="active"
+                 [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }"
+                 (click)="collapseAll()">
                 <span class="pi pi-box"></span>
                 <span class="nav-label">Inventario</span>
-                <span class="pi pi-chevron-down toggle-chevron-sm"></span>
-              </button>
-
-              @if (inventarioExpanded()) {
-                <div class="nav-subgroup-children">
-                  <a routerLink="/admin/config"
-                     [queryParams]="{ section: 'categories' }"
-                     routerLinkActive="active"
-                     [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }">
-                    <span class="pi pi-tags"></span>
-                    <span class="nav-label">Categorias</span>
-                  </a>
-                  <a routerLink="/admin/config"
-                     [queryParams]="{ section: 'price-categories' }"
-                     routerLinkActive="active"
-                     [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }">
-                    <span class="pi pi-dollar"></span>
-                    <span class="nav-label">Categorias de Precio</span>
-                  </a>
-                  <a routerLink="/admin/config"
-                     [queryParams]="{ section: 'measurement-units' }"
-                     routerLinkActive="active"
-                     [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }">
-                    <span class="pi pi-ruler"></span>
-                    <span class="nav-label">Unidades de Medida</span>
-                  </a>
-                </div>
-              }
+              </a>
+            }
+            @if (canViewAdministracion()) {
+              <a routerLink="/admin/config"
+                 [queryParams]="{ section: 'administracion' }"
+                 routerLinkActive="active"
+                 [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }"
+                 (click)="collapseAll()">
+                <span class="pi pi-building"></span>
+                <span class="nav-label">Administracion</span>
+              </a>
             }
           </div>
         }
