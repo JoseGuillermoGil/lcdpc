@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Inject, Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { API_BASE_URL } from '../../pages/auth-page/auth-api-go.service';
-import { Category, CreateCategoryRequest } from '../models/category.model';
+import { Category, CreateCategoryRequest, UpdateCategoryRequest } from '../models/category.model';
 
 interface JsendEnvelope<T> {
   status: 'success' | 'fail' | 'error';
@@ -51,7 +51,7 @@ export class CategoryApiService {
       .pipe(map((res) => this.map(res.data)));
   }
 
-  update(id: string, req: CreateCategoryRequest): Observable<Category> {
+  update(id: string, req: UpdateCategoryRequest): Observable<Category> {
     return this.http
       .put<JsendEnvelope<CategoryGoData>>(`${this.baseUrl}/api/v1/categories/${id}`, req, {
         withCredentials: true,

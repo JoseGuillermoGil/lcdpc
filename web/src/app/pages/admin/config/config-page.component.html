@@ -1,0 +1,16 @@
+<section class="config-page">
+  <div class="page-header">
+    <h1><span class="pi pi-cog"></span> {{ getSectionTitle() }}</h1>
+  </div>
+
+  <div class="config-section">
+    @switch (activeSection()) {
+      @case ('profiles') { <app-rbac-section [activeTab]="'profiles'" /> }
+      @case ('roles') { <app-rbac-section [activeTab]="'roles'" /> }
+      @case ('resources') { <app-rbac-section [activeTab]="'resources'" /> }
+      @case ('categories') { <app-categories-section /> }
+      @case ('price-categories') { <app-price-categories-section /> }
+      @case ('measurement-units') { <app-measurement-units-section /> }
+    }
+  </div>
+</section>

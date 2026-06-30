@@ -13,3 +13,10 @@ export interface CreateCategoryRequest {
   slug: string;
   sort_order?: number;
 }
+
+export interface UpdateCategoryRequest {
+  name?: string;
+  slug?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}

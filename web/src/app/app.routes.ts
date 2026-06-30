@@ -9,7 +9,7 @@ import { ProductsPageComponent } from './pages/admin/products/products-page.comp
 import { BundlesPageComponent } from './pages/admin/bundles/bundles-page.component';
 import { OrdersPageComponent } from './pages/admin/orders/orders-page.component';
 import { StaffPageComponent } from './pages/admin/staff/staff-page.component';
-import { ClassificationsPageComponent } from './pages/admin/classifications/classifications-page.component';
+import { ConfigPageComponent } from './pages/admin/config/config-page.component';
 import { adminGuard } from './core/auth/admin.guard';
 import { permissionGuard } from './core/auth/permission.guard';
 
@@ -29,7 +29,7 @@ export const routes: Routes = [
 			{ path: 'bundles', component: BundlesPageComponent, canActivate: [permissionGuard('bundle:view')] },
 			{ path: 'orders', component: OrdersPageComponent, canActivate: [permissionGuard('order:view')] },
 			{ path: 'staff', component: StaffPageComponent, canActivate: [permissionGuard('staff:view')] },
-			{ path: 'classifications', component: ClassificationsPageComponent, canActivate: [permissionGuard('product:view')] },
+			{ path: 'config', component: ConfigPageComponent, canActivate: [permissionGuard('rbac:profile:view')] },
 		]
 	}
 ];

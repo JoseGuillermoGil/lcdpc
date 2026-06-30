@@ -1,0 +1,239 @@
+@switch (activeTab()) {
+  @case ('profiles') {
+    <div class="tab-toolbar">
+      @if (canCreate()) {
+        <p-button label="Nuevo Perfil" icon="pi pi-plus" size="small" (onClick)="openProfileCreate()"></p-button>
+      }
+    </div>
+    <p-table [value]="profiles()" [loading]="loading()" styleClass="admin-table">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Nombre</th>
+          <th>Codigo</th>
+          <th>Roles</th>
+          <th style="width: 140px">Acciones</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-profile>
+        <tr>
+          <td>{{ profile.name }}</td>
+          <td><code>{{ profile.code }}</code></td>
+          <td>
+            @for (role of profile.roles; track role.id) {
+              <p-tag [value]="role.name" styleClass="mr-1" />
+            }
+            @if (profile.roles.length === 0) {
+              <span class="text-muted">Sin roles</span>
+            }
+          </td>
+          <td>
+            @if (canUpdate()) {
+              <p-button icon="pi pi-pencil" [text]="true" [rounded]="true"
+                        (onClick)="openProfileEdit(profile)" pTooltip="Editar"></p-button>
+              <p-button icon="pi pi-key" [text]="true" [rounded]="true"
+                        (onClick)="openProfileRoles(profile)" pTooltip="Gestionar Roles"></p-button>
+            }
+            @if (canDelete()) {
+              <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger"
+                        (onClick)="confirmDeleteProfile(profile)" pTooltip="Eliminar"></p-button>
+            }
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr><td colspan="4" class="empty-state">No hay perfiles registrados</td></tr>
+      </ng-template>
+    </p-table>
+  }
+
+  @case ('roles') {
+    <div class="tab-toolbar">
+      @if (canCreate()) {
+        <p-button label="Nuevo Rol" icon="pi pi-plus" size="small" (onClick)="openRoleCreate()"></p-button>
+      }
+    </div>
+    <p-table [value]="roles()" [loading]="loading()" styleClass="admin-table">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Codigo</th>
+          <th>Nombre</th>
+          <th>Descripcion</th>
+          <th>Recursos</th>
+          <th style="width: 140px">Acciones</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-role>
+        <tr>
+          <td><code>{{ role.code }}</code></td>
+          <td>{{ role.name }}</td>
+          <td>{{ role.description || '—' }}</td>
+          <td>{{ role.resources.length }}</td>
+          <td>
+            @if (canUpdate()) {
+              <p-button icon="pi pi-pencil" [text]="true" [rounded]="true"
+                        (onClick)="openRoleEdit(role)" pTooltip="Editar"></p-button>
+              <p-button icon="pi pi-key" [text]="true" [rounded]="true"
+                        (onClick)="openRoleResources(role)" pTooltip="Gestionar Recursos"></p-button>
+            }
+            @if (canDelete()) {
+              <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger"
+                        (onClick)="confirmDeleteRole(role)" pTooltip="Eliminar"></p-button>
+            }
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr><td colspan="5" class="empty-state">No hay roles registrados</td></tr>
+      </ng-template>
+    </p-table>
+  }
+
+  @case ('resources') {
+    <div class="tab-toolbar">
+      @if (canCreate()) {
+        <p-button label="Nuevo Recurso" icon="pi pi-plus" size="small" (onClick)="openResourceCreate()"></p-button>
+      }
+    </div>
+    <p-table [value]="resources()" [loading]="loading()" styleClass="admin-table">
+      <ng-template pTemplate="header">
+        <tr>
+          <th>Codigo</th>
+          <th style="width: 120px">Acciones</th>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="body" let-resource>
+        <tr>
+          <td><code>{{ resource.code }}</code></td>
+          <td>
+            @if (canUpdate()) {
+              <p-button icon="pi pi-pencil" [text]="true" [rounded]="true"
+                        (onClick)="openResourceEdit(resource)" pTooltip="Editar"></p-button>
+            }
+            @if (canDelete()) {
+              <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger"
+                        (onClick)="confirmDeleteResource(resource)" pTooltip="Eliminar"></p-button>
+            }
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template pTemplate="emptymessage">
+        <tr><td colspan="2" class="empty-state">No hay recursos registrados</td></tr>
+      </ng-template>
+    </p-table>
+  }
+}
+
+<!-- Resource Dialog -->
+<p-dialog [header]="selectedResource() ? 'Editar Recurso' : 'Nuevo Recurso'"
+          [visible]="resourceDialogVisible()" (visibleChange)="resourceDialogVisible.set($event)"
+          [modal]="true" [dismissableMask]="true" [style]="{width: 'min(400px, 95vw)'}">
+  <div class="form-fields">
+    <p-floatlabel>
+      <input pInputText id="resCode" [(ngModel)]="resourceForm.code" [class.ng-invalid]="resourceSubmitted && !resourceForm.code" style="width: 100%" />
+      <label for="resCode">Codigo *</label>
+    </p-floatlabel>
+  </div>
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" severity="secondary" (onClick)="resourceDialogVisible.set(false)"></p-button>
+    <p-button label="Guardar" icon="pi pi-check" [loading]="saving()" (onClick)="saveResource()"></p-button>
+  </ng-template>
+</p-dialog>
+
+<!-- Role Dialog -->
+<p-dialog [header]="selectedRole() ? 'Editar Rol' : 'Nuevo Rol'"
+          [visible]="roleDialogVisible()" (visibleChange)="roleDialogVisible.set($event)"
+          [modal]="true" [dismissableMask]="true" [style]="{width: 'min(500px, 95vw)'}">
+  <div class="form-fields">
+    <p-floatlabel>
+      <input pInputText id="roleCode" [(ngModel)]="roleForm.code" [class.ng-invalid]="roleSubmitted && !roleForm.code" style="width: 100%" />
+      <label for="roleCode">Codigo *</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input pInputText id="roleName" [(ngModel)]="roleForm.name" [class.ng-invalid]="roleSubmitted && !roleForm.name" style="width: 100%" />
+      <label for="roleName">Nombre *</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input pInputText id="roleDesc" [(ngModel)]="roleForm.description" style="width: 100%" />
+      <label for="roleDesc">Descripcion</label>
+    </p-floatlabel>
+  </div>
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" severity="secondary" (onClick)="roleDialogVisible.set(false)"></p-button>
+    <p-button label="Guardar" icon="pi pi-check" [loading]="saving()" (onClick)="saveRole()"></p-button>
+  </ng-template>
+</p-dialog>
+
+<!-- Role Resources Dialog -->
+<p-dialog [header]="'Recursos de ' + (roleResourcesTarget()?.name ?? '')"
+          [visible]="roleResourcesDialogVisible()" (visibleChange)="roleResourcesDialogVisible.set($event)"
+          [modal]="true" [dismissableMask]="true" [style]="{width: 'min(500px, 95vw)'}">
+  <div class="assign-section">
+    <div class="assign-row">
+      <p-select [options]="availableResources()" [(ngModel)]="selectedResourceId"
+                optionLabel="label" optionValue="value" placeholder="Seleccionar recurso"
+                [style]="{'width':'100%'}" appendTo="body" />
+      <p-button icon="pi pi-plus" (onClick)="assignResourceToRole()" [disabled]="!selectedResourceId"></p-button>
+    </div>
+    <div class="assigned-list">
+      @for (res of roleResourcesTarget()?.resources; track res.id) {
+        <div class="assigned-item">
+          <code>{{ res.code }}</code>
+          <p-button icon="pi pi-times" [text]="true" [rounded]="true" severity="danger" size="small"
+                    (onClick)="removeResourceFromRole(res.id)"></p-button>
+        </div>
+      }
+      @if ((roleResourcesTarget()?.resources?.length ?? 0) === 0) {
+        <span class="text-muted">Sin recursos asignados</span>
+      }
+    </div>
+  </div>
+</p-dialog>
+
+<!-- Profile Dialog -->
+<p-dialog [header]="selectedProfile() ? 'Editar Perfil' : 'Nuevo Perfil'"
+          [visible]="profileDialogVisible()" (visibleChange)="profileDialogVisible.set($event)"
+          [modal]="true" [dismissableMask]="true" [style]="{width: 'min(500px, 95vw)'}">
+  <div class="form-fields">
+    <p-floatlabel>
+      <input pInputText id="profName" [(ngModel)]="profileForm.name" [class.ng-invalid]="profileSubmitted && !profileForm.name" style="width: 100%" />
+      <label for="profName">Nombre *</label>
+    </p-floatlabel>
+    <p-floatlabel>
+      <input pInputText id="profCode" [(ngModel)]="profileForm.code" [class.ng-invalid]="profileSubmitted && !profileForm.code" style="width: 100%" />
+      <label for="profCode">Codigo *</label>
+    </p-floatlabel>
+  </div>
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" severity="secondary" (onClick)="profileDialogVisible.set(false)"></p-button>
+    <p-button label="Guardar" icon="pi pi-check" [loading]="saving()" (onClick)="saveProfile()"></p-button>
+  </ng-template>
+</p-dialog>
+
+<!-- Profile Roles Dialog -->
+<p-dialog [header]="'Roles de ' + (profileRolesTarget()?.name ?? '')"
+          [visible]="profileRolesDialogVisible()" (visibleChange)="profileRolesDialogVisible.set($event)"
+          [modal]="true" [dismissableMask]="true" [style]="{width: 'min(500px, 95vw)'}">
+  <div class="assign-section">
+    <div class="assign-row">
+      <p-select [options]="availableRoles()" [(ngModel)]="selectedRoleId"
+                optionLabel="label" optionValue="value" placeholder="Seleccionar rol"
+                [style]="{'width':'100%'}" appendTo="body" />
+      <p-button icon="pi pi-plus" (onClick)="assignRoleToProfile()" [disabled]="!selectedRoleId"></p-button>
+    </div>
+    <div class="assigned-list">
+      @for (role of profileRolesTarget()?.roles; track role.id) {
+        <div class="assigned-item">
+          <span>{{ role.name }} <code>{{ role.code }}</code></span>
+          <p-button icon="pi pi-times" [text]="true" [rounded]="true" severity="danger" size="small"
+                    (onClick)="removeRoleFromProfile(role.id)"></p-button>
+        </div>
+      }
+      @if ((profileRolesTarget()?.roles?.length ?? 0) === 0) {
+        <span class="text-muted">Sin roles asignados</span>
+      }
+    </div>
+  </div>
+</p-dialog>
+
+<p-confirmDialog />
+<p-toast />

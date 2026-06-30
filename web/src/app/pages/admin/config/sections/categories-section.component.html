@@ -1,0 +1,56 @@
+<div class="section-toolbar">
+  @if (canCreate()) {
+    <p-button label="Nueva Categoria" icon="pi pi-plus" size="small" (onClick)="openCreate()"></p-button>
+  }
+</div>
+
+<p-table [value]="categories()" [loading]="loading()" styleClass="admin-table">
+  <ng-template pTemplate="header">
+    <tr>
+      <th>Nombre</th>
+      <th>Slug</th>
+      <th>Orden</th>
+      <th>Activo</th>
+      <th style="width: 120px">Acciones</th>
+    </tr>
+  </ng-template>
+  <ng-template pTemplate="body" let-cat>
+    <tr>
+      <td>{{ cat.name }}</td>
+      <td><code>{{ cat.slug }}</code></td>
+      <td>{{ cat.sortOrder }}</td>
+      <td>
+        <p-tag [value]="cat.isActive ? 'Activo' : 'Inactivo'"
+               [severity]="cat.isActive ? 'success' : 'danger'" />
+      </td>
+      <td>
+        @if (canUpdate()) {
+          <p-button icon="pi pi-pencil" [text]="true" [rounded]="true"
+                    (onClick)="openEdit(cat)" pTooltip="Editar"></p-button>
+          <p-button [icon]="cat.isActive ? 'pi pi-eye-slash' : 'pi pi-eye'" [text]="true" [rounded]="true"
+                    (onClick)="toggleActive(cat)" [pTooltip]="cat.isActive ? 'Desactivar' : 'Activar'"></p-button>
+        }
+        @if (canDelete()) {
+          <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger"
+                    (onClick)="confirmDelete(cat)" pTooltip="Eliminar"></p-button>
+        }
+      </td>
+    </tr>
+  </ng-template>
+  <ng-template pTemplate="emptymessage">
+    <tr>
+      <td colspan="5" class="empty-state">No hay categorias registradas</td>
+    </tr>
+  </ng-template>
+</p-table>
+
+<app-category-form-dialog
+  [visible]="dialogVisible()"
+  [category]="selectedCategory()"
+  (visibleChange)="dialogVisible.set($event)"
+  (saved)="onDialogClose(true)"
+  (closed)="onDialogClose(false)"
+/>
+
+<p-confirmDialog />
+<p-toast />
