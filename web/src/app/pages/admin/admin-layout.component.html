@@ -42,6 +42,13 @@
           <span class="nav-label">Personal</span>
         </a>
       }
+
+      @if (canViewProducts()) {
+        <a routerLink="/admin/classifications" routerLinkActive="active">
+          <span class="pi pi-tags"></span>
+          <span class="nav-label">Clasificaciones</span>
+        </a>
+      }
     </nav>
 
     <div class="sidebar-footer">

@@ -18,27 +18,31 @@ func NewService(pool *pgxpool.Pool) *Service {
 }
 
 type SyncProductRequest struct {
-	ProductID            uuid.UUID `json:"product_id"`
-	Name                 string    `json:"name"`
-	Sku                  string    `json:"sku"`
-	BaseMeasureType      string    `json:"base_measure_type"`
-	WholesaleCommercialType string `json:"wholesale_commercial_type"`
-	UnitsPerBox          *int      `json:"units_per_box"`
-	UnitsPerBundle       *int      `json:"units_per_bundle"`
-	IsActive             bool      `json:"is_active"`
+	ProductID               uuid.UUID  `json:"product_id"`
+	Name                    string     `json:"name"`
+	Sku                     string     `json:"sku"`
+	WholesaleCommercialType string     `json:"wholesale_commercial_type"`
+	IsActive                bool       `json:"is_active"`
+	BaseUnitID              *uuid.UUID `json:"base_unit_id"`
+	Stock                   *int       `json:"stock"`
+	StockAvailable          *int       `json:"stock_available"`
+	StockBlocked            *int       `json:"stock_blocked"`
 }
 
 type SyncBundleRequest struct {
-	BundleID                uuid.UUID        `json:"bundle_id"`
-	Code                    string           `json:"code"`
-	Name                    string           `json:"name"`
-	Status                  string           `json:"status"`
-	BranchID                *uuid.UUID       `json:"branch_id"`
-	TotalPrice              float64          `json:"total_price"`
-	TotalPriceCurrency      string           `json:"total_price_currency"`
-	PromotionalPrice        *float64         `json:"promotional_price"`
-	PromotionalPriceCurrency *string         `json:"promotional_price_currency"`
-	Items                   []SyncBundleItem `json:"items"`
+	BundleID                 uuid.UUID        `json:"bundle_id"`
+	Code                     string           `json:"code"`
+	Name                     string           `json:"name"`
+	Status                   string           `json:"status"`
+	BranchID                 *uuid.UUID       `json:"branch_id"`
+	TotalPrice               float64          `json:"total_price"`
+	TotalPriceCurrency       string           `json:"total_price_currency"`
+	PromotionalPrice         *float64         `json:"promotional_price"`
+	PromotionalPriceCurrency *string          `json:"promotional_price_currency"`
+	Items                    []SyncBundleItem `json:"items"`
+	Stock                    *int             `json:"stock"`
+	StockAvailable           *int             `json:"stock_available"`
+	StockBlocked             *int             `json:"stock_blocked"`
 }
 
 type SyncBundleItem struct {
@@ -61,16 +65,17 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 	result := &SyncResult{}
 	for _, p := range products {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO products (product_id, name, sku, base_measure_type, wholesale_commercial_type, units_per_box, units_per_bundle, is_active)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			INSERT INTO products (product_id, name, sku, wholesale_commercial_type, is_active, base_unit_id, stock, stock_available, stock_blocked)
+			VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 0), COALESCE($8, 0), COALESCE($9, 0))
 			ON CONFLICT (sku) DO UPDATE SET
 				name = EXCLUDED.name,
-				base_measure_type = EXCLUDED.base_measure_type,
 				wholesale_commercial_type = EXCLUDED.wholesale_commercial_type,
-				units_per_box = EXCLUDED.units_per_box,
-				units_per_bundle = EXCLUDED.units_per_bundle,
-				is_active = EXCLUDED.is_active
-		`, p.ProductID, p.Name, p.Sku, p.BaseMeasureType, p.WholesaleCommercialType, p.UnitsPerBox, p.UnitsPerBundle, p.IsActive)
+				is_active = EXCLUDED.is_active,
+				base_unit_id = EXCLUDED.base_unit_id,
+				stock = EXCLUDED.stock,
+				stock_available = EXCLUDED.stock_available,
+				stock_blocked = EXCLUDED.stock_blocked
+		`, p.ProductID, p.Name, p.Sku, p.WholesaleCommercialType, p.IsActive, p.BaseUnitID, p.Stock, p.StockAvailable, p.StockBlocked)
 		if err != nil {
 			result.Errors++
 			continue
@@ -95,8 +100,8 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 	result := &SyncResult{}
 	for _, b := range bundles {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO bundles (bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			INSERT INTO bundles (bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, stock, stock_available, stock_blocked)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 0), COALESCE($11, 0), COALESCE($12, 0))
 			ON CONFLICT (code) DO UPDATE SET
 				name = EXCLUDED.name,
 				status = EXCLUDED.status,
@@ -104,9 +109,12 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 				total_price = EXCLUDED.total_price,
 				total_price_currency = EXCLUDED.total_price_currency,
 				promotional_price = EXCLUDED.promotional_price,
-				promotional_price_currency = EXCLUDED.promotional_price_currency
+				promotional_price_currency = EXCLUDED.promotional_price_currency,
+				stock = EXCLUDED.stock,
+				stock_available = EXCLUDED.stock_available,
+				stock_blocked = EXCLUDED.stock_blocked
 		`, b.BundleID, b.Code, b.Name, b.Status, b.BranchID,
-			b.TotalPrice, b.TotalPriceCurrency, b.PromotionalPrice, b.PromotionalPriceCurrency)
+			b.TotalPrice, b.TotalPriceCurrency, b.PromotionalPrice, b.PromotionalPriceCurrency, b.Stock, b.StockAvailable, b.StockBlocked)
 		if err != nil {
 			result.Errors++
 			continue

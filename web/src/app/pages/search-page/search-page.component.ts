@@ -60,11 +60,11 @@ export class SearchPageComponent implements OnInit {
             id: p.productId,
             name: p.name,
             price: '$0.00',
-            description: `${p.baseMeasureType} — ${p.wholesaleCommercialType}`,
+            description: p.wholesaleCommercialType,
             imageUrl: this.productApi.resolveImageUrl(p.img) ?? NOT_FOUND_IMAGE,
             alt: p.name,
             tags: [this.categoryStore.getCategoryName(p.categoryId)],
-            unitLabel: p.baseMeasureType
+            unitLabel: p.wholesaleCommercialType
           }));
 
         this.searchResults.set([...bundleItems, ...productItems]);

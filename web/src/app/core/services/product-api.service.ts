@@ -15,14 +15,15 @@ interface ProductGoData {
   product_id: string;
   name: string;
   sku: string;
-  base_measure_type: string;
   wholesale_commercial_type: string;
-  units_per_box: number | null;
-  units_per_bundle: number | null;
   is_active: boolean;
   img: string | null;
   category_id: string | null;
   branch_id: string | null;
+  stock: number;
+  stock_available: number;
+  stock_blocked: number;
+  base_unit_id: string | null;
 }
 
 interface PaginatedGoData<T> {
@@ -138,14 +139,15 @@ export class ProductApiService {
       productId: raw.product_id,
       name: raw.name,
       sku: raw.sku,
-      baseMeasureType: raw.base_measure_type,
       wholesaleCommercialType: raw.wholesale_commercial_type,
-      unitsPerBox: raw.units_per_box,
-      unitsPerBundle: raw.units_per_bundle,
       isActive: raw.is_active,
       img: raw.img,
       categoryId: raw.category_id,
       branchId: raw.branch_id,
+      stock: raw.stock,
+      stockAvailable: raw.stock_available,
+      stockBlocked: raw.stock_blocked,
+      baseUnitId: raw.base_unit_id,
     };
   }
 }

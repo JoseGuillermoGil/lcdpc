@@ -53,6 +53,10 @@ func NewServer(
 	productH := handler.NewProductHandler(pricingSvc)
 	bundleH := handler.NewBundleHandler(pricingSvc)
 	priceH := handler.NewPriceHandler(pricingSvc)
+	priceCategoryH := handler.NewPriceCategoryHandler(pricingSvc)
+	measurementUnitH := handler.NewMeasurementUnitHandler(pricingSvc)
+	measurementUnitClassificationH := handler.NewMeasurementUnitClassificationHandler(pricingSvc)
+	conversionFactorH := handler.NewConversionFactorHandler(pricingSvc)
 	branchH := handler.NewBranchHandler(branchSvc)
 	categoryH := handler.NewCategoryHandler(categorySvc)
 	staffH := handler.NewStaffHandler(staffSvc)
@@ -186,6 +190,86 @@ func NewServer(
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission(rbacStore, "price:delete"))
 				r.Delete("/{id}", priceH.Delete)
+			})
+		})
+	})
+
+	// Price Categories
+	r.Route("/api/v1/price-categories", func(r chi.Router) {
+		r.Get("/", priceCategoryH.List)
+		r.Get("/{id}", priceCategoryH.GetByID)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "price:create"))
+
+			r.Post("/", priceCategoryH.Create)
+			r.Put("/{id}", priceCategoryH.Update)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "price:delete"))
+				r.Delete("/{id}", priceCategoryH.Delete)
+			})
+		})
+	})
+
+	// Measurement Units
+	r.Route("/api/v1/measurement-units", func(r chi.Router) {
+		r.Get("/", measurementUnitH.List)
+		r.Get("/{id}", measurementUnitH.GetByID)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "product:create"))
+
+			r.Post("/", measurementUnitH.Create)
+			r.Put("/{id}", measurementUnitH.Update)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "product:delete"))
+				r.Delete("/{id}", measurementUnitH.Delete)
+			})
+		})
+	})
+
+	// Measurement Unit Classifications
+	r.Route("/api/v1/measurement-unit-classifications", func(r chi.Router) {
+		r.Get("/", measurementUnitClassificationH.List)
+		r.Get("/{id}", measurementUnitClassificationH.GetByID)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "product:create"))
+
+			r.Post("/", measurementUnitClassificationH.Create)
+			r.Put("/{id}", measurementUnitClassificationH.Update)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "product:delete"))
+				r.Delete("/{id}", measurementUnitClassificationH.Delete)
+			})
+		})
+	})
+
+	// Conversion Factors
+	r.Route("/api/v1/conversion-factors", func(r chi.Router) {
+		r.Get("/product/{id}", conversionFactorH.ListByProductID)
+		r.Get("/{id}", conversionFactorH.GetByID)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Use(middleware.RequirePermission(rbacStore, "product:create"))
+
+			r.Post("/", conversionFactorH.Create)
+			r.Put("/{id}", conversionFactorH.Update)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequirePermission(rbacStore, "product:delete"))
+				r.Delete("/{id}", conversionFactorH.Delete)
 			})
 		})
 	})

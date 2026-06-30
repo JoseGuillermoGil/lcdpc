@@ -572,7 +572,349 @@ func (h *PriceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, map[string]string{"status": "deleted"})
 }
 
-// Helpers
+// Price Category Handler
+
+type PriceCategoryHandler struct {
+	svc *pricing.Service
+}
+
+func NewPriceCategoryHandler(svc *pricing.Service) *PriceCategoryHandler {
+	return &PriceCategoryHandler{svc: svc}
+}
+
+func (h *PriceCategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req pricing.CreatePriceCategoryRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+
+	result, err := h.svc.CreatePriceCategory(r.Context(), req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Created(w, result)
+}
+
+func (h *PriceCategoryHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	result, err := h.svc.GetPriceCategoryByID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	response.Success(w, result)
+}
+
+func (h *PriceCategoryHandler) List(w http.ResponseWriter, r *http.Request) {
+	result, err := h.svc.ListPriceCategories(r.Context())
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(w, result)
+}
+
+func (h *PriceCategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req pricing.CreatePriceCategoryRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+
+	result, err := h.svc.UpdatePriceCategory(r.Context(), id, req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Success(w, result)
+}
+
+func (h *PriceCategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	if err := h.svc.DeletePriceCategory(r.Context(), id); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(w, map[string]string{"status": "deleted"})
+}
+
+// Conversion Factor Handler
+
+type ConversionFactorHandler struct {
+	svc *pricing.Service
+}
+
+func NewConversionFactorHandler(svc *pricing.Service) *ConversionFactorHandler {
+	return &ConversionFactorHandler{svc: svc}
+}
+
+func (h *ConversionFactorHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req pricing.CreateConversionFactorRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+	result, err := h.svc.CreateConversionFactor(r.Context(), req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Created(w, result)
+}
+
+func (h *ConversionFactorHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	result, err := h.svc.GetConversionFactorByID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+	response.Success(w, result)
+}
+
+func (h *ConversionFactorHandler) ListByProductID(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	result, err := h.svc.ListConversionFactorsByProductID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(w, result)
+}
+
+func (h *ConversionFactorHandler) Update(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var req pricing.CreateConversionFactorRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+	result, err := h.svc.UpdateConversionFactor(r.Context(), id, req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(w, result)
+}
+
+func (h *ConversionFactorHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := h.svc.DeleteConversionFactor(r.Context(), id); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(w, map[string]string{"status": "deleted"})
+}
+
+// Measurement Unit Classification Handler
+
+type MeasurementUnitClassificationHandler struct {
+	svc *pricing.Service
+}
+
+func NewMeasurementUnitClassificationHandler(svc *pricing.Service) *MeasurementUnitClassificationHandler {
+	return &MeasurementUnitClassificationHandler{svc: svc}
+}
+
+func (h *MeasurementUnitClassificationHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req pricing.CreateMeasurementUnitClassificationRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+	result, err := h.svc.CreateMeasurementUnitClassification(r.Context(), req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Created(w, result)
+}
+
+func (h *MeasurementUnitClassificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	result, err := h.svc.GetMeasurementUnitClassificationByID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+	response.Success(w, result)
+}
+
+func (h *MeasurementUnitClassificationHandler) List(w http.ResponseWriter, r *http.Request) {
+	result, err := h.svc.ListMeasurementUnitClassifications(r.Context())
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(w, result)
+}
+
+func (h *MeasurementUnitClassificationHandler) Update(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var req pricing.CreateMeasurementUnitClassificationRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+	result, err := h.svc.UpdateMeasurementUnitClassification(r.Context(), id, req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(w, result)
+}
+
+func (h *MeasurementUnitClassificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := h.svc.DeleteMeasurementUnitClassification(r.Context(), id); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(w, map[string]string{"status": "deleted"})
+}
+
+// Measurement Unit Handler
+
+type MeasurementUnitHandler struct {
+	svc *pricing.Service
+}
+
+func NewMeasurementUnitHandler(svc *pricing.Service) *MeasurementUnitHandler {
+	return &MeasurementUnitHandler{svc: svc}
+}
+
+func (h *MeasurementUnitHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var req pricing.CreateMeasurementUnitRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+	result, err := h.svc.CreateMeasurementUnit(r.Context(), req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Created(w, result)
+}
+
+func (h *MeasurementUnitHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	result, err := h.svc.GetMeasurementUnitByID(r.Context(), id)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, err.Error())
+		return
+	}
+	response.Success(w, result)
+}
+
+func (h *MeasurementUnitHandler) List(w http.ResponseWriter, r *http.Request) {
+	result, err := h.svc.ListMeasurementUnits(r.Context())
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(w, result)
+}
+
+func (h *MeasurementUnitHandler) Update(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var req pricing.CreateMeasurementUnitRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+	result, err := h.svc.UpdateMeasurementUnit(r.Context(), id, req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	response.Success(w, result)
+}
+
+func (h *MeasurementUnitHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	if err := h.svc.DeleteMeasurementUnit(r.Context(), id); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(w, map[string]string{"status": "deleted"})
+}
 
 func chiURLParam(r *http.Request, key string) string {
 	return chi.URLParam(r, key)

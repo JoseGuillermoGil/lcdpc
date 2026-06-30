@@ -11,6 +11,10 @@ export interface Bundle {
   items: BundleItem[] | null;
   img: string | null;
   categoryId: string | null;
+  stock: number;
+  stockAvailable: number;
+  stockBlocked: number;
+
 }
 
 export interface BundleItem {
@@ -30,6 +34,10 @@ export interface CreateBundleRequest {
   name: string;
   items: BundleItemRequest[];
   branch_id?: string | null;
+  stock?: number;
+  stock_available?: number;
+  stock_blocked?: number;
+
   img?: string | null;
   category_id?: string | null;
 }

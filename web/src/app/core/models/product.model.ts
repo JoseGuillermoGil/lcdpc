@@ -2,25 +2,27 @@ export interface Product {
   productId: string;
   name: string;
   sku: string;
-  baseMeasureType: string;
   wholesaleCommercialType: string;
-  unitsPerBox: number | null;
-  unitsPerBundle: number | null;
   isActive: boolean;
   img: string | null;
   categoryId: string | null;
   branchId: string | null;
+  stock: number;
+  stockAvailable: number;
+  stockBlocked: number;
+  baseUnitId: string | null;
 }
 
 export interface CreateProductRequest {
   name: string;
   sku: string;
-  base_measure_type: string;
   wholesale_commercial_type: string;
-  units_per_box?: number | null;
-  units_per_bundle?: number | null;
   img?: string | null;
   category_id?: string | null;
   branch_id?: string | null;
+  stock?: number;
+  stock_available?: number;
+  stock_blocked?: number;
+  base_unit_id?: string | null;
   is_active?: boolean;
 }

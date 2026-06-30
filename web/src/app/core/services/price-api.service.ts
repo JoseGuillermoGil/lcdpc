@@ -13,17 +13,9 @@ interface JsendEnvelope<T> {
 interface PriceGoData {
   id: string;
   product_id: string;
-  price1_unit: number;
-  price1_currency: string;
-  price2_box_bundle_piece: number;
-  price2_currency: string;
-  price3_wholesale_from2: number;
-  price3_currency: string;
-  price4_wholesale: number | null;
-  price4_currency: string | null;
-  price4_requires_agreement: boolean;
-  valid_from: string;
-  valid_until: string | null;
+  price_category_id: string | null;
+  amount: number;
+  currency: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -79,17 +71,9 @@ export class PriceApiService {
     return {
       id: raw.id,
       productId: raw.product_id,
-      price1Unit: raw.price1_unit,
-      price1Currency: raw.price1_currency,
-      price2BoxBundlePiece: raw.price2_box_bundle_piece,
-      price2Currency: raw.price2_currency,
-      price3WholesaleFrom2: raw.price3_wholesale_from2,
-      price3Currency: raw.price3_currency,
-      price4Wholesale: raw.price4_wholesale,
-      price4Currency: raw.price4_currency,
-      price4RequiresAgreement: raw.price4_requires_agreement,
-      validFrom: raw.valid_from,
-      validUntil: raw.valid_until,
+      priceCategoryId: raw.price_category_id,
+      amount: raw.amount,
+      currency: raw.currency,
     };
   }
 }

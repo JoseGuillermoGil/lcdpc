@@ -1,0 +1,26 @@
+<p-dialog [header]="isEditMode ? 'Editar Clasificacion' : 'Nueva Clasificacion'"
+          [visible]="visible" (visibleChange)="visibleChange.emit($event)"
+          [modal]="true" [dismissableMask]="true" [style]="{width: '400px'}"
+          (onHide)="close()">
+  <div class="classification-form">
+    <div class="field">
+      <p-floatlabel>
+        <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" />
+        <label for="name">Nombre *</label>
+      </p-floatlabel>
+    </div>
+
+    <div class="field">
+      <p-floatlabel>
+        <input pInputText id="code" [(ngModel)]="form.code" [class.ng-invalid]="submitted && !form.code" style="width: 100%" />
+        <label for="code">Codigo *</label>
+      </p-floatlabel>
+    </div>
+  </div>
+
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" severity="secondary" (onClick)="close()"></p-button>
+    <p-button [label]="isEditMode ? 'Guardar Cambios' : 'Crear Clasificacion'"
+              icon="pi pi-check" [loading]="saving()" (onClick)="save()"></p-button>
+  </ng-template>
+</p-dialog>
