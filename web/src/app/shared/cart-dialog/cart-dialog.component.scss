@@ -130,10 +130,37 @@
   flex: 1;
 }
 
+.auth-notice {
+  font-size: 0.85rem;
+  color: var(--text-soft);
+  text-align: right;
+  width: 100%;
+  padding-bottom: 0.25rem;
+
+  .login-link {
+    color: #994700;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: underline;
+
+    &:hover {
+      color: #f27405;
+    }
+  }
+}
+
+.footer-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
 :host ::ng-deep {
   .p-dialog-footer {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     gap: 0.5rem;
   }
 }

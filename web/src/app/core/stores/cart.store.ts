@@ -16,7 +16,8 @@ function loadCart(): CartItem[] {
   try {
     const raw = localStorage.getItem(CART_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as CartItem[];
+    const items = JSON.parse(raw) as CartItem[];
+    return items.filter((item) => item.stockAvailable != null && item.stockAvailable > 0);
   } catch {
     return [];
   }
@@ -47,7 +48,8 @@ export class CartStore {
       if (items.length > 0 && item.branchId !== null) {
         const currentBranchId = items[0].branchId ?? null;
         if (currentBranchId !== null && currentBranchId !== item.branchId) {
-          const next = [{ ...item, quantity } as CartItem];
+          const capped = item.stockAvailable > 0 ? Math.min(quantity, item.stockAvailable) : 0;
+          const next = [...(capped > 0 ? [{ ...item, quantity: capped } as CartItem] : [])];
           saveCart(next);
           return next;
         }
@@ -55,11 +57,20 @@ export class CartStore {
       const existing = items.find((i) => i.id === item.id);
       let next: CartItem[];
       if (existing) {
-        next = items.map((i) =>
-          i.id === item.id ? { ...i, quantity: i.quantity + quantity } : i
-        );
+        const newQty = existing.quantity + quantity;
+        const freshStockAvailable = item.stockAvailable;
+        const capped = freshStockAvailable > 0 ? Math.min(newQty, freshStockAvailable) : 0;
+        if (capped <= 0) {
+          next = items.filter((i) => i.id !== item.id);
+        } else {
+          next = items.map((i) =>
+            i.id === item.id ? { ...i, quantity: capped, stockAvailable: freshStockAvailable } : i
+          );
+        }
       } else {
-        next = [...items, { ...item, quantity }];
+        const capped = item.stockAvailable > 0 ? Math.min(quantity, item.stockAvailable) : 0;
+        if (capped <= 0) return items;
+        next = [...items, { ...item, quantity: capped }];
       }
       saveCart(next);
       return next;
@@ -80,7 +91,11 @@ export class CartStore {
       return;
     }
     this._items.update((items) => {
-      const next = items.map((i) => (i.id === id ? { ...i, quantity } : i));
+      const next = items.map((i) => {
+        if (i.id !== id) return i;
+        const capped = i.stockAvailable > 0 ? Math.min(quantity, i.stockAvailable) : 0;
+        return { ...i, quantity: capped };
+      });
       saveCart(next);
       return next;
     });
@@ -88,9 +103,12 @@ export class CartStore {
 
   increment(id: string): void {
     this._items.update((items) => {
-      const next = items.map((i) =>
-        i.id === id ? { ...i, quantity: i.quantity + 1 } : i
-      );
+      const next = items.map((i) => {
+        if (i.id !== id) return i;
+        if (i.stockAvailable <= 0) return i;
+        if (i.quantity >= i.stockAvailable) return i;
+        return { ...i, quantity: i.quantity + 1 };
+      });
       saveCart(next);
       return next;
     });

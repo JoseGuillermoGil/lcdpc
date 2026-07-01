@@ -80,6 +80,7 @@ export class ProductFormDialogComponent implements OnChanges {
   protected priceError: string | null = null;
 
   private previousClassificationId: string | null = null;
+  private retailCategoryId: string | null = null;
 
   protected form: CreateProductRequest = this.emptyForm();
   protected prices: PriceRow[] = [this.emptyPrice()];
@@ -146,6 +147,7 @@ export class ProductFormDialogComponent implements OnChanges {
       this.submitted = false;
       this.imageFile = null;
       this.conversionError = null;
+      this.retailCategoryId = null;
     }
   }
 
@@ -165,6 +167,16 @@ export class ProductFormDialogComponent implements OnChanges {
           value: u.id,
         })));
         this.priceCategories.set(categories.map((c) => ({ label: c.name, value: c.id })));
+
+        const retail = categories.find((c) => c.code === 'retail');
+        this.retailCategoryId = retail?.id ?? null;
+
+        if (!this.isEditMode) {
+          const retail = categories.find((c) => c.code === 'retail');
+          if (retail && this.prices.length === 1 && !this.prices[0].price_category_id) {
+            this.prices[0].price_category_id = retail.id;
+          }
+        }
       },
     });
   }
@@ -421,6 +433,13 @@ export class ProductFormDialogComponent implements OnChanges {
   }
 
   private validatePrices(prices: PriceRow[]): string | null {
+    if (this.retailCategoryId) {
+      const hasRetail = prices.some((p) => p.price_category_id === this.retailCategoryId);
+      if (!hasRetail) {
+        return 'El precio Minorista (retail) es obligatorio';
+      }
+    }
+
     const seen = new Set<string>();
     for (const p of prices) {
       const key = p.price_category_id ?? '__none__';

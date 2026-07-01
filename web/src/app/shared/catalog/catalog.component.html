@@ -61,12 +61,18 @@
               <div class="quantity-control">
                 <p-button icon="pi pi-minus" [text]="true" (onClick)="decrement.emit(product.id)"></p-button>
                 <span>{{ product.quantity }}</span>
-                <p-button icon="pi pi-plus" [text]="true" (onClick)="increment.emit(product.id)"></p-button>
+                <p-button icon="pi pi-plus" [text]="true"
+                          [disabled]="product.stockAvailable > 0 && product.quantity >= product.stockAvailable"
+                          (onClick)="increment.emit(product.id)"></p-button>
               </div>
+              @if (product.stockAvailable > 0) {
+                <span class="stock-info">{{ product.stockAvailable }} disponibles</span>
+              }
               <p-button
                 [label]="product.featured ? 'Añadir al Carrito' : 'Agregar'"
                 icon="pi pi-shopping-cart"
                 [severity]="product.featured ? 'secondary' : 'primary'"
+                [disabled]="product.stockAvailable === 0"
                 (onClick)="addToCart.emit(product.id)"
               ></p-button>
             </div>

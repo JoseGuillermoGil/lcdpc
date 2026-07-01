@@ -337,6 +337,7 @@ web/src/app/
 - Delete: `confirmDelete()` using PrimeNG `ConfirmationService`.
 - Toast messages via `MessageService` (Spanish: "Exito", "Error").
 - All `ConfirmationService` and `MessageService` provided locally in component `providers: []`.
+- **PrimeNG 20 Toast**: The `detail` property of `MessageService.add()` renders HTML by default — do NOT use `escape: false` (that property does not exist in `ToastMessageOptions`). Just write HTML directly in the `detail` string. Example: `detail: 'Texto <a class="link" href="javascript:void(0)">enlace</a>'`.
 
 #### Pagination pattern (PrimeNG lazy table)
 All paginated list pages must follow the products page pattern — **never** use an external `<p-paginator>` outside `<p-table>`:

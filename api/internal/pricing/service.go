@@ -151,10 +151,15 @@ func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]
 }
 
 func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreateProductRequest) (*Product, error) {
-	var oldStock, oldStockAvail, oldStockBlocked int
+	var current Product
 	err := s.pool.QueryRow(ctx, `
-		SELECT stock, stock_available, stock_blocked FROM products WHERE product_id = $1 FOR UPDATE
-	`, id).Scan(&oldStock, &oldStockAvail, &oldStockBlocked)
+		SELECT product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
+		FROM products WHERE product_id = $1 FOR UPDATE
+	`, id).Scan(
+		&current.ProductID, &current.Name, &current.Sku, &current.IsActive, &current.Img,
+		&current.BrandID, &current.CategoryID, &current.BranchID, &current.BaseUnitID,
+		&current.Stock, &current.StockAvailable, &current.StockBlocked,
+	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
 	}
@@ -162,14 +167,34 @@ func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreatePro
 		return nil, fmt.Errorf("get product for update: %w", err)
 	}
 
-	newStock := oldStock
-	newStockAvail := oldStockAvail
-	newStockBlocked := oldStockBlocked
+	img := current.Img
+	if req.Img != nil {
+		img = req.Img
+	}
+
+	categoryID := current.CategoryID
+	if req.CategoryID != nil {
+		categoryID = req.CategoryID
+	}
+
+	branchID := current.BranchID
+	if req.BranchID != nil {
+		branchID = req.BranchID
+	}
+
+	baseUnitID := current.BaseUnitID
+	if req.BaseUnitID != nil {
+		baseUnitID = req.BaseUnitID
+	}
+
+	newStock := current.Stock
+	newStockAvail := current.StockAvailable
+	newStockBlocked := current.StockBlocked
 
 	if req.Stock != nil {
 		newStock = *req.Stock
-		delta := newStock - oldStock
-		newStockAvail = oldStockAvail + delta
+		delta := newStock - current.Stock
+		newStockAvail = current.StockAvailable + delta
 
 		if newStock < 0 {
 			return nil, fmt.Errorf("STOCK_BELOW_ZERO")
@@ -177,7 +202,7 @@ func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreatePro
 		if newStockAvail < 0 {
 			return nil, fmt.Errorf("STOCK_AVAILABLE_BELOW_ZERO")
 		}
-		if oldStockBlocked > newStock {
+		if current.StockBlocked > newStock {
 			return nil, fmt.Errorf("STOCK_BLOCKED_EXCEEDS_STOCK")
 		}
 	}
@@ -187,7 +212,7 @@ func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreatePro
 		UPDATE products SET name = $2, sku = $3, img = $4, brand_id = $5, category_id = $6, branch_id = $7, base_unit_id = $8, stock = $9, stock_available = $10, stock_blocked = $11
 		WHERE product_id = $1
 		RETURNING product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
-	`, id, req.Name, req.Sku, req.Img, req.BrandID, req.CategoryID, req.BranchID, req.BaseUnitID, newStock, newStockAvail, newStockBlocked).Scan(
+	`, id, req.Name, req.Sku, img, req.BrandID, categoryID, branchID, baseUnitID, newStock, newStockAvail, newStockBlocked).Scan(
 		&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked,
 	)
 	if err != nil {
@@ -917,7 +942,19 @@ func (s *Service) UpdatePriceCategory(ctx context.Context, id uuid.UUID, req Cre
 }
 
 func (s *Service) DeletePriceCategory(ctx context.Context, id uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM price_categories WHERE id = $1`, id)
+	var code string
+	err := s.pool.QueryRow(ctx, `SELECT code FROM price_categories WHERE id = $1`, id).Scan(&code)
+	if err == pgx.ErrNoRows {
+		return fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return fmt.Errorf("get price category: %w", err)
+	}
+	if code == "retail" {
+		return fmt.Errorf("CANNOT_DELETE_RETAIL")
+	}
+
+	_, err = s.pool.Exec(ctx, `DELETE FROM price_categories WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("delete price category: %w", err)
 	}

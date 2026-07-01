@@ -4,6 +4,8 @@ import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ProductApiService } from '../../core/services/product-api.service';
 import { BundleApiService } from '../../core/services/bundle-api.service';
+import { PriceApiService } from '../../core/services/price-api.service';
+import { PriceCategoryApiService } from '../../core/services/price-category-api.service';
 import { CategoryStore } from '../../core/stores/category.store';
 import { BranchApiService } from '../../core/services/branch-api.service';
 import { Branch } from '../../core/models/branch.model';
@@ -56,6 +58,8 @@ export class LandingPageComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly productApi = inject(ProductApiService);
   private readonly bundleApi = inject(BundleApiService);
+  private readonly priceApi = inject(PriceApiService);
+  private readonly priceCategoryApi = inject(PriceCategoryApiService);
   readonly categoryStore = inject(CategoryStore);
   private readonly branchApi = inject(BranchApiService);
   private readonly branchStore = inject(BranchStore);
@@ -136,8 +140,12 @@ export class LandingPageComponent implements OnInit {
     forkJoin({
       products: this.productApi.list({ branch_id: branchId, is_active: true }),
       bundles: this.bundleApi.list({ branch_id: branchId }),
+      priceCategories: this.priceCategoryApi.list(),
     }).subscribe({
-      next: ({ products, bundles }) => {
+      next: ({ products, bundles, priceCategories }) => {
+        const retailCategory = priceCategories.find((c) => c.code === 'retail');
+        const retailCategoryId = retailCategory?.id ?? null;
+
         const bundleCards: ProductCard[] = bundles.items
           .filter((b) => b.status === 'Published')
           .map((b) => ({
@@ -156,23 +164,45 @@ export class LandingPageComponent implements OnInit {
             stockAvailable: 0,
           }));
 
-        const productCards: ProductCard[] = products.items
-          .map((p) => ({
-            id: p.productId,
-            name: p.name,
-            price: '$0.00',
-            priceNumeric: 0,
-            description: '',
-            imageUrl: this.productApi.resolveImageUrl(p.img) ?? NOT_FOUND_IMAGE,
-            alt: p.name,
-            categoryId: p.categoryId ?? '',
-            category: this.categoryStore.getCategoryName(p.categoryId),
-            quantity: 1,
-            branchId: p.branchId,
-            stockAvailable: p.stockAvailable,
-          }));
+        const productCards: ProductCard[] = products.items.map((p) => ({
+          id: p.productId,
+          name: p.name,
+          price: '$0.00',
+          priceNumeric: 0,
+          description: '',
+          imageUrl: this.productApi.resolveImageUrl(p.img) ?? NOT_FOUND_IMAGE,
+          alt: p.name,
+          categoryId: p.categoryId ?? '',
+          category: this.categoryStore.getCategoryName(p.categoryId),
+          quantity: 1,
+          branchId: p.branchId,
+          stockAvailable: p.stockAvailable,
+        }));
 
-        this.products.set([...bundleCards, ...productCards]);
+        if (productCards.length === 0 || !retailCategoryId) {
+          this.products.set([...bundleCards, ...productCards]);
+          return;
+        }
+
+        const priceCalls = productCards.map((p) =>
+          this.priceApi.listByProductId(p.id)
+        );
+
+        forkJoin(priceCalls).subscribe({
+          next: (pricesPerProduct) => {
+            pricesPerProduct.forEach((prices, i) => {
+              const retail = prices.find((pr) => pr.priceCategoryId === retailCategoryId);
+              if (retail) {
+                productCards[i].priceNumeric = retail.amount;
+                productCards[i].price = `$${retail.amount.toFixed(2)}`;
+              }
+            });
+            this.products.set([...bundleCards, ...productCards]);
+          },
+          error: () => {
+            this.products.set([...bundleCards, ...productCards]);
+          },
+        });
       },
       error: () => {
         this.products.set([]);
@@ -186,7 +216,12 @@ export class LandingPageComponent implements OnInit {
 
   protected incrementQuantity(productId: string): void {
     this.products.update((items) =>
-      items.map((p) => (p.id === productId ? { ...p, quantity: p.quantity + 1 } : p))
+      items.map((p) => {
+        if (p.id !== productId) return p;
+        const max = p.stockAvailable > 0 ? p.stockAvailable : Infinity;
+        const newQty = Math.min(p.quantity + 1, max);
+        return { ...p, quantity: newQty };
+      })
     );
   }
 

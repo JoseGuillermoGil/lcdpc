@@ -20,6 +20,7 @@ type ProductCard = {
   badge?: string;
   featured?: boolean;
   quantity: number;
+  stockAvailable: number;
 };
 
 @Component({

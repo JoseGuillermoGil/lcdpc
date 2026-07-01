@@ -84,29 +84,43 @@
   }
 
   <ng-template pTemplate="footer">
-    @if (!isEmpty()) {
-      <p-button
-        label="Vaciar Carrito"
-        icon="pi pi-trash"
-        severity="danger"
-        [text]="true"
-        (onClick)="clearCart()"
-      ></p-button>
+    @if (!isEmpty() && !isAuthenticated()) {
+      <div class="auth-notice">
+        Para realizar una compra debes
+        <a class="login-link" (click)="openLogin()">iniciar sesión</a>
+      </div>
     }
-    <div class="footer-spacer"></div>
-    <p-button
-      label="Cancelar"
-      severity="secondary"
-      (onClick)="close()"
-    ></p-button>
-    @if (!isEmpty()) {
+    <div class="footer-buttons">
+      @if (!isEmpty()) {
+        <p-button
+          label="Vaciar Carrito"
+          icon="pi pi-trash"
+          severity="danger"
+          [text]="true"
+          (onClick)="clearCart()"
+        ></p-button>
+      }
+      <div class="footer-spacer"></div>
       <p-button
-        label="Comprar"
-        icon="pi pi-check"
-        [loading]="buying()"
-        [disabled]="hasStockIssues() || !isAuthenticated()"
-        (onClick)="buy()"
+        label="Cancelar"
+        severity="secondary"
+        (onClick)="close()"
       ></p-button>
-    }
+      @if (!isEmpty()) {
+        <p-button
+          label="Comprar"
+          icon="pi pi-check"
+          [loading]="buying()"
+          [disabled]="hasStockIssues() || !isAuthenticated()"
+          (onClick)="buy()"
+        ></p-button>
+      }
+    </div>
   </ng-template>
 </p-dialog>
+
+<app-login-dialog
+  [visible]="showLoginDialog()"
+  (visibleChange)="showLoginDialog.set($event)"
+  (loginSuccess)="onLoginSuccess()"
+/>

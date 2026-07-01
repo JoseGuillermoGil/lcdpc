@@ -25,7 +25,7 @@
           <p-button icon="pi pi-pencil" [text]="true" [rounded]="true"
                     (onClick)="openEdit(item)" pTooltip="Editar"></p-button>
         }
-        @if (canDelete()) {
+        @if (canDelete() && item.code !== 'retail') {
           <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger"
                     (onClick)="confirmDelete(item)" pTooltip="Eliminar"></p-button>
         }

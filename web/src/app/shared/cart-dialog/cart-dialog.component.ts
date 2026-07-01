@@ -1,6 +1,5 @@
 import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output, inject, computed, signal } from '@angular/core';
-import { Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
 import { ToastModule } from 'primeng/toast';
@@ -10,11 +9,12 @@ import { AuthStore } from '../../core/auth/auth.store';
 import { BranchStore } from '../../core/stores/branch.store';
 import { OrderApiService } from '../../core/services/order-api.service';
 import { ProductApiService } from '../../core/services/product-api.service';
+import { LoginDialogComponent } from '../login-dialog/login-dialog.component';
 
 @Component({
   selector: 'app-cart-dialog',
   standalone: true,
-  imports: [CommonModule, ButtonModule, DialogModule, ToastModule],
+  imports: [CommonModule, ButtonModule, DialogModule, ToastModule, LoginDialogComponent],
   providers: [MessageService],
   templateUrl: './cart-dialog.component.html',
   styleUrl: './cart-dialog.component.scss',
@@ -26,12 +26,12 @@ export class CartDialogComponent {
   private readonly orderApi = inject(OrderApiService);
   private readonly productApi = inject(ProductApiService);
   private readonly messageService = inject(MessageService);
-  private readonly router = inject(Router);
 
   @Input() visible = false;
   @Output() visibleChange = new EventEmitter<boolean>();
 
   protected readonly buying = signal(false);
+  protected readonly showLoginDialog = signal(false);
 
   protected readonly items = this.cartStore.items;
   protected readonly totalPrice = this.cartStore.totalPrice;
@@ -82,12 +82,19 @@ export class CartDialogComponent {
     return item.quantity > item.stockAvailable;
   }
 
+  openLogin(): void {
+    this.showLoginDialog.set(true);
+  }
+
+  onLoginSuccess(): void {
+    this.showLoginDialog.set(false);
+    this.buy();
+  }
+
   buy(): void {
     if (this.isEmpty()) return;
 
     if (!this.isAuthenticated()) {
-      this.close();
-      this.router.navigate(['/login']);
       return;
     }
 
