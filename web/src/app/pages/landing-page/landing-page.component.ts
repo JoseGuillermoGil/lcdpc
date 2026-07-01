@@ -25,6 +25,7 @@ type ProductCard = {
   id: string;
   name: string;
   price: string;
+  priceNumeric: number;
   description: string;
   imageUrl: string;
   alt: string;
@@ -34,6 +35,7 @@ type ProductCard = {
   featured?: boolean;
   quantity: number;
   branchId: string | null;
+  stockAvailable: number;
 };
 
 type BranchCard = {
@@ -142,6 +144,7 @@ export class LandingPageComponent implements OnInit {
             id: b.bundleId,
             name: b.name,
             price: '$0.00',
+            priceNumeric: 0,
             description: `Código: ${b.code}`,
             imageUrl: this.bundleApi.resolveImageUrl(b.img) ?? NOT_FOUND_IMAGE,
             alt: b.name,
@@ -149,7 +152,8 @@ export class LandingPageComponent implements OnInit {
             category: this.categoryStore.getCategoryName(b.categoryId),
             featured: true,
             quantity: 1,
-            branchId: b.branchId
+            branchId: b.branchId,
+            stockAvailable: 0,
           }));
 
         const productCards: ProductCard[] = products.items
@@ -157,13 +161,15 @@ export class LandingPageComponent implements OnInit {
             id: p.productId,
             name: p.name,
             price: '$0.00',
+            priceNumeric: 0,
             description: '',
             imageUrl: this.productApi.resolveImageUrl(p.img) ?? NOT_FOUND_IMAGE,
             alt: p.name,
             categoryId: p.categoryId ?? '',
             category: this.categoryStore.getCategoryName(p.categoryId),
             quantity: 1,
-            branchId: p.branchId
+            branchId: p.branchId,
+            stockAvailable: p.stockAvailable,
           }));
 
         this.products.set([...bundleCards, ...productCards]);
@@ -203,8 +209,9 @@ export class LandingPageComponent implements OnInit {
         id: product.id,
         name: product.name,
         imageUrl: product.imageUrl,
-        price: 0,
+        price: product.priceNumeric,
         branchId: product.branchId,
+        stockAvailable: product.stockAvailable,
       },
       product.quantity
     );

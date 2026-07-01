@@ -26,6 +26,12 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 		if item.ItemType != "product" && item.ItemType != "bundle" {
 			return nil, fmt.Errorf("invalid item_type: %s", item.ItemType)
 		}
+		if item.ItemType == "product" && item.ProductID == uuid.Nil {
+			return nil, fmt.Errorf("product_id is required for product items")
+		}
+		if item.ItemType == "bundle" && item.BundleID == uuid.Nil {
+			return nil, fmt.Errorf("bundle_id is required for bundle items")
+		}
 	}
 
 	tx, err := s.pool.Begin(ctx)
@@ -54,6 +60,32 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 		var productID, bundleID *uuid.UUID
 		if item.ItemType == "product" {
 			productID = &item.ProductID
+
+			var stock, stockAvailable, stockBlocked int
+			err = tx.QueryRow(ctx, `
+				SELECT stock, stock_available, stock_blocked
+				FROM products WHERE product_id = $1 FOR UPDATE
+			`, item.ProductID).Scan(&stock, &stockAvailable, &stockBlocked)
+			if err != nil {
+				return nil, fmt.Errorf("get product stock: %w", err)
+			}
+
+			qty := int(item.Quantity)
+			if stockAvailable < qty {
+				return nil, fmt.Errorf("INSUFFICIENT_STOCK: product %s has %d available, requested %d", item.ProductID, stockAvailable, qty)
+			}
+			if stockBlocked+qty > stock {
+				return nil, fmt.Errorf("STOCK_EXCEEDED: product %s stock=%d blocked=%d requested=%d", item.ProductID, stock, stockBlocked, qty)
+			}
+
+			_, err = tx.Exec(ctx, `
+				UPDATE products
+				SET stock_available = stock_available - $1, stock_blocked = stock_blocked + $1
+				WHERE product_id = $2
+			`, qty, item.ProductID)
+			if err != nil {
+				return nil, fmt.Errorf("update product stock: %w", err)
+			}
 		} else {
 			bundleID = &item.BundleID
 		}

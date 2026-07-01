@@ -4,13 +4,14 @@ import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { FooterComponent } from './shared/footer/footer.component';
 import { HeaderComponent } from './shared/header/header.component';
+import { CartDialogComponent } from './shared/cart-dialog/cart-dialog.component';
 import { AuthStore } from './core/auth/auth.store';
 import { BranchStore } from './core/stores/branch.store';
 import { CartStore } from './core/stores/cart.store';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, RouterOutlet, HeaderComponent, FooterComponent],
+  imports: [CommonModule, RouterOutlet, HeaderComponent, FooterComponent, CartDialogComponent],
   templateUrl: './app.html',
   styleUrl: './app.scss'
 })
@@ -22,6 +23,7 @@ export class App implements OnInit {
   protected readonly cartStore = inject(CartStore);
 
   protected readonly showStoreShell = signal(!this.isAuthRoute(this.router.url));
+  protected readonly showCartDialog = signal(false);
 
   constructor() {
     const subscription = this.router.events
@@ -41,6 +43,10 @@ export class App implements OnInit {
     if (branchId) {
       this.branchStore.selectBranch(branchId);
     }
+  }
+
+  protected openCartDialog(): void {
+    this.showCartDialog.set(true);
   }
 
   private isAuthRoute(url: string): boolean {

@@ -16,6 +16,7 @@ import { OrderApiService } from '../../../core/services/order-api.service';
 import { BranchApiService } from '../../../core/services/branch-api.service';
 import { Order } from '../../../core/models/order.model';
 import { OrderDetailDialogComponent } from './order-detail-dialog.component';
+import { OrderFormDialogComponent } from './order-form-dialog.component';
 
 @Component({
   selector: 'app-orders-page',
@@ -23,7 +24,7 @@ import { OrderDetailDialogComponent } from './order-detail-dialog.component';
   imports: [
     CommonModule, FormsModule, ButtonModule, TableModule, TagModule,
     SelectModule, InputTextModule, DialogModule, ConfirmDialogModule,
-    ToastModule, TooltipModule, OrderDetailDialogComponent
+    ToastModule, TooltipModule, OrderDetailDialogComponent, OrderFormDialogComponent
   ],
   providers: [ConfirmationService, MessageService],
   templateUrl: './orders-page.component.html',
@@ -37,6 +38,7 @@ export class OrdersPageComponent implements OnInit {
   private readonly messageService = inject(MessageService);
 
   protected readonly canView = computed(() => this.authStore.hasPermission('order:view'));
+  protected readonly canCreate = computed(() => this.authStore.hasPermission('order:create'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('order:delete'));
   protected readonly canChangeStatus = computed(() => this.authStore.hasPermission('order:status:change'));
   protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
@@ -63,6 +65,7 @@ export class OrdersPageComponent implements OnInit {
 
   protected readonly detailVisible = signal(false);
   protected readonly selectedOrder = signal<Order | null>(null);
+  protected readonly createDialogVisible = signal(false);
 
   protected readonly statusDialogVisible = signal(false);
   protected readonly nextStatusOptions = signal<{ label: string; value: string }[]>([]);
@@ -167,6 +170,16 @@ export class OrdersPageComponent implements OnInit {
         this.messageService.add({ severity: 'error', summary: 'Error', detail: 'No se pudo cambiar el estado' });
       },
     });
+  }
+
+  openCreateDialog(): void {
+    this.createDialogVisible.set(true);
+  }
+
+  onOrderCreated(): void {
+    this.createDialogVisible.set(false);
+    this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Orden creada exitosamente' });
+    this.applyFilters();
   }
 
   confirmDelete(order: Order): void {

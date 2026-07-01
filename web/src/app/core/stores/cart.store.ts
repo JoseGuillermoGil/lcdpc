@@ -9,6 +9,7 @@ export interface CartItem {
   price: number;
   branchId: string | null;
   quantity: number;
+  stockAvailable: number;
 }
 
 function loadCart(): CartItem[] {
@@ -32,6 +33,10 @@ export class CartStore {
   readonly items = this._items.asReadonly();
 
   readonly totalItems = computed(() => this._items().length);
+
+  readonly totalQuantity = computed(() =>
+    this._items().reduce((sum, item) => sum + item.quantity, 0)
+  );
 
   readonly totalPrice = computed(() =>
     this._items().reduce((sum, item) => sum + item.price * item.quantity, 0)

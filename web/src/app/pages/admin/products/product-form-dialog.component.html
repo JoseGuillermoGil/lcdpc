@@ -47,6 +47,14 @@
     </div>
 
     <div class="field">
+      <p-floatlabel>
+        <p-inputNumber id="stock" [(ngModel)]="form.stock" [min]="0" [useGrouping]="false"
+                       style="width: 100%" placeholder=" " />
+        <label for="stock">Stock</label>
+      </p-floatlabel>
+    </div>
+
+    <div class="field">
       <label class="field-label">Imagen</label>
       @if (imagePreview) {
         <div class="image-preview">

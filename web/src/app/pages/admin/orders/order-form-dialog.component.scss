@@ -1,0 +1,163 @@
+:host ::ng-deep {
+  .p-dialog {
+    max-width: 95vw;
+  }
+}
+
+.order-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+.field-label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--text-soft);
+  margin-bottom: 0.25rem;
+}
+
+.user-search {
+  position: relative;
+}
+
+.user-search-input {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.user-option {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover {
+    background: var(--surface-strong);
+  }
+
+  .user-email {
+    font-weight: 500;
+    font-size: 0.85rem;
+  }
+
+  .user-name {
+    font-size: 0.75rem;
+    color: var(--text-soft);
+  }
+}
+
+.items-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.items-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+
+  h3 {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin: 0;
+  }
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+
+  &:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  &.ng-invalid {
+    border-color: rgba(217, 37, 37, 0.3);
+  }
+}
+
+.item-subtotal {
+  font-weight: 600;
+  font-size: 0.85rem;
+  min-width: 80px;
+  text-align: right;
+}
+
+.items-total {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+  border-top: 2px solid var(--border);
+  font-size: 1rem;
+
+  strong {
+    font-size: 1.1rem;
+  }
+}
+
+.empty-items {
+  text-align: center;
+  padding: 1rem;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+}
+
+.p-error {
+  color: #ba1a1a;
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+@media (max-width: 600px) {
+  .item-row {
+    flex-wrap: wrap;
+  }
+
+  .item-subtotal {
+    width: 100%;
+    text-align: left;
+  }
+}

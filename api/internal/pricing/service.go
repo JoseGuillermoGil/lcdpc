@@ -51,9 +51,9 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 	p := &Product{}
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO products (product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked)
-		VALUES ($1, $2, $3, true, $4, $5, $6, $7, $8, COALESCE($9, 0), COALESCE($10, 0), COALESCE($11, 0))
+		VALUES ($1, $2, $3, true, $4, $5, $6, $7, $8, COALESCE($9, 0), COALESCE($9, 0), 0)
 		RETURNING product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
-	`, uuid.New(), req.Name, req.Sku, req.Img, req.BrandID, req.CategoryID, req.BranchID, req.BaseUnitID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
+	`, uuid.New(), req.Name, req.Sku, req.Img, req.BrandID, req.CategoryID, req.BranchID, req.BaseUnitID, req.Stock).Scan(
 		&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked,
 	)
 	if err != nil {
@@ -151,12 +151,43 @@ func (s *Service) ListProducts(ctx context.Context, filter ...ProductFilter) ([]
 }
 
 func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreateProductRequest) (*Product, error) {
-	p := &Product{}
+	var oldStock, oldStockAvail, oldStockBlocked int
 	err := s.pool.QueryRow(ctx, `
+		SELECT stock, stock_available, stock_blocked FROM products WHERE product_id = $1 FOR UPDATE
+	`, id).Scan(&oldStock, &oldStockAvail, &oldStockBlocked)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("NOT_FOUND")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get product for update: %w", err)
+	}
+
+	newStock := oldStock
+	newStockAvail := oldStockAvail
+	newStockBlocked := oldStockBlocked
+
+	if req.Stock != nil {
+		newStock = *req.Stock
+		delta := newStock - oldStock
+		newStockAvail = oldStockAvail + delta
+
+		if newStock < 0 {
+			return nil, fmt.Errorf("STOCK_BELOW_ZERO")
+		}
+		if newStockAvail < 0 {
+			return nil, fmt.Errorf("STOCK_AVAILABLE_BELOW_ZERO")
+		}
+		if oldStockBlocked > newStock {
+			return nil, fmt.Errorf("STOCK_BLOCKED_EXCEEDS_STOCK")
+		}
+	}
+
+	p := &Product{}
+	err = s.pool.QueryRow(ctx, `
 		UPDATE products SET name = $2, sku = $3, img = $4, brand_id = $5, category_id = $6, branch_id = $7, base_unit_id = $8, stock = $9, stock_available = $10, stock_blocked = $11
 		WHERE product_id = $1
 		RETURNING product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
-	`, id, req.Name, req.Sku, req.Img, req.BrandID, req.CategoryID, req.BranchID, req.BaseUnitID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
+	`, id, req.Name, req.Sku, req.Img, req.BrandID, req.CategoryID, req.BranchID, req.BaseUnitID, newStock, newStockAvail, newStockBlocked).Scan(
 		&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked,
 	)
 	if err != nil {

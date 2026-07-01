@@ -33,8 +33,8 @@ export interface CreateOrderRequest {
 
 export interface CreateOrderItem {
   item_type: string;
-  product_id: string;
-  bundle_id: string;
+  product_id?: string;
+  bundle_id?: string;
   quantity: number;
   unit_price: number;
 }

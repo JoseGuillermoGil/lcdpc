@@ -21,6 +21,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/staff"
 	"github.com/lcdpc/lcdpc-go/internal/sync"
 	"github.com/lcdpc/lcdpc-go/internal/systemconfig"
+	"github.com/lcdpc/lcdpc-go/internal/user"
 )
 
 func NewServer(
@@ -39,6 +40,7 @@ func NewServer(
 	rbacSvc *rbac.Service,
 	orderSvc *order.Service,
 	systemConfigSvc *systemconfig.Service,
+	userSvc *user.Service,
 ) *chi.Mux {
 	r := chi.NewRouter()
 
@@ -70,6 +72,7 @@ func NewServer(
 	rbacH := rbac.NewHandler(rbacSvc)
 	orderH := order.NewHandler(orderSvc, rbacStore)
 	systemConfigH := handler.NewSystemConfigHandler(systemConfigSvc)
+	userH := handler.NewUserHandler(userSvc)
 
 	// Public
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -482,12 +485,20 @@ func NewServer(
 		})
 	})
 
-	// User profile assignment
+	// Users
 	r.Route("/api/v1/users", func(r chi.Router) {
 		r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
 		r.Use(middleware.RequireAuth())
-		r.Use(middleware.RequirePermission(rbacStore, "rbac:user:update"))
-		r.Put("/{id}/profile", rbacH.AssignProfileToUser)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "order:create"))
+			r.Get("/", userH.List)
+			r.Get("/search", userH.Search)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "rbac:user:update"))
+			r.Put("/{id}/profile", rbacH.AssignProfileToUser)
+		})
 	})
 
 	// Orders

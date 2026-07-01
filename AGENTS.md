@@ -228,6 +228,7 @@ web/src/app/
     catalog-search/
     advanced-search/
     branches/
+    cart-dialog/   — cart management dialog with order creation
   components/      — legacy plain-HTML versions of hero, catalog, branches (no PrimeNG)
 ```
 
@@ -561,11 +562,99 @@ loadItems(event: TableLazyLoadEvent): void {
 - `selectBranch()` changes active branch
 - Used by `App` component (header) and `LandingPageComponent` (product filtering)
 
-### Cart Store
+### Cart Store (`core/stores/cart.store.ts`)
 
-- **Store**: `core/stores/cart.store.ts` — `items` signal, `totalItems`/`totalPrice` computed
-- `addItem()`, `removeItem()`, `updateQuantity()`, `increment()`, `decrement()`, `clear()`
-- Used by `App` component (header badge) and `LandingPageComponent` (add to cart from catalog)
+Purely client-side cart with localStorage persistence. Makes **zero API calls** — no server sync, no checkout flow.
+
+#### Data model
+```typescript
+interface CartItem {
+  id: string;
+  name: string;
+  imageUrl: string;
+  price: number;
+  branchId: string | null;
+  quantity: number;
+  stockAvailable: number;
+}
+```
+
+#### Signals
+| Signal | Type | Description |
+|---|---|---|
+| `_items` | `signal<CartItem[]>` | Private state, initialized from `loadCart()` |
+| `items` (readonly) | `Signal<CartItem[]>` | Public read-only items |
+| `totalItems` | `computed` | `_items().length` — counts **distinct items**, not sum of quantities |
+| `totalQuantity` | `computed` | Sum of all item quantities (actual units) |
+| `totalPrice` | `computed` | Sum of `price * quantity` across all items |
+
+#### Methods
+| Method | Behavior |
+|---|---|
+| `addItem(item, quantity=1)` | Branch-scoped: if cart has items from a different branch, replaces entire cart. Otherwise adds qty to existing item or appends new. Calls `saveCart()`. |
+| `removeItem(id)` | Filters out by id. Saves. |
+| `updateQuantity(id, qty)` | If qty <= 0, removes. Otherwise updates. Saves. |
+| `increment(id)` | +1 to item quantity. Saves. |
+| `decrement(id)` | -1; removes if new qty <= 0. Saves. |
+| `clear()` | Empties cart, removes localStorage key. |
+
+#### Persistence
+- Key: `lcdpc_cart`
+- Format: JSON array of `CartItem`
+- Loaded on store init via `signal<CartItem[]>(loadCart())`
+- Saved after every mutation via `saveCart()`
+- No expiry — persists indefinitely until manually cleared
+
+#### Known issues / incomplete state
+- **No auth integration**: cart survives logout, not user-specific
+- **`totalItems` counts distinct products**: 10 units of one product = count of 1 (badge shows 1)
+- **`totalQuantity`** is available for accurate count but badge uses `totalItems`
+
+#### Integration points
+- **Header** (`shared/header/`): receives `@Input() cartCount`, emits `@Output() cartClick` — opens cart dialog
+- **App** (`app.html`): passes `cartStore.totalItems()` to header, shows second badge in mobile nav, wires `(cartClick)` to `openCartDialog()`
+- **CartDialogComponent** (`shared/cart-dialog/`): full cart UI — items list, quantity controls, stock warnings, clear, buy
+- **LandingPageComponent**: calls `cartStore.addItem()` when user clicks "Agregar" on a product, passes `stockAvailable` and real price
+- **CatalogComponent** (`shared/catalog/`): presentational — emits `addToCart`, `increment`, `decrement` events, no cart store direct access
+- **BranchStore**: branchId from selected product is passed to cart; branch conflict enforcement in `addItem()` prevents mixing branches
+
+#### Add-to-cart flow
+1. User clicks +/- in CatalogComponent → emits `increment`/`decrement` → `LandingPageComponent` updates local `product.quantity` signal
+2. User clicks "Añadir al Carrito" → CatalogComponent emits `addToCart(productId)` → `LandingPageComponent.addToCart()` finds product, calls `cartStore.addItem()` with `{ id, name, imageUrl, price, branchId, stockAvailable }` and local quantity
+3. CartStore checks branch conflict → saves to localStorage
+4. Product local quantity resets to 1
+
+### Cart Dialog (`shared/cart-dialog/`)
+
+Complex dialog (separate `.ts` + `.html` + `.scss` files) for cart management and order creation.
+
+#### Files
+- `cart-dialog.component.ts` — component class with buy logic
+- `cart-dialog.component.html` — PrimeNG `p-dialog` template
+- `cart-dialog.component.scss` — styles
+
+#### Behavior
+- Opens when user clicks cart icon in header or mobile nav (`showCartDialog` signal in `App`)
+- Shows list of cart items with image, name, stock info, quantity controls, remove button
+- Stock warning: items where `quantity > stockAvailable` are highlighted in red
+- Quantity +/- buttons: increment disabled when `quantity >= stockAvailable`
+- "Vaciar Carrito" clears all items
+- "Comprar" creates order via `OrderApiService.create()`
+
+#### Buy flow
+1. Validates user is authenticated — if not, redirects to `/login`
+2. Validates no stock issues (`hasStockIssues` computed signal)
+3. Builds `CreateOrderRequest` with `branch_id`, `client_user_id`, items (all `item_type: "product"`)
+4. Calls `orderApi.create(req)`
+5. On success: clears cart, shows success toast, closes dialog
+6. On error: shows error toast (e.g., `INSUFFICIENT_STOCK`)
+
+#### Stock management (backend)
+- Order creation validates `stock_available >= quantity` per product item
+- Validates `stock_blocked + quantity <= stock` (blocked can't exceed total)
+- On success: `stock_available -= quantity`, `stock_blocked += quantity` (atomic within transaction)
+- Uses `SELECT ... FOR UPDATE` to prevent race conditions
+- If any item fails, entire transaction rolls back
 
 ### Catalog branch filtering
 

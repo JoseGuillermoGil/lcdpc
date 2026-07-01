@@ -129,6 +129,7 @@ export class ProductFormDialogComponent implements OnChanges {
           category_id: this.product.categoryId,
           branch_id: this.product.branchId,
           base_unit_id: this.product.baseUnitId,
+          stock: this.product.stock,
         };
         this.imagePreview = this.productApi.resolveImageUrl(this.product.img);
         this.loadExistingPricesAndConversions();
@@ -277,6 +278,10 @@ export class ProductFormDialogComponent implements OnChanges {
       return;
     }
 
+    if (this.form.stock != null && this.form.stock < 0) {
+      return;
+    }
+
     const validPrices = this.prices.filter(
       (p) => p.amount != null && p.amount > 0
     );
@@ -395,6 +400,7 @@ export class ProductFormDialogComponent implements OnChanges {
       category_id: null,
       branch_id: null,
       base_unit_id: null,
+      stock: undefined,
     };
   }
 

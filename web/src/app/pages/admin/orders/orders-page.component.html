@@ -1,6 +1,9 @@
 <section class="orders-page">
   <div class="page-header">
     <h1>Ordenes</h1>
+    @if (canCreate()) {
+      <p-button label="Nueva Orden" icon="pi pi-plus" (onClick)="openCreateDialog()" />
+    }
   </div>
 
   <div class="filters">
@@ -57,6 +60,14 @@
     </ng-template>
   </p-table>
 </section>
+
+<!-- Create Dialog -->
+<app-order-form-dialog
+  [visible]="createDialogVisible()"
+  [branches]="branches()"
+  (visibleChange)="createDialogVisible.set($event)"
+  (saved)="onOrderCreated()"
+></app-order-form-dialog>
 
 <!-- Detail Dialog -->
 <app-order-detail-dialog

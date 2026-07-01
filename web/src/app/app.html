@@ -4,7 +4,7 @@
     [selectedBranchId]="branchStore.selectedBranchId()"
     [cartCount]="cartStore.totalItems()"
     (branchChange)="selectBranch($event)"
-    (cartClick)="true"
+    (cartClick)="openCartDialog()"
   ></app-header>
 
   <main class="landing-shell">
@@ -20,7 +20,7 @@
       <span class="pi pi-map-marker"></span>
       <span>Ubicación</span>
     </button>
-    <button class="mobile-nav-item" type="button">
+    <button class="mobile-nav-item" type="button" (click)="openCartDialog()">
       <span class="pi pi-shopping-basket"></span>
       <span>Carrito</span>
       <span class="mobile-badge">{{ cartStore.totalItems() }}</span>
@@ -30,6 +30,8 @@
       <span>Perfil</span>
     </button>
   </nav>
+
+  <app-cart-dialog [(visible)]="showCartDialog"></app-cart-dialog>
 
   <app-footer></app-footer>
 } @else {
