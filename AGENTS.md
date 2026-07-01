@@ -140,6 +140,7 @@ High-signal guidance for OpenCode sessions in this repo.
 | `rbac:role` | ✅ | ✅ | ✅ | ✅ | |
 | `rbac:profile` | ✅ | ✅ | ✅ | ✅ | |
 | `rbac:user` | — | — | ✅ | — | |
+| `view:branch:all` | — | — | — | — | Extra: grants visibility of all branches in admin; users without it are auto-scoped to their assigned branch |
 | `security-policy` | — | ✅ | ✅ | — | |
 
 #### Route → permission mapping
@@ -159,6 +160,24 @@ High-signal guidance for OpenCode sessions in this repo.
 - **RBAC**: all endpoints require matching `rbac:resource/role/profile:view/create/update/delete`
 - **Auth**: login/register/public, `/me`+`/refresh`+`/logout` auth-only, `/security-policy` PUT `security-policy:update`
 - **Sync**: API Key protected
+
+### Branch-scoped access (backend)
+
+The `view:branch:all` permission controls multi-branch visibility:
+
+- **PASETO token** embeds `branch_id` at login/refresh via `TokenClaims.BranchID`. Existing tokens without it are handled gracefully.
+- **Middleware** (`middleware/auth.go`): `GetBranchID(ctx)` retrieves the user's branch from context; `HasPermission(ctx, store, code)` checks RBAC.
+- **List handlers** for products, bundles, orders, and staff must auto-filter by `branch_id` when `view:branch:all` is absent. Pattern in each handler:
+
+```go
+branchID := middleware.GetBranchID(r.Context())
+if !middleware.HasPermission(r.Context(), s.rbac, "view:branch:all") && branchID != "" {
+    f.BranchID = &branchID
+}
+```
+
+- **Admin branch endpoint** (`GET /api/v1/branches/admin`): returns only the user's branch when `view:branch:all` is absent; all branches when present.
+- **Handler constructors** for products, bundles, orders, staff, and branches must accept `rbac.Store` to enable permission checks.
 
 ### Response format
 - All responses use JSend: `{"status":"success","data":{}}` or `{"status":"error","message":"..."}`.
@@ -272,6 +291,13 @@ web/src/app/
 - `API_BASE_URL` injection token is defined in `pages/auth-page/auth-api-go.service.ts`, not in `core/services/`.
 - `AuthApiService` handles login, logout, refresh, me, and multi-step registration (start → verify-email → complete).
 - `initializeAuth()` factory in `core/auth/auth-init.ts` runs as `APP_INITIALIZER` to restore session on app boot.
+
+#### Session auto-expiration
+- `expiresAt` is persisted in `localStorage` (key `lcdpc_expires_at`) after each login/refresh/me call.
+- On app boot, `auth-init.ts` checks localStorage first: if stored `expiresAt` is in the past, it clears the session immediately without making a network request.
+- AuthStore schedules a `setTimeout` 30s before the actual expiry to auto-clear the session and redirect to `/login`. The timer is reset on every token refresh.
+- If the user is on a protected route when the timer fires, guards redirect to login because `isAuthenticated()` flips to false.
+- `clear()` always removes the localStorage key and cancels the pending timer.
 
 ### Stores (`core/stores/`)
 - Domain stores manage read-only data caches with signals.
@@ -422,8 +448,127 @@ Rules derived from this template:
 - Dialog `[style]` must include `paddingTop: '20px'` so the first floatlabel is visible.
 - Use `InputTextModule` only (no `InputNumberModule` unless numeric fields are required).
 
+### Branch-scoped access in form dialogs
+
+When a form dialog creates/edits an entity with `branch_id` (products, bundles, staff), the branch selector must be conditionally hidden for users without `view:branch:all`:
+
+- Inject `AuthStore`.
+- Add a `canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'))` signal.
+- Add a `userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null)` signal.
+- Load branches via `branchApi.listAdmin()` instead of `branchApi.list()`.
+- In `ngOnChanges`, when opening for **create** mode and `canViewAllBranches()` is false, auto-set `form.branch_id = userBranchId()`.
+- In the template, wrap the branch `<p-select>` in `@if (canViewAllBranches())`.
+
+```typescript
+// Component additions
+private readonly authStore = inject(AuthStore);
+protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
+protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
+
+// In ngOnChanges create branch:
+if (!this.canViewAllBranches() && this.userBranchId()) {
+  this.form.branch_id = this.userBranchId();
+}
+```
+
+```html
+<!-- Template branch selector -->
+@if (canViewAllBranches()) {
+  <div class="field">
+    <p-select id="branch" [options]="branches()" [(ngModel)]="form.branch_id"
+              optionLabel="label" optionValue="value" placeholder="Sucursal"
+              [showClear]="true" [style]="{'width':'100%'}" />
+  </div>
+}
+```
+
+### Branch-scoped access in list pages
+
+Admin list pages for products, bundles, orders, and staff must auto-filter by branch when the user lacks `view:branch:all`:
+
+- Inject `AuthStore` and add `canViewAllBranches` / `userBranchId` computed signals.
+- In the `loadItems` method, append `filters.branch_id = this.userBranchId()` when `canViewAllBranches()` is false.
+- Branch dropdowns in filters should use `branchApi.listAdmin()`.
+- Do not rely solely on the frontend — the backend also enforces this filter in each list handler.
+
+```typescript
+// In list component
+private readonly authStore = inject(AuthStore);
+protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
+protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
+
+loadItems(event: TableLazyLoadEvent): void {
+  const filters: ProductListFilter = {};
+  if (!this.canViewAllBranches() && this.userBranchId()) {
+    filters.branch_id = this.userBranchId();
+  }
+  this.productApi.list({ ...filters, limit: event.rows ?? this.pageSize, offset: event.first ?? 0 })
+    .subscribe({ ... });
+}
+```
+
 ### Image handling
 - All product/bundle images: `loading="lazy"` attribute
 - Fallback: `/not-found.png` via `(error)="onImageError($event)"`
 - API images resolved via `resolveImageUrl(img)` which prepends `apiBaseUrl`
-- Static files served from `/static/*` with 7-day cache headers
+- Static files served from `/static/*` with 7-day cache headers (resize via `?w=` and `?h=`)
+- Backend stores images in `api/static/img/` with subdirectories: `products/`, `bundles/`, `config/`
+- `saveUploadedFile(file, ext, subDir string)` creates the subdirectory if it doesn't exist
+- `deleteOldFile(oldImg)` handles subdirectory paths correctly (trims `/static/img/` prefix, preserves subdirectory in the remaining path)
+
+### System Config (Singleton Settings)
+
+#### Backend
+- Package: `internal/systemconfig/` with `service.go`
+- Table: `system_config` with columns: `id`, `logo_path`, `icon_path`, `page_name`, `title`, `show_price_in_catalog`, `active`, `created_at`, `updated_at`
+- RBAC resources: `system_config:view`, `system_config:update` (seeded to `global_admin`)
+- `GetActive()` returns the active record or hardcoded defaults if none exists
+- `Create()` and `Update()` with singleton logic: when `active=true`, all other records are deactivated first
+- File uploads: `validateLogoFile()` accepts jpg/png/webp/gif, `validateIconFile()` accepts only `.ico`
+- Images saved to `static/img/config/`
+
+#### Protected Endpoints (CRUD)
+| Method | Route | Permission |
+|---|---|---|
+| GET | `/api/v1/system-config/` | `system_config:view` |
+| GET | `/api/v1/system-config/active` | `system_config:view` |
+| POST | `/api/v1/system-config/` | `system_config:update` |
+| PUT | `/api/v1/system-config/{id}` | `system_config:update` |
+
+#### Public Endpoints (individual fields, no auth)
+| Method | Route | Response |
+|---|---|---|
+| GET | `/api/v1/system/logo` | `{"logo_path": "..."}` |
+| GET | `/api/v1/system/icon` | `{"icon_path": "..."}` |
+| GET | `/api/v1/system/page-name` | `{"page_name": "..."}` |
+| GET | `/api/v1/system/title` | `{"title": "..."}` |
+| GET | `/api/v1/system/show-price` | `{"show_price_in_catalog": true}` |
+
+#### Frontend
+- **Model**: `core/models/system-config.model.ts` — `SystemConfig`, `CreateSystemConfigRequest`, `UpdateSystemConfigRequest`
+- **Service**: `core/services/system-config-api.service.ts` — CRUD (authenticated) + public endpoints + `resolveImageUrl()`
+- **Store**: `core/stores/system-config.store.ts` — caches `logoUrl`, `iconUrl`, `pageName`, `title`, `showPrice`; loads from public endpoints on boot; sets `document.title` and favicon dynamically
+- **Initializer**: `core/stores/system-config-init.ts` — `APP_INITIALIZER` factory that calls `store.load()`
+- **Config page section**: `pages/admin/config/sections/system-config-section.component.ts` — table with create/edit/activate actions
+- **Form dialog**: `pages/admin/config/sections/system-config-form-dialog.component.ts` — supports create + edit modes, file upload for logo/icon, `p-floatlabel` with `placeholder=" "`
+- **Header**: `shared/header/header.component.ts` — uses `SystemConfigStore` for dynamic logo and page name
+- Route guard updated to allow `system_config:view` for config page access
+
+### Branch Store (centralized branch selection)
+
+- **Store**: `core/stores/branch.store.ts` — `branches` list, `selectedBranchId` signal
+- `load()` loads branches from API, auto-selects first branch
+- `selectBranch()` changes active branch
+- Used by `App` component (header) and `LandingPageComponent` (product filtering)
+
+### Cart Store
+
+- **Store**: `core/stores/cart.store.ts` — `items` signal, `totalItems`/`totalPrice` computed
+- `addItem()`, `removeItem()`, `updateQuantity()`, `increment()`, `decrement()`, `clear()`
+- Used by `App` component (header badge) and `LandingPageComponent` (add to cart from catalog)
+
+### Catalog branch filtering
+
+- `LandingPageComponent` uses `effect()` to react to `branchStore.selectedBranchId()` changes
+- When branch changes, reloads products and bundles with `branch_id` filter
+- `CatalogComponent` emits `increment(productId)`, `decrement(productId)`, `addToCart(productId)` events

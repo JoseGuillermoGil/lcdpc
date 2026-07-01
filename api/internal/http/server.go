@@ -20,6 +20,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/rbac"
 	"github.com/lcdpc/lcdpc-go/internal/staff"
 	"github.com/lcdpc/lcdpc-go/internal/sync"
+	"github.com/lcdpc/lcdpc-go/internal/systemconfig"
 )
 
 func NewServer(
@@ -37,6 +38,7 @@ func NewServer(
 	rbacStore *rbac.Store,
 	rbacSvc *rbac.Service,
 	orderSvc *order.Service,
+	systemConfigSvc *systemconfig.Service,
 ) *chi.Mux {
 	r := chi.NewRouter()
 
@@ -52,21 +54,22 @@ func NewServer(
 
 	authH := handler.NewAuthHandler(authSvc)
 	oauth2H := handler.NewOAuth2Handler(oauth2Svc)
-	productH := handler.NewProductHandler(pricingSvc)
-	bundleH := handler.NewBundleHandler(pricingSvc)
+	productH := handler.NewProductHandler(pricingSvc, rbacStore)
+	bundleH := handler.NewBundleHandler(pricingSvc, rbacStore)
 	priceH := handler.NewPriceHandler(pricingSvc)
 	priceCategoryH := handler.NewPriceCategoryHandler(pricingSvc)
 	measurementUnitH := handler.NewMeasurementUnitHandler(pricingSvc)
 	measurementUnitClassificationH := handler.NewMeasurementUnitClassificationHandler(pricingSvc)
 	conversionFactorH := handler.NewConversionFactorHandler(pricingSvc)
-	branchH := handler.NewBranchHandler(branchSvc)
+	branchH := handler.NewBranchHandler(branchSvc, rbacStore)
 	brandH := handler.NewBrandHandler(brandSvc)
 	categoryH := handler.NewCategoryHandler(categorySvc)
-	staffH := handler.NewStaffHandler(staffSvc)
+	staffH := handler.NewStaffHandler(staffSvc, rbacStore)
 	syncH := handler.NewSyncHandler(syncSvc)
 	healthH := handler.NewHealthHandler(pool)
 	rbacH := rbac.NewHandler(rbacSvc)
-	orderH := order.NewHandler(orderSvc)
+	orderH := order.NewHandler(orderSvc, rbacStore)
+	systemConfigH := handler.NewSystemConfigHandler(systemConfigSvc)
 
 	// Public
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -312,6 +315,13 @@ func NewServer(
 	r.Route("/api/v1/branches", func(r chi.Router) {
 		r.Get("/", branchH.List)
 
+		// Admin branch list (filtered by view:branch:all permission)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+			r.Use(middleware.RequireAuth())
+			r.Get("/admin", branchH.ListAdmin)
+		})
+
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
 			r.Use(middleware.RequireAuth())
@@ -516,6 +526,29 @@ func NewServer(
 		r.Post("/bundles", syncH.SyncBundles)
 		r.Post("/products/{sku}/image", syncH.SyncProductImage)
 		r.Post("/bundles/{code}/image", syncH.SyncBundleImage)
+	})
+
+	// System Config (public individual endpoints)
+	r.Get("/api/v1/system/logo", systemConfigH.GetLogo)
+	r.Get("/api/v1/system/icon", systemConfigH.GetIcon)
+	r.Get("/api/v1/system/page-name", systemConfigH.GetPageName)
+	r.Get("/api/v1/system/title", systemConfigH.GetTitle)
+	r.Get("/api/v1/system/show-price", systemConfigH.GetShowPrice)
+
+	// System Config (protected CRUD)
+	r.Route("/api/v1/system-config", func(r chi.Router) {
+		r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+		r.Use(middleware.RequireAuth())
+		r.Use(middleware.RequirePermission(rbacStore, "system_config:view"))
+
+		r.Get("/", systemConfigH.List)
+		r.Get("/active", systemConfigH.GetActive)
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "system_config:update"))
+			r.Post("/", systemConfigH.Create)
+			r.Put("/{id}", systemConfigH.Update)
+		})
 	})
 
 	return r

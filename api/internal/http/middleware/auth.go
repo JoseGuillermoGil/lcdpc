@@ -15,6 +15,7 @@ type contextKey string
 const (
 	UserIDKey    contextKey = "user_id"
 	ProfileIDKey contextKey = "profile_id"
+	BranchIDKey  contextKey = "branch_id"
 	TokenKey     contextKey = "access_token"
 )
 
@@ -35,6 +36,9 @@ func PASETOAuth(key []byte, issuer, audience string) func(http.Handler) http.Han
 
 			ctx := context.WithValue(r.Context(), UserIDKey, claims.Sub)
 			ctx = context.WithValue(ctx, ProfileIDKey, claims.ProfileID)
+			if claims.BranchID != "" {
+				ctx = context.WithValue(ctx, BranchIDKey, claims.BranchID)
+			}
 			ctx = context.WithValue(ctx, TokenKey, tokenString)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -113,4 +117,23 @@ func GetAccessToken(ctx context.Context) string {
 		return v
 	}
 	return ""
+}
+
+func GetBranchID(ctx context.Context) string {
+	if v, ok := ctx.Value(BranchIDKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+func HasPermission(ctx context.Context, store *rbac.Store, resourceCode string) bool {
+	profileIDStr := GetProfileID(ctx)
+	if profileIDStr == "" {
+		return false
+	}
+	profileID, err := uuid.Parse(profileIDStr)
+	if err != nil {
+		return false
+	}
+	return store.HasPermission(profileID, resourceCode)
 }

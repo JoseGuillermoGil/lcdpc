@@ -6,16 +6,19 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/lcdpc/lcdpc-go/internal/http/middleware"
 	"github.com/lcdpc/lcdpc-go/internal/http/response"
+	"github.com/lcdpc/lcdpc-go/internal/rbac"
 	"github.com/lcdpc/lcdpc-go/internal/staff"
 )
 
 type StaffHandler struct {
-	svc *staff.Service
+	svc       *staff.Service
+	rbacStore *rbac.Store
 }
 
-func NewStaffHandler(svc *staff.Service) *StaffHandler {
-	return &StaffHandler{svc: svc}
+func NewStaffHandler(svc *staff.Service, rbacStore *rbac.Store) *StaffHandler {
+	return &StaffHandler{svc: svc, rbacStore: rbacStore}
 }
 
 func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +45,16 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	if v := q.Get("search"); v != "" {
 		f.Search = &v
+	}
+
+	// Auto-filter by assigned branch if user lacks view:branch:all
+	if !middleware.HasPermission(r.Context(), h.rbacStore, "view:branch:all") {
+		branchIDStr := middleware.GetBranchID(r.Context())
+		if branchIDStr != "" {
+			if id, err := uuid.Parse(branchIDStr); err == nil {
+				f.BranchID = &id
+			}
+		}
 	}
 
 	items, total, err := h.svc.List(r.Context(), f)

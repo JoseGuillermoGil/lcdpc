@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, inject, Input, OnChanges, Output, signal, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, inject, Input, OnChanges, Output, signal, SimpleChanges, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
@@ -7,6 +7,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { SelectModule } from 'primeng/select';
 import { FloatLabelModule } from 'primeng/floatlabel';
+import { AuthStore } from '../../../core/auth/auth.store';
 import { CreateStaffRequest, StaffMember, UpdateStaffRequest } from '../../../core/models/staff.model';
 import { StaffApiService } from '../../../core/services/staff-api.service';
 
@@ -29,9 +30,12 @@ export class StaffFormDialogComponent implements OnChanges {
   @Output() saved = new EventEmitter<void>();
   @Output() closed = new EventEmitter<void>();
 
+  private readonly authStore = inject(AuthStore);
   private readonly staffApi = inject(StaffApiService);
 
   protected readonly saving = signal(false);
+  protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
+  protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
   protected submitted = false;
 
   protected email = '';
@@ -67,6 +71,9 @@ export class StaffFormDialogComponent implements OnChanges {
         this.roleCode = this.staff.roleCode;
       } else if (this.visible) {
         this.resetForm();
+        if (!this.canViewAllBranches() && this.userBranchId()) {
+          this.branchId = this.userBranchId() ?? '';
+        }
       }
       this.submitted = false;
     }

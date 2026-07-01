@@ -10,6 +10,7 @@ import { routes } from './app.routes';
 import { API_BASE_URL } from './pages/auth-page/auth-api-go.service';
 import { authInterceptor } from './core/auth/auth.interceptor';
 import { initializeAuth } from './core/auth/auth-init';
+import { initializeSystemConfig } from './core/stores/system-config-init';
 import { environment } from '../environments/environment';
 
 export const appConfig: ApplicationConfig = {
@@ -27,6 +28,11 @@ export const appConfig: ApplicationConfig = {
     {
       provide: APP_INITIALIZER,
       useFactory: initializeAuth,
+      multi: true,
+    },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: initializeSystemConfig,
       multi: true,
     },
     providePrimeNG({

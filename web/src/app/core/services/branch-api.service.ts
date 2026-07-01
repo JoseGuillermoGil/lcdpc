@@ -49,6 +49,14 @@ export class BranchApiService {
       .pipe(map((res) => res.data.map((b) => this.mapBranch(b))));
   }
 
+  listAdmin(): Observable<Branch[]> {
+    return this.http
+      .get<JsendEnvelope<BranchGoData[]>>(`${this.baseUrl}/api/v1/branches/admin`, {
+        withCredentials: true,
+      })
+      .pipe(map((res) => res.data.map((b) => this.mapBranch(b))));
+  }
+
   create(req: CreateBranchRequest): Observable<Branch> {
     return this.http
       .post<JsendEnvelope<BranchGoData>>(`${this.baseUrl}/api/v1/branches/`, req, {

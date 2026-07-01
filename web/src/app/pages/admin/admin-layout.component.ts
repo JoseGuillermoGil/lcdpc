@@ -45,7 +45,7 @@ export class AdminLayoutComponent {
     this.authStore.hasPermission('staff:view')
   );
   protected readonly canViewConfig = computed(() =>
-    this.authStore.hasAnyPermission('rbac:profile:view', 'category:view', 'price_category:view', 'measurement_unit:view', 'branch:create', 'branch:view')
+    this.authStore.hasAnyPermission('rbac:profile:view', 'category:view', 'price_category:view', 'measurement_unit:view', 'branch:create', 'branch:view', 'system_config:view')
   );
 
   protected readonly canViewRbac = computed(() =>
@@ -56,6 +56,10 @@ export class AdminLayoutComponent {
   );
   protected readonly canViewAdministracion = computed(() =>
     this.authStore.hasAnyPermission('branch:create', 'branch:view')
+  );
+
+  protected readonly canViewSistema = computed(() =>
+    this.authStore.hasPermission('system_config:view')
   );
 
   protected toggleSidebar(): void {

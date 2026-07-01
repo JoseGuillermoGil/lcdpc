@@ -8,14 +8,16 @@ import (
 	"github.com/google/uuid"
 	"github.com/lcdpc/lcdpc-go/internal/http/middleware"
 	"github.com/lcdpc/lcdpc-go/internal/http/response"
+	"github.com/lcdpc/lcdpc-go/internal/rbac"
 )
 
 type Handler struct {
-	svc *Service
+	svc       *Service
+	rbacStore *rbac.Store
 }
 
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, rbacStore *rbac.Store) *Handler {
+	return &Handler{svc: svc, rbacStore: rbacStore}
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +83,16 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
 		if offset, err := strconv.Atoi(offsetStr); err == nil {
 			filter.Offset = offset
+		}
+	}
+
+	// Auto-filter by assigned branch if user lacks view:branch:all
+	if !middleware.HasPermission(r.Context(), h.rbacStore, "view:branch:all") {
+		branchIDStr := middleware.GetBranchID(r.Context())
+		if branchIDStr != "" {
+			if id, err := uuid.Parse(branchIDStr); err == nil {
+				filter.BranchID = &id
+			}
 		}
 	}
 

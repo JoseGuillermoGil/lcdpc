@@ -1,4 +1,7 @@
 import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { AuthStore } from './core/auth/auth.store';
 import { AuthPageComponent } from './pages/auth-page/auth-page.component';
 import { LandingPageComponent } from './pages/landing-page/landing-page.component';
 import { RegisterPageComponent } from './pages/register-page/register-page.component';
@@ -29,7 +32,12 @@ export const routes: Routes = [
 			{ path: 'bundles', component: BundlesPageComponent, canActivate: [permissionGuard('bundle:view')] },
 			{ path: 'orders', component: OrdersPageComponent, canActivate: [permissionGuard('order:view')] },
 			{ path: 'staff', component: StaffPageComponent, canActivate: [permissionGuard('staff:view')] },
-			{ path: 'config', component: ConfigPageComponent, canActivate: [permissionGuard('rbac:profile:view')] },
+			{ path: 'config', component: ConfigPageComponent, canActivate: [() => {
+				const authStore = inject(AuthStore);
+				const router = inject(Router);
+				if (authStore.hasAnyPermission('rbac:profile:view', 'category:view', 'price_category:view', 'measurement_unit:view', 'branch:create', 'branch:view', 'system_config:view')) return true;
+				return router.createUrlTree(['/admin']);
+			}] },
 		]
 	}
 ];

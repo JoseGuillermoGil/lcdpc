@@ -42,6 +42,8 @@ export class BundlesPageComponent implements OnInit {
   protected readonly canCreate = computed(() => this.authStore.hasPermission('bundle:create'));
   protected readonly canUpdate = computed(() => this.authStore.hasPermission('bundle:update'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('bundle:delete'));
+  protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
+  protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
 
   protected readonly bundles = signal<Bundle[]>([]);
   protected readonly loading = signal(false);
@@ -76,6 +78,9 @@ export class BundlesPageComponent implements OnInit {
     if (this.filterCode) filter['code'] = this.filterCode;
     if (this.filterStatus) filter['status'] = this.filterStatus;
     if (this.filterCategoryId) filter['category_id'] = this.filterCategoryId;
+    if (!this.canViewAllBranches() && this.userBranchId()) {
+      filter['branch_id'] = this.userBranchId();
+    }
 
     this.bundleApi.list(filter).subscribe({
       next: (res) => {

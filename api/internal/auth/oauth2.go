@@ -264,11 +264,14 @@ func (s *OAuth2Service) ExchangeCode(ctx context.Context, code, codeVerifier, re
 	var email string
 	s.pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, authCode.UserID).Scan(&email)
 
-	// Get profile ID
+	// Get profile ID + branch ID
 	var profileID uuid.UUID
 	s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, authCode.UserID).Scan(&profileID)
 
-	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, authCode.UserID, profileID, clientID, authCode.Scope, email)
+	var branchID *uuid.UUID
+	s.pool.QueryRow(ctx, `SELECT branch_id FROM users WHERE id = $1`, authCode.UserID).Scan(&branchID)
+
+	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, authCode.UserID, profileID, branchID, clientID, authCode.Scope, email)
 	if err != nil {
 		return nil, &TokenErrorResponse{Error: "server_error", ErrorDescription: "Failed to generate access token."}
 	}
@@ -349,11 +352,14 @@ func (s *OAuth2Service) RefreshToken(ctx context.Context, refreshToken, clientID
 	var email string
 	s.pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, rt.UserID).Scan(&email)
 
-	// Get profile ID
+	// Get profile ID + branch ID
 	var profileID uuid.UUID
 	s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, rt.UserID).Scan(&profileID)
 
-	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, profileID, clientID, rt.Scope, email)
+	var branchID *uuid.UUID
+	s.pool.QueryRow(ctx, `SELECT branch_id FROM users WHERE id = $1`, rt.UserID).Scan(&branchID)
+
+	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, profileID, branchID, clientID, rt.Scope, email)
 	if err != nil {
 		return nil, &TokenErrorResponse{Error: "server_error", ErrorDescription: "Failed to generate access token."}
 	}

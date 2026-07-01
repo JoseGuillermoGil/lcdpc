@@ -35,8 +35,9 @@ export class CatalogComponent {
   @Input() products: ProductCard[] = [];
 
   @Output() categorySelect = new EventEmitter<string>();
-  @Output() increment = new EventEmitter<void>();
-  @Output() decrement = new EventEmitter<void>();
+  @Output() increment = new EventEmitter<string>();
+  @Output() decrement = new EventEmitter<string>();
+  @Output() addToCart = new EventEmitter<string>();
 
   onImageError(event: Event): void {
     (event.target as HTMLImageElement).src = '/not-found.png';

@@ -5,7 +5,8 @@ import { filter } from 'rxjs';
 import { FooterComponent } from './shared/footer/footer.component';
 import { HeaderComponent } from './shared/header/header.component';
 import { AuthStore } from './core/auth/auth.store';
-import { BranchApiService } from './core/services/branch-api.service';
+import { BranchStore } from './core/stores/branch.store';
+import { CartStore } from './core/stores/cart.store';
 
 @Component({
   selector: 'app-root',
@@ -16,13 +17,11 @@ import { BranchApiService } from './core/services/branch-api.service';
 export class App implements OnInit {
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly branchApi = inject(BranchApiService);
   protected readonly authStore = inject(AuthStore);
+  protected readonly branchStore = inject(BranchStore);
+  protected readonly cartStore = inject(CartStore);
 
   protected readonly showStoreShell = signal(!this.isAuthRoute(this.router.url));
-  protected readonly selectedBranchId = signal('');
-  protected readonly cartCount = signal(0);
-  protected readonly branches = signal<{ id: string; name: string }[]>([]);
 
   constructor() {
     const subscription = this.router.events
@@ -35,25 +34,13 @@ export class App implements OnInit {
   }
 
   ngOnInit(): void {
-    this.branchApi.list().subscribe({
-      next: (branchList) => {
-        const mapped = branchList.map((b) => ({ id: b.id, name: b.storeName }));
-        this.branches.set(mapped);
-        if (mapped.length > 0 && !this.selectedBranchId()) {
-          this.selectedBranchId.set(mapped[0].id);
-        }
-      }
-    });
+    this.branchStore.load();
   }
 
   protected selectBranch(branchId: string | null): void {
     if (branchId) {
-      this.selectedBranchId.set(branchId);
+      this.branchStore.selectBranch(branchId);
     }
-  }
-
-  protected incrementCart(): void {
-    this.cartCount.update((count) => count + 1);
   }
 
   private isAuthRoute(url: string): boolean {

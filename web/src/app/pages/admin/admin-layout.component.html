@@ -82,6 +82,16 @@
                 <span class="nav-label">Administracion</span>
               </a>
             }
+            @if (canViewSistema()) {
+              <a routerLink="/admin/config"
+                 [queryParams]="{ section: 'sistema' }"
+                 routerLinkActive="active"
+                 [routerLinkActiveOptions]="{ queryParams: 'subset', paths: 'exact', fragment: 'ignored', matrixParams: 'ignored' }"
+                 (click)="collapseAll()">
+                <span class="pi pi-sliders-h"></span>
+                <span class="nav-label">Sistema</span>
+              </a>
+            }
           </div>
         }
       }

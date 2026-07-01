@@ -1,10 +1,10 @@
 @if (showStoreShell()) {
   <app-header
-    [branches]="branches()"
-    [selectedBranchId]="selectedBranchId()"
-    [cartCount]="cartCount()"
+    [branches]="branchStore.branches()"
+    [selectedBranchId]="branchStore.selectedBranchId()"
+    [cartCount]="cartStore.totalItems()"
     (branchChange)="selectBranch($event)"
-    (cartClick)="incrementCart()"
+    (cartClick)="true"
   ></app-header>
 
   <main class="landing-shell">
@@ -23,7 +23,7 @@
     <button class="mobile-nav-item" type="button">
       <span class="pi pi-shopping-basket"></span>
       <span>Carrito</span>
-      <span class="mobile-badge">{{ cartCount() }}</span>
+      <span class="mobile-badge">{{ cartStore.totalItems() }}</span>
     </button>
     <button class="mobile-nav-item" type="button">
       <span class="pi pi-user"></span>

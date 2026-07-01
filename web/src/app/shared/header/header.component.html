@@ -1,12 +1,21 @@
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand-lockup" routerLink="/" aria-label="Ir al inicio">
-      <img
-        class="brand-logo"
-        src="https://lh3.googleusercontent.com/aida-public/AB6AXuClHorMf-3Ti1vNiAK2kWqdTHKuGf_IHnq5clehQbyiemx8J4-oasySwjQkjIhsAzYUX712NmcjYunh5CfpYRhEPZ18VPymlFyMFtjF_9-_kpvJT-hoUmZTUY8oKN-R67MHmJhoh6KsVwIMqsdaCJrbvwQJ1TbMLp9o_pSmNpi9bsx16MiHH8R0ZTfAgMYHABmOWHvQ_ml0wZCtMKbAXwym-JzLAPzNWTJz6PWgSoBaUMapWdeGXdTL_c9owQl7y7Qb3z8PRX6A0tI"
-        alt="La Casa del Perrocalentero"
-      />
-      <span class="brand-name">LA CASA DEL PERROCALENTERO</span>
+      @if (systemConfigStore.logoUrl()) {
+        <img
+          class="brand-logo"
+          [src]="systemConfigStore.logoUrl()"
+          [alt]="systemConfigStore.pageName()"
+          (error)="onLogoError($event)"
+        />
+      } @else {
+        <img
+          class="brand-logo"
+          src="/not-found.png"
+          [alt]="systemConfigStore.pageName()"
+        />
+      }
+      <span class="brand-name">{{ systemConfigStore.pageName() }}</span>
     </a>
 
     <div class="topbar-actions">

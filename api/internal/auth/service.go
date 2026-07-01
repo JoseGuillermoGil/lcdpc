@@ -407,11 +407,16 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 		return nil, fmt.Errorf("INVALID_CREDENTIALS")
 	}
 
-	// Get profile ID
+	// Get profile ID + branch ID
 	var profileID uuid.UUID
+	var branchID *uuid.UUID
 	err = s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, user.ID).Scan(&profileID)
 	if err != nil {
 		return nil, fmt.Errorf("get profile: %w", err)
+	}
+	err = s.pool.QueryRow(ctx, `SELECT branch_id FROM users WHERE id = $1`, user.ID).Scan(&branchID)
+	if err != nil {
+		branchID = nil
 	}
 
 	// Generate access token
@@ -420,6 +425,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 		s.tokenCfg,
 		user.ID,
 		profileID,
+		branchID,
 		"lcdpc-web",
 		"openid email profile",
 		user.Email,
@@ -476,14 +482,15 @@ type MeResponse struct {
 }
 
 type UserSummary struct {
-	ID               uuid.UUID `json:"id"`
-	Email            string    `json:"email"`
-	DisplayName      string    `json:"display_name"`
-	Status           string    `json:"status"`
-	AccountType      string    `json:"account_type"`
-	OnboardingStatus string    `json:"onboarding_status"`
+	ID               uuid.UUID  `json:"id"`
+	Email            string     `json:"email"`
+	DisplayName      string     `json:"display_name"`
+	Status           string     `json:"status"`
+	AccountType      string     `json:"account_type"`
+	OnboardingStatus string     `json:"onboarding_status"`
 	EmailVerifiedAt  *time.Time `json:"email_verified_at"`
-	ProfileID        string    `json:"profile_id"`
+	ProfileID        string     `json:"profile_id"`
+	BranchID         *string    `json:"branch_id,omitempty"`
 }
 
 func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, error) {
@@ -518,16 +525,17 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 		EmailVerifiedAt  *time.Time
 		Name             *string
 		ProfileID        uuid.UUID
+		BranchID         *uuid.UUID
 	}
 
 	err = s.pool.QueryRow(ctx, `
 		SELECT u.id, u.email, u.status, u.onboarding_status, u.email_verified_at_utc,
-		       p.name, p.id
+		       p.name, p.id, u.branch_id
 		FROM users u
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE u.id = $1
 	`, session.UserID).Scan(&user.ID, &user.Email, &user.Status, &user.OnboardingStatus,
-		&user.EmailVerifiedAt, &user.Name, &user.ProfileID)
+		&user.EmailVerifiedAt, &user.Name, &user.ProfileID, &user.BranchID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
@@ -564,6 +572,12 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 		expiresIn = 0
 	}
 
+	var branchIDStr *string
+	if user.BranchID != nil {
+		s := user.BranchID.String()
+		branchIDStr = &s
+	}
+
 	return &MeResponse{
 		Authenticated: true,
 		User: &UserSummary{
@@ -575,6 +589,7 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 			OnboardingStatus: user.OnboardingStatus,
 			EmailVerifiedAt:  user.EmailVerifiedAt,
 			ProfileID:        user.ProfileID.String(),
+			BranchID:         branchIDStr,
 		},
 		Permissions: permissions,
 		ExpiresIn:   &expiresIn,
@@ -630,7 +645,13 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*LoginRespo
 		return nil, fmt.Errorf("get user email: %w", err)
 	}
 
-	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, profileID, rt.ClientID, rt.Scope, email)
+	var branchID *uuid.UUID
+	err = s.pool.QueryRow(ctx, `SELECT branch_id FROM users WHERE id = $1`, rt.UserID).Scan(&branchID)
+	if err != nil {
+		branchID = nil
+	}
+
+	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, profileID, branchID, rt.ClientID, rt.Scope, email)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
 	}

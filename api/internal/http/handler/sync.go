@@ -76,7 +76,7 @@ func (h *SyncHandler) SyncProductImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save new file first
-	newPath, err := saveUploadedFile(file, ext)
+	newPath, err := saveUploadedFile(file, ext, "products")
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "failed to save image")
 		return
@@ -127,7 +127,7 @@ func (h *SyncHandler) SyncBundleImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save new file first
-	newPath, err := saveUploadedFile(file, ext)
+	newPath, err := saveUploadedFile(file, ext, "bundles")
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "failed to save image")
 		return

@@ -1,6 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { Observable, catchError, map, of, switchMap, tap, throwError } from 'rxjs';
 import { AuthApiService } from '../../pages/auth-page/auth-api-go.service';
+
+const EXPIRES_AT_KEY = 'lcdpc_expires_at';
 
 export interface UserSummary {
   id: string;
@@ -11,6 +14,7 @@ export interface UserSummary {
   onboardingStatus: string;
   emailVerifiedAt: string | null;
   profileId: string;
+  branchId: string | null;
 }
 
 interface MeGoData {
@@ -24,6 +28,7 @@ interface MeGoData {
     onboarding_status: string;
     email_verified_at: string | null;
     profile_id: string;
+    branch_id: string | null;
   } | null;
   permissions: string[];
   expires_in: number | null;
@@ -32,6 +37,7 @@ interface MeGoData {
 @Injectable({ providedIn: 'root' })
 export class AuthStore {
   private readonly authApi = inject(AuthApiService);
+  private readonly router = inject(Router);
 
   readonly currentUser = signal<UserSummary | null>(null);
   readonly permissions = signal<string[]>([]);
@@ -41,6 +47,18 @@ export class AuthStore {
 
   private refreshing = false;
   private refreshResult: Observable<boolean> | null = null;
+  private expirationTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    const saved = localStorage.getItem(EXPIRES_AT_KEY);
+    if (saved) {
+      const exp = parseInt(saved, 10);
+      this.expiresAt.set(exp);
+      if (exp > Date.now()) {
+        this.scheduleExpiration();
+      }
+    }
+  }
 
   me(): Observable<void> {
     return this.authApi.me().pipe(
@@ -55,7 +73,7 @@ export class AuthStore {
   login(email: string, password: string): Observable<void> {
     return this.authApi.login({ email, password }).pipe(
       tap((result) => {
-        this.expiresAt.set(Date.now() + result.expiresIn * 1000);
+        this.setExpiresAt(Date.now() + result.expiresIn * 1000);
       }),
       switchMap(() => this.me()),
       catchError((err) => {
@@ -73,7 +91,7 @@ export class AuthStore {
     this.refreshing = true;
     this.refreshResult = this.authApi.refresh().pipe(
       map((result) => {
-        this.expiresAt.set(Date.now() + result.expiresIn * 1000);
+        this.setExpiresAt(Date.now() + result.expiresIn * 1000);
         this.refreshing = false;
         this.refreshResult = null;
         return true;
@@ -103,6 +121,8 @@ export class AuthStore {
     this.currentUser.set(null);
     this.permissions.set([]);
     this.expiresAt.set(null);
+    localStorage.removeItem(EXPIRES_AT_KEY);
+    this.clearExpirationTimer();
   }
 
   hasPermission(resourceCode: string): boolean {
@@ -135,12 +155,37 @@ export class AuthStore {
       onboardingStatus: data.user.onboarding_status,
       emailVerifiedAt: data.user.email_verified_at,
       profileId: data.user.profile_id,
+      branchId: data.user.branch_id ?? null,
     });
 
     this.permissions.set(data.permissions ?? []);
 
     if (data.expires_in != null) {
-      this.expiresAt.set(Date.now() + data.expires_in * 1000);
+      this.setExpiresAt(Date.now() + data.expires_in * 1000);
+    }
+  }
+
+  private setExpiresAt(exp: number): void {
+    this.expiresAt.set(exp);
+    localStorage.setItem(EXPIRES_AT_KEY, String(exp));
+    this.scheduleExpiration();
+  }
+
+  private scheduleExpiration(): void {
+    this.clearExpirationTimer();
+    const exp = this.expiresAt();
+    if (exp === null) return;
+    const delay = Math.max(0, exp - Date.now() - 30_000);
+    this.expirationTimer = setTimeout(() => {
+      this.clear();
+      this.router.navigate(['/login']);
+    }, delay);
+  }
+
+  private clearExpirationTimer(): void {
+    if (this.expirationTimer !== null) {
+      clearTimeout(this.expirationTimer);
+      this.expirationTimer = null;
     }
   }
 }

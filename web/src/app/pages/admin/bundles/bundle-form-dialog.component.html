@@ -24,11 +24,13 @@
                   optionLabel="label" optionValue="value" placeholder="Categoría"
                   [showClear]="true" [style]="{'width':'100%'}" />
       </div>
-      <div class="field">
-        <p-select id="branch" [options]="branches()" [(ngModel)]="form.branch_id"
-                  optionLabel="label" optionValue="value" placeholder="Sucursal"
-                  [showClear]="true" [style]="{'width':'100%'}" />
-      </div>
+      @if (canViewAllBranches()) {
+        <div class="field">
+          <p-select id="branch" [options]="branches()" [(ngModel)]="form.branch_id"
+                    optionLabel="label" optionValue="value" placeholder="Sucursal"
+                    [showClear]="true" [style]="{'width':'100%'}" />
+        </div>
+      }
     </div>
 
     <div class="items-section">

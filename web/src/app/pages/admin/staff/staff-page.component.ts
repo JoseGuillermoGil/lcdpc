@@ -42,6 +42,8 @@ export class StaffPageComponent implements OnInit {
   protected readonly canCreate = computed(() => this.authStore.hasPermission('staff:create'));
   protected readonly canUpdate = computed(() => this.authStore.hasPermission('staff:update'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('staff:delete'));
+  protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
+  protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
 
   protected readonly staffMembers = signal<StaffMember[]>([]);
   protected readonly branches = signal<{ id: string; name: string }[]>([]);
@@ -66,7 +68,7 @@ export class StaffPageComponent implements OnInit {
   protected readonly selectedStaff = signal<StaffMember | null>(null);
 
   ngOnInit(): void {
-    this.branchApi.list().subscribe({
+    this.branchApi.listAdmin().subscribe({
       next: (branches) => this.branches.set(branches.map((b) => ({ id: b.id, name: b.storeName }))),
     });
   }
@@ -80,6 +82,9 @@ export class StaffPageComponent implements OnInit {
     if (this.filterSearch) filter['search'] = this.filterSearch;
     if (this.filterBranchId) filter['branch_id'] = this.filterBranchId;
     if (this.filterRoleCode) filter['role_code'] = this.filterRoleCode;
+    if (!this.canViewAllBranches() && this.userBranchId()) {
+      filter['branch_id'] = this.userBranchId();
+    }
 
     this.staffApi.list(filter).subscribe({
       next: (res) => {

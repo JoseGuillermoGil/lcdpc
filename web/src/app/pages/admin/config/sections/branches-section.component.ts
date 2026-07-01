@@ -41,7 +41,7 @@ export class BranchesSectionComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.branchApi.list().subscribe({
+    this.branchApi.listAdmin().subscribe({
       next: (data) => { this.items.set(data); this.loading.set(false); },
       error: () => this.loading.set(false),
     });

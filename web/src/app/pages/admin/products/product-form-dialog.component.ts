@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, OnChanges, Output, inject, signal, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, Input, OnChanges, Output, computed, inject, signal, SimpleChanges } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
@@ -9,6 +9,7 @@ import { SelectModule } from 'primeng/select';
 import { CheckboxModule } from 'primeng/checkbox';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { forkJoin } from 'rxjs';
+import { AuthStore } from '../../../core/auth/auth.store';
 import { Product, CreateProductRequest } from '../../../core/models/product.model';
 import { CreatePriceRequest } from '../../../core/models/price.model';
 import { CreateConversionFactorRequest } from '../../../core/models/conversion-factor.model';
@@ -53,6 +54,7 @@ export class ProductFormDialogComponent implements OnChanges {
   @Output() saved = new EventEmitter<void>();
   @Output() closed = new EventEmitter<void>();
 
+  private readonly authStore = inject(AuthStore);
   private readonly productApi = inject(ProductApiService);
   private readonly priceApi = inject(PriceApiService);
   private readonly conversionApi = inject(ConversionFactorApiService);
@@ -63,6 +65,8 @@ export class ProductFormDialogComponent implements OnChanges {
   readonly categoryStore = inject(CategoryStore);
 
   protected readonly saving = signal(false);
+  protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
+  protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
   protected readonly branches = signal<{ label: string; value: string }[]>([]);
   protected readonly brands = signal<{ label: string; value: string }[]>([]);
   protected readonly allUnits = signal<MeasurementUnit[]>([]);
@@ -130,6 +134,9 @@ export class ProductFormDialogComponent implements OnChanges {
         this.loadExistingPricesAndConversions();
       } else {
         this.form = this.emptyForm();
+        if (!this.canViewAllBranches() && this.userBranchId()) {
+          this.form.branch_id = this.userBranchId();
+        }
         this.prices = [this.emptyPrice()];
         this.conversions = [];
         this.imagePreview = null;
@@ -143,7 +150,7 @@ export class ProductFormDialogComponent implements OnChanges {
 
   private loadData(): void {
     forkJoin({
-      branches: this.branchApi.list(),
+      branches: this.branchApi.listAdmin(),
       brands: this.brandApi.list(),
       units: this.unitApi.list(),
       categories: this.priceCategoryApi.list(),

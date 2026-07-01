@@ -17,8 +17,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/lcdpc/lcdpc-go/internal/http/middleware"
 	"github.com/lcdpc/lcdpc-go/internal/http/response"
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
+	"github.com/lcdpc/lcdpc-go/internal/rbac"
 	"github.com/nfnt/resize"
 	"golang.org/x/image/webp"
 )
@@ -29,20 +31,23 @@ const (
 )
 
 var allowedMimeTypes = map[string]string{
-	"image/jpeg": ".jpg",
-	"image/png":  ".png",
-	"image/webp": ".webp",
-	"image/gif":  ".gif",
+	"image/jpeg":                ".jpg",
+	"image/png":                 ".png",
+	"image/webp":                ".webp",
+	"image/gif":                 ".gif",
+	"image/x-icon":              ".ico",
+	"image/vnd.microsoft.icon":  ".ico",
 }
 
 // Product Handler
 
 type ProductHandler struct {
-	svc *pricing.Service
+	svc       *pricing.Service
+	rbacStore *rbac.Store
 }
 
-func NewProductHandler(svc *pricing.Service) *ProductHandler {
-	return &ProductHandler{svc: svc}
+func NewProductHandler(svc *pricing.Service, rbacStore *rbac.Store) *ProductHandler {
+	return &ProductHandler{svc: svc, rbacStore: rbacStore}
 }
 
 func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +78,7 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 			response.Fail(w, http.StatusBadRequest, map[string]string{"file": err.Error()})
 			return
 		}
-		imgPath, err := saveUploadedFile(file, ext)
+		imgPath, err := saveUploadedFile(file, ext, "products")
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "failed to save image")
 			return
@@ -109,6 +114,17 @@ func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 func (h *ProductHandler) List(w http.ResponseWriter, r *http.Request) {
 	f := pricing.ParseProductFilter(r)
+
+	// Auto-filter by assigned branch if user lacks view:branch:all
+	if !middleware.HasPermission(r.Context(), h.rbacStore, "view:branch:all") {
+		branchIDStr := middleware.GetBranchID(r.Context())
+		if branchIDStr != "" {
+			if id, err := uuid.Parse(branchIDStr); err == nil {
+				f.BranchID = &id
+			}
+		}
+	}
+
 	items, total, err := h.svc.ListProducts(r.Context(), f)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
@@ -153,7 +169,7 @@ func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.Fail(w, http.StatusBadRequest, map[string]string{"file": err.Error()})
 			return
 		}
-		imgPath, err := saveUploadedFile(file, ext)
+		imgPath, err := saveUploadedFile(file, ext, "products")
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "failed to save image")
 			return
@@ -236,7 +252,7 @@ func (h *ProductHandler) UpdateImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save new file first (with temp name)
-	newPath, err := saveUploadedFile(file, ext)
+	newPath, err := saveUploadedFile(file, ext, "products")
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "failed to save image")
 		return
@@ -246,7 +262,7 @@ func (h *ProductHandler) UpdateImage(w http.ResponseWriter, r *http.Request) {
 	oldImg, err := h.svc.UpdateProductImage(r.Context(), id, newPath)
 	if err != nil {
 		// Rollback: delete the new file
-		os.Remove(filepath.Join(staticImgDir, filepath.Base(newPath)))
+		deleteOldFile(newPath)
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -262,11 +278,12 @@ func (h *ProductHandler) UpdateImage(w http.ResponseWriter, r *http.Request) {
 // Bundle Handler
 
 type BundleHandler struct {
-	svc *pricing.Service
+	svc       *pricing.Service
+	rbacStore *rbac.Store
 }
 
-func NewBundleHandler(svc *pricing.Service) *BundleHandler {
-	return &BundleHandler{svc: svc}
+func NewBundleHandler(svc *pricing.Service, rbacStore *rbac.Store) *BundleHandler {
+	return &BundleHandler{svc: svc, rbacStore: rbacStore}
 }
 
 func (h *BundleHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -297,7 +314,7 @@ func (h *BundleHandler) Create(w http.ResponseWriter, r *http.Request) {
 			response.Fail(w, http.StatusBadRequest, map[string]string{"file": err.Error()})
 			return
 		}
-		imgPath, err := saveUploadedFile(file, ext)
+		imgPath, err := saveUploadedFile(file, ext, "bundles")
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "failed to save image")
 			return
@@ -333,6 +350,17 @@ func (h *BundleHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 func (h *BundleHandler) List(w http.ResponseWriter, r *http.Request) {
 	f := pricing.ParseBundleFilter(r)
+
+	// Auto-filter by assigned branch if user lacks view:branch:all
+	if !middleware.HasPermission(r.Context(), h.rbacStore, "view:branch:all") {
+		branchIDStr := middleware.GetBranchID(r.Context())
+		if branchIDStr != "" {
+			if id, err := uuid.Parse(branchIDStr); err == nil {
+				f.BranchID = &id
+			}
+		}
+	}
+
 	items, total, err := h.svc.ListBundles(r.Context(), f)
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
@@ -377,7 +405,7 @@ func (h *BundleHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.Fail(w, http.StatusBadRequest, map[string]string{"file": err.Error()})
 			return
 		}
-		imgPath, err := saveUploadedFile(file, ext)
+		imgPath, err := saveUploadedFile(file, ext, "bundles")
 		if err != nil {
 			response.Error(w, http.StatusInternalServerError, "failed to save image")
 			return
@@ -471,7 +499,7 @@ func (h *BundleHandler) UpdateImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Save new file first (with temp name)
-	newPath, err := saveUploadedFile(file, ext)
+	newPath, err := saveUploadedFile(file, ext, "bundles")
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "failed to save image")
 		return
@@ -481,7 +509,7 @@ func (h *BundleHandler) UpdateImage(w http.ResponseWriter, r *http.Request) {
 	oldImg, err := h.svc.UpdateBundleImage(r.Context(), id, newPath)
 	if err != nil {
 		// Rollback: delete the new file
-		os.Remove(filepath.Join(staticImgDir, filepath.Base(newPath)))
+		deleteOldFile(newPath)
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -959,9 +987,13 @@ func validateImageFile(header *multipart.FileHeader) (string, error) {
 	return ext, nil
 }
 
-func saveUploadedFile(file multipart.File, ext string) (string, error) {
+func saveUploadedFile(file multipart.File, ext, subDir string) (string, error) {
 	filename := uuid.New().String() + ext
-	path := filepath.Join(staticImgDir, filename)
+	saveDir := filepath.Join(staticImgDir, subDir)
+	if err := os.MkdirAll(saveDir, 0755); err != nil {
+		return "", fmt.Errorf("create directory: %w", err)
+	}
+	path := filepath.Join(saveDir, filename)
 
 	file.Seek(0, 0)
 	img, err := decodeImage(file, ext)
@@ -976,7 +1008,7 @@ func saveUploadedFile(file multipart.File, ext string) (string, error) {
 		if _, err := io.Copy(out, file); err != nil {
 			return "", fmt.Errorf("write file: %w", err)
 		}
-		return "/static/img/" + filename, nil
+		return "/static/img/" + subDir + "/" + filename, nil
 	}
 
 	// Resize if larger than 1200px width
@@ -995,7 +1027,7 @@ func saveUploadedFile(file multipart.File, ext string) (string, error) {
 		return "", fmt.Errorf("write file: %w", err)
 	}
 
-	return "/static/img/" + filename, nil
+	return "/static/img/" + subDir + "/" + filename, nil
 }
 
 func deleteOldFile(oldImg string) {

@@ -5,6 +5,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { SelectModule } from 'primeng/select';
 import { AuthStore } from '../../core/auth/auth.store';
+import { SystemConfigStore } from '../../core/stores/system-config.store';
 
 export type HeaderBranch = {
   id: string;
@@ -21,6 +22,7 @@ export type HeaderBranch = {
 export class HeaderComponent {
   private readonly authStore = inject(AuthStore);
   private readonly router = inject(Router);
+  readonly systemConfigStore = inject(SystemConfigStore);
 
   @Input() branches: HeaderBranch[] = [];
   @Input() selectedBranchId = '';
@@ -41,6 +43,10 @@ export class HeaderComponent {
       'staff:view'
     )
   );
+
+  protected onLogoError(event: Event): void {
+    (event.target as HTMLImageElement).src = '/not-found.png';
+  }
 
   protected async logout(): Promise<void> {
     await this.authStore.logout().toPromise();

@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, inject, Input, OnChanges, Output, signal, SimpleChanges } from '@angular/core';
+import { Component, EventEmitter, inject, Input, OnChanges, Output, signal, SimpleChanges, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
@@ -7,6 +7,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { FloatLabelModule } from 'primeng/floatlabel';
+import { AuthStore } from '../../../core/auth/auth.store';
 import { Bundle, CreateBundleRequest, BundleItemRequest } from '../../../core/models/bundle.model';
 import { Product } from '../../../core/models/product.model';
 import { BundleApiService } from '../../../core/services/bundle-api.service';
@@ -32,12 +33,15 @@ export class BundleFormDialogComponent implements OnChanges {
   @Output() saved = new EventEmitter<void>();
   @Output() closed = new EventEmitter<void>();
 
+  private readonly authStore = inject(AuthStore);
   private readonly bundleApi = inject(BundleApiService);
   private readonly productApi = inject(ProductApiService);
   private readonly branchApi = inject(BranchApiService);
   readonly categoryStore = inject(CategoryStore);
 
   protected readonly saving = signal(false);
+  protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
+  protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
   protected readonly products = signal<Product[]>([]);
   protected readonly branches = signal<{ label: string; value: string }[]>([]);
   protected submitted = false;
@@ -72,6 +76,9 @@ export class BundleFormDialogComponent implements OnChanges {
         this.imagePreview = this.bundleApi.resolveImageUrl(this.bundle.img);
       } else {
         this.form = this.emptyForm();
+        if (!this.canViewAllBranches() && this.userBranchId()) {
+          this.form.branch_id = this.userBranchId();
+        }
         this.imagePreview = null;
       }
       this.submitted = false;
@@ -80,7 +87,7 @@ export class BundleFormDialogComponent implements OnChanges {
   }
 
   private loadBranches(): void {
-    this.branchApi.list().subscribe({
+    this.branchApi.listAdmin().subscribe({
       next: (branches) => this.branches.set(branches.map((b) => ({ label: b.storeName, value: b.id }))),
     });
   }

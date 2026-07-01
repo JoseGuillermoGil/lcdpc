@@ -5,8 +5,9 @@ import { AuthStore } from '../../../core/auth/auth.store';
 import { RbacSectionComponent } from './sections/rbac-section.component';
 import { InventarioSectionComponent } from './sections/inventario-section.component';
 import { AdministracionSectionComponent } from './sections/administracion-section.component';
+import { SistemaSectionComponent } from './sections/sistema-section.component';
 
-type ConfigSection = 'rbac' | 'inventario' | 'administracion';
+type ConfigSection = 'rbac' | 'inventario' | 'administracion' | 'sistema';
 
 @Component({
   selector: 'app-config-page',
@@ -14,6 +15,7 @@ type ConfigSection = 'rbac' | 'inventario' | 'administracion';
   imports: [
     CommonModule,
     RbacSectionComponent, InventarioSectionComponent, AdministracionSectionComponent,
+    SistemaSectionComponent,
   ],
   templateUrl: './config-page.component.html',
   styleUrl: './config-page.component.scss',
@@ -37,18 +39,23 @@ export class ConfigPageComponent implements OnInit {
     this.authStore.hasAnyPermission('branch:create', 'branch:view')
   );
 
+  protected readonly canViewSistema = computed(() =>
+    this.authStore.hasPermission('system_config:view')
+  );
+
   protected readonly visibleSections = computed(() => {
     const result: ConfigSection[] = [];
     if (this.canViewRbac()) result.push('rbac');
     if (this.canViewInventario()) result.push('inventario');
     if (this.canViewAdministracion()) result.push('administracion');
+    if (this.canViewSistema()) result.push('sistema');
     return result;
   });
 
   ngOnInit(): void {
     this.route.queryParamMap.subscribe((params) => {
       const section = params.get('section') as ConfigSection | null;
-      if (section && (section === 'rbac' || section === 'inventario' || section === 'administracion')) {
+      if (section && (section === 'rbac' || section === 'inventario' || section === 'administracion' || section === 'sistema')) {
         this.activeSection.set(section);
       } else {
         const first = this.visibleSections()[0];
@@ -77,6 +84,7 @@ export class ConfigPageComponent implements OnInit {
       case 'rbac': return 'RBAC';
       case 'inventario': return 'Inventario';
       case 'administracion': return 'Administracion';
+      case 'sistema': return 'Sistema';
       default: return '';
     }
   }

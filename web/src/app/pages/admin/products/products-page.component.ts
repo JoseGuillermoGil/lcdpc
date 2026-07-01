@@ -42,6 +42,8 @@ export class ProductsPageComponent implements OnInit {
   protected readonly canCreate = computed(() => this.authStore.hasPermission('product:create'));
   protected readonly canUpdate = computed(() => this.authStore.hasPermission('product:update'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('product:delete'));
+  protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
+  protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
 
   protected readonly products = signal<Product[]>([]);
   protected readonly loading = signal(false);
@@ -73,6 +75,9 @@ export class ProductsPageComponent implements OnInit {
     if (this.filterName) filter['name'] = this.filterName;
     if (this.filterCategoryId) filter['category_id'] = this.filterCategoryId;
     if (this.filterIsActive !== null) filter['is_active'] = this.filterIsActive;
+    if (!this.canViewAllBranches() && this.userBranchId()) {
+      filter['branch_id'] = this.userBranchId();
+    }
 
     this.productApi.list(filter).subscribe({
       next: (res) => {

@@ -29,6 +29,7 @@ type TokenClaims struct {
 	Aud       string `json:"aud"`
 	Sub       string `json:"sub"`
 	ProfileID string `json:"profile_id"`
+	BranchID  string `json:"branch_id,omitempty"`
 	ClientID  string `json:"client_id"`
 	Scope     string `json:"scope"`
 	Email     string `json:"email"`
@@ -96,6 +97,7 @@ func GenerateAccessToken(
 	cfg TokenConfig,
 	userID uuid.UUID,
 	profileID uuid.UUID,
+	branchID *uuid.UUID,
 	clientID string,
 	scope string,
 	email string,
@@ -108,6 +110,7 @@ func GenerateAccessToken(
 		Aud:       cfg.Audience,
 		Sub:       userID.String(),
 		ProfileID: profileID.String(),
+		BranchID:  branchIDToString(branchID),
 		ClientID:  clientID,
 		Scope:     scope,
 		Email:     email,
@@ -153,4 +156,11 @@ func randomRead(b []byte) (int, error) {
 	}
 	defer f.Close()
 	return f.Read(b)
+}
+
+func branchIDToString(branchID *uuid.UUID) string {
+	if branchID == nil {
+		return ""
+	}
+	return branchID.String()
 }

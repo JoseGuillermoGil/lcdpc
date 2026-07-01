@@ -39,6 +39,8 @@ export class OrdersPageComponent implements OnInit {
   protected readonly canView = computed(() => this.authStore.hasPermission('order:view'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('order:delete'));
   protected readonly canChangeStatus = computed(() => this.authStore.hasPermission('order:status:change'));
+  protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
+  protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
 
   protected readonly orders = signal<Order[]>([]);
   protected readonly branches = signal<{ id: string; name: string }[]>([]);
@@ -68,7 +70,7 @@ export class OrdersPageComponent implements OnInit {
   protected statusNotes = '';
 
   ngOnInit(): void {
-    this.branchApi.list().subscribe({
+    this.branchApi.listAdmin().subscribe({
       next: (branches) => this.branches.set(branches.map((b) => ({ id: b.id, name: b.storeName }))),
     });
   }
@@ -80,7 +82,11 @@ export class OrdersPageComponent implements OnInit {
 
     const filter: Record<string, any> = { limit, offset };
     if (this.selectedStatus) filter['status'] = this.selectedStatus;
-    if (this.selectedBranch) filter['branch_id'] = this.selectedBranch;
+    if (this.selectedBranch) {
+      filter['branch_id'] = this.selectedBranch;
+    } else if (!this.canViewAllBranches() && this.userBranchId()) {
+      filter['branch_id'] = this.userBranchId();
+    }
 
     this.orderApi.list(filter).subscribe({
       next: (res) => {

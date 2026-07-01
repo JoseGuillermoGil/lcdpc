@@ -1,11 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, OnInit, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { ProductApiService } from '../../core/services/product-api.service';
 import { BundleApiService } from '../../core/services/bundle-api.service';
 import { CategoryStore } from '../../core/stores/category.store';
 import { BranchApiService } from '../../core/services/branch-api.service';
+import { Branch } from '../../core/models/branch.model';
+import { BranchStore } from '../../core/stores/branch.store';
+import { CartStore } from '../../core/stores/cart.store';
 import { BranchesComponent } from '../../shared/branches/branches.component';
 import { CatalogComponent } from '../../shared/catalog/catalog.component';
 import { HeroComponent } from '../../shared/hero/hero.component';
@@ -30,6 +33,7 @@ type ProductCard = {
   badge?: string;
   featured?: boolean;
   quantity: number;
+  branchId: string | null;
 };
 
 type BranchCard = {
@@ -52,6 +56,8 @@ export class LandingPageComponent implements OnInit {
   private readonly bundleApi = inject(BundleApiService);
   readonly categoryStore = inject(CategoryStore);
   private readonly branchApi = inject(BranchApiService);
+  private readonly branchStore = inject(BranchStore);
+  private readonly cartStore = inject(CartStore);
 
   protected readonly activeHeroIndex = signal(0);
   protected readonly search = signal('');
@@ -97,15 +103,39 @@ export class LandingPageComponent implements OnInit {
     });
   });
 
+  constructor() {
+    effect(() => {
+      const branchId = this.branchStore.selectedBranchId();
+      if (branchId) {
+        this.loadProducts(branchId);
+      }
+    });
+  }
+
   ngOnInit(): void {
     this.categoryStore.load();
 
+    this.branchApi.list().subscribe({
+      next: (branches: Branch[]) => {
+        this.branches.set(
+          branches.map((b) => ({
+            id: b.id,
+            name: b.storeName,
+            address: b.address,
+            phone: b.contactPhone,
+            icon: 'storefront'
+          }))
+        );
+      },
+    });
+  }
+
+  private loadProducts(branchId: string): void {
     forkJoin({
-      products: this.productApi.list(),
-      bundles: this.bundleApi.list(),
-      branches: this.branchApi.list()
+      products: this.productApi.list({ branch_id: branchId, is_active: true }),
+      bundles: this.bundleApi.list({ branch_id: branchId }),
     }).subscribe({
-      next: ({ products, bundles, branches }) => {
+      next: ({ products, bundles }) => {
         const bundleCards: ProductCard[] = bundles.items
           .filter((b) => b.status === 'Published')
           .map((b) => ({
@@ -118,11 +148,11 @@ export class LandingPageComponent implements OnInit {
             categoryId: b.categoryId ?? '',
             category: this.categoryStore.getCategoryName(b.categoryId),
             featured: true,
-            quantity: 1
+            quantity: 1,
+            branchId: b.branchId
           }));
 
         const productCards: ProductCard[] = products.items
-          .filter((p) => p.isActive)
           .map((p) => ({
             id: p.productId,
             name: p.name,
@@ -132,30 +162,56 @@ export class LandingPageComponent implements OnInit {
             alt: p.name,
             categoryId: p.categoryId ?? '',
             category: this.categoryStore.getCategoryName(p.categoryId),
-            quantity: 1
+            quantity: 1,
+            branchId: p.branchId
           }));
 
         this.products.set([...bundleCards, ...productCards]);
-
-        this.branches.set(
-          branches.map((b) => ({
-            id: b.id,
-            name: b.storeName,
-            address: b.address,
-            phone: b.contactPhone,
-            icon: 'storefront'
-          }))
-        );
       },
       error: () => {
         this.products.set([]);
-        this.branches.set([]);
       }
     });
   }
 
   protected selectCategory(categoryId: string): void {
     this.selectedCategoryId.set(categoryId);
+  }
+
+  protected incrementQuantity(productId: string): void {
+    this.products.update((items) =>
+      items.map((p) => (p.id === productId ? { ...p, quantity: p.quantity + 1 } : p))
+    );
+  }
+
+  protected decrementQuantity(productId: string): void {
+    this.products.update((items) =>
+      items.map((p) => {
+        if (p.id !== productId) return p;
+        const newQty = Math.max(1, p.quantity - 1);
+        return { ...p, quantity: newQty };
+      })
+    );
+  }
+
+  protected addToCart(productId: string): void {
+    const product = this.products().find((p) => p.id === productId);
+    if (!product) return;
+
+    this.cartStore.addItem(
+      {
+        id: product.id,
+        name: product.name,
+        imageUrl: product.imageUrl,
+        price: 0,
+        branchId: product.branchId,
+      },
+      product.quantity
+    );
+
+    this.products.update((items) =>
+      items.map((p) => (p.id === productId ? { ...p, quantity: 1 } : p))
+    );
   }
 
   protected goToAdvancedSearch(query: string): void {

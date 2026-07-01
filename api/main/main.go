@@ -23,6 +23,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/rbac"
 	"github.com/lcdpc/lcdpc-go/internal/staff"
 	"github.com/lcdpc/lcdpc-go/internal/sync"
+	"github.com/lcdpc/lcdpc-go/internal/systemconfig"
 )
 
 func main() {
@@ -118,8 +119,9 @@ func main() {
 	syncSvc := sync.NewService(pool)
 	rbacSvc := rbac.NewService(pool, rbacStore)
 	orderSvc := order.NewService(pool)
+	systemConfigSvc := systemconfig.NewService(pool)
 
-	router := httpserver.NewServer(cfg, pool, authSvc, oauth2Svc, keySvc, pricingSvc, branchSvc, brandSvc, categorySvc, staffSvc, syncSvc, rbacStore, rbacSvc, orderSvc)
+	router := httpserver.NewServer(cfg, pool, authSvc, oauth2Svc, keySvc, pricingSvc, branchSvc, brandSvc, categorySvc, staffSvc, syncSvc, rbacStore, rbacSvc, orderSvc, systemConfigSvc)
 
 	addr := ":" + cfg.Port
 	srv := &http.Server{

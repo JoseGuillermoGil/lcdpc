@@ -12,6 +12,9 @@
   [selectedCategoryId]="selectedCategoryId()"
   [products]="filteredProducts()"
   (categorySelect)="selectCategory($event)"
+  (increment)="incrementQuantity($event)"
+  (decrement)="decrementQuantity($event)"
+  (addToCart)="addToCart($event)"
 ></app-catalog>
 
 <app-branches [branches]="branches()"></app-branches>
