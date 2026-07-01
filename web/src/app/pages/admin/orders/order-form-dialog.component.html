@@ -19,25 +19,26 @@
       <label class="field-label">Cliente *</label>
       <div class="user-search">
         <div class="user-search-input">
-          <input pInputText [(ngModel)]="userSearchQuery"
-                 placeholder="Buscar por email o nombre..."
+          <input pInputText [(ngModel)]="documentQuery"
+                 placeholder="Buscar por documento de identidad..."
                  [class.ng-invalid]="submitted && !form.client_user_id"
-                 (input)="onUserSearchInput()"
-                 (focus)="onUserSearchInput()"
+                 (keydown.enter)="searchByDocument(); $event.preventDefault()"
                  style="width: 100%" />
+          <p-button icon="pi pi-search" [text]="true" [rounded]="true"
+                    [loading]="searchingUser()"
+                    (onClick)="searchByDocument()" />
           @if (selectedUser()) {
             <p-button icon="pi pi-times" [text]="true" [rounded]="true" severity="danger"
                       (onClick)="clearUser()" />
           }
         </div>
-        @if (showUserDropdown && userSearchResults().length > 0) {
-          <div class="user-dropdown">
-            @for (user of userSearchResults(); track user.id) {
-              <div class="user-option" (click)="selectUser(user)">
-                <span class="user-email">{{ user.email }}</span>
-                <span class="user-name">{{ formatUserName(user) }}</span>
-              </div>
-            }
+        @if (userSearchError()) {
+          <small class="p-error">{{ userSearchError() }}</small>
+        }
+        @if (selectedUser()) {
+          <div class="user-selected">
+            <i class="pi pi-user"></i>
+            <span>{{ formatUserName(selectedUser()!) }} — {{ selectedUser()!.email }}</span>
           </div>
         }
       </div>
@@ -56,7 +57,9 @@
       }
 
       @for (item of form.items; track $index; let i = $index) {
-        <div class="item-row" [class.ng-invalid]="submitted && (!item.product_id || item.quantity <= 0)">
+        <div class="item-row" [class.ng-invalid]="submitted && (!item.product_id || item.quantity <= 0)"
+             [class.item-duplicate]="isDuplicateItem(i)"
+             [class.item-over-stock]="isOverStock(i)">
           <p-select [options]="products()" [(ngModel)]="item.product_id"
                     optionLabel="name" optionValue="productId"
                     placeholder="Producto" [style]="{'flex':'1'}"
@@ -70,6 +73,11 @@
           <p-button icon="pi pi-times" [text]="true" severity="danger" [rounded]="true"
                     (onClick)="removeItem(i)" />
         </div>
+        @if (item.product_id && getItemStockInfo(i)) {
+          <div class="item-stock-info" [class.stock-error]="isOverStock(i)">
+            <small>{{ getItemStockInfo(i) }}</small>
+          </div>
+        }
       } @empty {
         <div class="empty-items">
           @if (form.branch_id) {

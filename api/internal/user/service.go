@@ -72,6 +72,21 @@ func (s *Service) List(ctx context.Context, limit, offset int) ([]UserModel, int
 	return users, totalCount, nil
 }
 
+func (s *Service) GetByDocument(ctx context.Context, document string) (*UserModel, error) {
+	var u UserModel
+	err := s.pool.QueryRow(ctx, `
+		SELECT u.id, u.email, u.status, u.created_at_utc,
+		       p.first_name, p.last_name
+		FROM users u
+		LEFT JOIN profiles p ON p.user_id = u.id
+		WHERE p.identity_document = $1
+	`, document).Scan(&u.ID, &u.Email, &u.Status, &u.CreatedAt, &u.FirstName, &u.LastName)
+	if err != nil {
+		return nil, fmt.Errorf("user not found by document: %w", err)
+	}
+	return &u, nil
+}
+
 func (s *Service) Search(ctx context.Context, query string, limit, offset int) ([]UserModel, int, error) {
 	if limit <= 0 {
 		limit = defaultLimit

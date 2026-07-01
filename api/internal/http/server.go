@@ -494,6 +494,7 @@ func NewServer(
 			r.Use(middleware.RequirePermission(rbacStore, "order:create"))
 			r.Get("/", userH.List)
 			r.Get("/search", userH.Search)
+			r.Get("/by-document/{doc}", userH.GetByDocument)
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequirePermission(rbacStore, "rbac:user:update"))

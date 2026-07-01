@@ -14,9 +14,10 @@ import { ConfirmationService, MessageService } from 'primeng/api';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { OrderApiService } from '../../../core/services/order-api.service';
 import { BranchApiService } from '../../../core/services/branch-api.service';
-import { Order } from '../../../core/models/order.model';
+import { Order, ORDER_STATUS_LABELS, ORDER_STATUS_SEVERITY, ORDER_STATUS_TRANSITIONS, ORDER_TERMINAL_STATUSES } from '../../../core/models/order.model';
 import { OrderDetailDialogComponent } from './order-detail-dialog.component';
 import { OrderFormDialogComponent } from './order-form-dialog.component';
+import { OrderItemsDialogComponent } from './order-items-dialog.component';
 
 @Component({
   selector: 'app-orders-page',
@@ -24,7 +25,7 @@ import { OrderFormDialogComponent } from './order-form-dialog.component';
   imports: [
     CommonModule, FormsModule, ButtonModule, TableModule, TagModule,
     SelectModule, InputTextModule, DialogModule, ConfirmDialogModule,
-    ToastModule, TooltipModule, OrderDetailDialogComponent, OrderFormDialogComponent
+    ToastModule, TooltipModule, OrderDetailDialogComponent, OrderFormDialogComponent, OrderItemsDialogComponent
   ],
   providers: [ConfirmationService, MessageService],
   templateUrl: './orders-page.component.html',
@@ -53,19 +54,13 @@ export class OrdersPageComponent implements OnInit {
   protected selectedStatus: string | null = null;
   protected selectedBranch: string | null = null;
 
-  protected readonly statusOptions = [
-    { label: 'Pending Review', value: 'PENDING_REVIEW' },
-    { label: 'Approved', value: 'APPROVED' },
-    { label: 'In Preparation', value: 'IN_PREPARATION' },
-    { label: 'Ready', value: 'READY' },
-    { label: 'Delivered', value: 'DELIVERED' },
-    { label: 'Rejected', value: 'REJECTED' },
-    { label: 'Cancelled', value: 'CANCELLED' },
-  ];
+  protected readonly statusOptions = Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({ label, value }));
+  protected readonly ORDER_STATUS_TRANSITIONS = ORDER_STATUS_TRANSITIONS;
 
   protected readonly detailVisible = signal(false);
   protected readonly selectedOrder = signal<Order | null>(null);
   protected readonly createDialogVisible = signal(false);
+  protected readonly itemsDialogVisible = signal(false);
 
   protected readonly statusDialogVisible = signal(false);
   protected readonly nextStatusOptions = signal<{ label: string; value: string }[]>([]);
@@ -109,17 +104,20 @@ export class OrdersPageComponent implements OnInit {
     return this.branches().find((b) => b.id === branchId)?.name ?? branchId.slice(0, 8);
   }
 
-  orderStatusSeverity(status: string): 'info' | 'success' | 'warn' | 'danger' {
-    switch (status) {
-      case 'PENDING_REVIEW': return 'warn';
-      case 'APPROVED': return 'info';
-      case 'IN_PREPARATION': return 'info';
-      case 'READY': return 'success';
-      case 'DELIVERED': return 'success';
-      case 'REJECTED': return 'danger';
-      case 'CANCELLED': return 'danger';
-      default: return 'info';
-    }
+  orderStatusLabel(status: string): string {
+    return ORDER_STATUS_LABELS[status] ?? status;
+  }
+
+  orderStatusSeverity(status: string): 'info' | 'success' | 'warn' | 'danger' | 'secondary' {
+    return ORDER_STATUS_SEVERITY[status] ?? 'info';
+  }
+
+  isTerminal(status: string): boolean {
+    return !!ORDER_TERMINAL_STATUSES[status];
+  }
+
+  isInitialStatus(status: string): boolean {
+    return status === 'PENDING_REVIEW';
   }
 
   viewDetail(order: Order): void {
@@ -127,30 +125,34 @@ export class OrdersPageComponent implements OnInit {
     this.detailVisible.set(true);
   }
 
+  viewItems(): void {
+    const order = this.selectedOrder();
+    if (!order) return;
+    this.detailVisible.set(false);
+    this.orderApi.getById(order.id).subscribe({
+      next: (fullOrder) => {
+        this.selectedOrder.set(fullOrder);
+        this.itemsDialogVisible.set(true);
+      },
+      error: () => {
+        this.itemsDialogVisible.set(true);
+      },
+    });
+  }
+
+  onItemsSaved(): void {
+    this.itemsDialogVisible.set(false);
+    this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Orden actualizada' });
+    this.applyFilters();
+  }
+
   openStatusDialog(order: Order): void {
     this.selectedOrder.set(order);
     this.newStatus = '';
     this.statusNotes = '';
 
-    const transitions: Record<string, { label: string; value: string }[]> = {
-      'PENDING_REVIEW': [
-        { label: 'Aprobar', value: 'APPROVED' },
-        { label: 'Rechazar', value: 'REJECTED' },
-        { label: 'Cancelar', value: 'CANCELLED' },
-      ],
-      'APPROVED': [
-        { label: 'Iniciar Preparacion', value: 'IN_PREPARATION' },
-        { label: 'Cancelar', value: 'CANCELLED' },
-      ],
-      'IN_PREPARATION': [
-        { label: 'Marcar Listo', value: 'READY' },
-      ],
-      'READY': [
-        { label: 'Entregar', value: 'DELIVERED' },
-      ],
-    };
-
-    this.nextStatusOptions.set(transitions[order.status] ?? []);
+    const allowed = ORDER_STATUS_TRANSITIONS[order.status] ?? [];
+    this.nextStatusOptions.set(allowed.map((s) => ({ label: ORDER_STATUS_LABELS[s] ?? s, value: s })));
     this.statusDialogVisible.set(true);
   }
 

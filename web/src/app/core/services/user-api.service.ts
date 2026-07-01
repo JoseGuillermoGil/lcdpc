@@ -52,6 +52,14 @@ export class UserApiService {
       })));
   }
 
+  getByDocument(document: string): Observable<AppUser> {
+    return this.http
+      .get<JsendEnvelope<UserGoData>>(`${this.baseUrl}/api/v1/users/by-document/${encodeURIComponent(document)}`, {
+        withCredentials: true,
+      })
+      .pipe(map((res) => this.map(res.data)));
+  }
+
   list(filter?: { limit?: number; offset?: number }): Observable<PaginatedResponse<AppUser>> {
     const params: Record<string, string> = {};
     if (filter?.limit != null) params['limit'] = String(filter.limit);

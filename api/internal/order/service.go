@@ -211,9 +211,18 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 	}
 
 	if req.Items != nil {
+		if len(req.Items) == 0 {
+			return nil, fmt.Errorf("order must have at least one item")
+		}
 		for _, item := range req.Items {
 			if item.ItemType != "product" && item.ItemType != "bundle" {
 				return nil, fmt.Errorf("invalid item_type: %s", item.ItemType)
+			}
+			if item.ItemType == "product" && item.ProductID == uuid.Nil {
+				return nil, fmt.Errorf("product_id is required for product items")
+			}
+			if item.ItemType == "bundle" && item.BundleID == uuid.Nil {
+				return nil, fmt.Errorf("bundle_id is required for bundle items")
 			}
 		}
 	}
@@ -232,8 +241,8 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 	}
 
 	if req.Items != nil {
-		if len(req.Items) == 0 {
-			return nil, fmt.Errorf("order must have at least one item")
+		if err := releaseBlockedStock(ctx, tx, o.Items); err != nil {
+			return nil, err
 		}
 
 		_, err = tx.Exec(ctx, `DELETE FROM order_items WHERE order_id = $1`, id)
@@ -252,6 +261,32 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 			var productID, bundleID *uuid.UUID
 			if item.ItemType == "product" {
 				productID = &item.ProductID
+
+				var stock, stockAvailable, stockBlocked int
+				err = tx.QueryRow(ctx, `
+					SELECT stock, stock_available, stock_blocked
+					FROM products WHERE product_id = $1 FOR UPDATE
+				`, item.ProductID).Scan(&stock, &stockAvailable, &stockBlocked)
+				if err != nil {
+					return nil, fmt.Errorf("get product stock: %w", err)
+				}
+
+				qty := int(item.Quantity)
+				if stockAvailable < qty {
+					return nil, fmt.Errorf("INSUFFICIENT_STOCK: product %s has %d available, requested %d", item.ProductID, stockAvailable, qty)
+				}
+				if stockBlocked+qty > stock {
+					return nil, fmt.Errorf("STOCK_EXCEEDED: product %s stock=%d blocked=%d requested=%d", item.ProductID, stock, stockBlocked, qty)
+				}
+
+				_, err = tx.Exec(ctx, `
+					UPDATE products
+					SET stock_available = stock_available - $1, stock_blocked = stock_blocked + $1
+					WHERE product_id = $2
+				`, qty, item.ProductID)
+				if err != nil {
+					return nil, fmt.Errorf("update product stock: %w", err)
+				}
 			} else {
 				bundleID = &item.BundleID
 			}
@@ -294,6 +329,10 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, changedByUserID uuid
 	}
 	defer tx.Rollback(ctx)
 
+	if err := releaseBlockedStock(ctx, tx, o.Items); err != nil {
+		return err
+	}
+
 	_, err = tx.Exec(ctx, `UPDATE orders SET status = $2, updated_at_utc = now() WHERE id = $1`, id, StatusCancelledByCustomer)
 	if err != nil {
 		return fmt.Errorf("cancel order: %w", err)
@@ -325,6 +364,12 @@ func (s *Service) ChangeStatus(ctx context.Context, id uuid.UUID, req StatusChan
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
+
+	if isStockReleaseStatus(req.ToStatus) {
+		if err := releaseBlockedStock(ctx, tx, o.Items); err != nil {
+			return nil, err
+		}
+	}
 
 	_, err = tx.Exec(ctx, `UPDATE orders SET status = $2, updated_at_utc = now() WHERE id = $1`, id, req.ToStatus)
 	if err != nil {
@@ -393,4 +438,26 @@ func nullString(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+func isStockReleaseStatus(status string) bool {
+	return status == StatusCancelledByCustomer || status == StatusRejectedByValidation
+}
+
+func releaseBlockedStock(ctx context.Context, tx pgx.Tx, items []OrderItem) error {
+	for _, item := range items {
+		if item.ItemType != "product" || item.ProductID == nil {
+			continue
+		}
+		qty := int(item.Quantity)
+		_, err := tx.Exec(ctx, `
+			UPDATE products
+			SET stock_available = stock_available + $1, stock_blocked = stock_blocked - $1
+			WHERE product_id = $2
+		`, qty, *item.ProductID)
+		if err != nil {
+			return fmt.Errorf("release stock for product %s: %w", *item.ProductID, err)
+		}
+	}
+	return nil
 }

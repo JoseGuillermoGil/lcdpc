@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/lcdpc/lcdpc-go/internal/http/response"
 	"github.com/lcdpc/lcdpc-go/internal/user"
 )
@@ -46,4 +47,20 @@ func (h *UserHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Paginated(w, items, total, limit, offset)
+}
+
+func (h *UserHandler) GetByDocument(w http.ResponseWriter, r *http.Request) {
+	doc := chi.URLParam(r, "doc")
+	if doc == "" {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"doc": "required"})
+		return
+	}
+
+	u, err := h.svc.GetByDocument(r.Context(), doc)
+	if err != nil {
+		response.Error(w, http.StatusNotFound, "Usuario no encontrado")
+		return
+	}
+
+	response.Success(w, u)
 }

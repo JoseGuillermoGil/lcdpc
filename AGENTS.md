@@ -211,7 +211,7 @@ web/src/app/
       dashboard/
       products/    — list + form dialog (with prices & conversions sub-forms)
       bundles/     — list + form dialog (with items sub-form)
-      orders/      — list + detail dialog + status change dialog
+      orders/      — list + detail dialog + items dialog + status change dialog
       staff/       — list + form dialog
       classifications/ — measurement unit classifications CRUD
       config/      — section-based config page (?section= query param)
@@ -349,11 +349,83 @@ All paginated list pages must follow the products page pattern — **never** use
 - No `<p-paginator>` is rendered separately; the table handles pagination UI natively.
 
 ### Order status flow
-- `PENDING_REVIEW` → `APPROVED` | `REJECTED` | `CANCELLED`
-- `APPROVED` → `IN_PREPARATION` | `CANCELLED`
-- `IN_PREPARATION` → `READY`
-- `READY` → `DELIVERED`
+- Full transition map defined in `api/internal/order/statuses.go` (`allowedTransitions`).
+- Frontend mirrors it in `ORDER_STATUS_TRANSITIONS` (`core/models/order.model.ts`).
+- Terminal statuses (no further transitions): `REJECTED_BY_VALIDATION`, `DELIVERY_FAILED`, `COMPLETED`, `CANCELLED_BY_CUSTOMER`.
 - Status transitions managed in `orders-page.component.ts` with a dialog.
+- Button visibility rules:
+  - **Cambiar estado**: hidden when status is terminal OR when `ORDER_STATUS_TRANSITIONS[status]` is empty.
+  - **Eliminar**: hidden when status is NOT `PENDING_REVIEW` (only initial status can be deleted).
+
+#### Order dialog architecture
+
+The orders page has a **three-dialog chain**:
+
+1. **Detail Dialog** (`order-detail-dialog`) — read-only overview of the order (ID, status tag, branch, total, notes, history). Uses `ORDER_STATUS_LABELS` and `ORDER_STATUS_SEVERITY` maps for all status tags. Contains an eye button (`pi pi-eye`) that opens the items dialog.
+
+2. **Items Dialog** (`order-items-dialog`) — specialized dialog for viewing and editing order products. Opened from the detail dialog's eye button. Behavior depends on order status:
+   - **Read-only mode** (non-editable statuses): shows items as a static list (product name, quantity, price, subtotal).
+   - **Editable mode** (`PENDING_REVIEW` / `UNDER_REVIEW` via `ORDER_EDITABLE_STATUSES`): full edit capabilities — add/remove products, change quantity, change price, edit notes.
+
+3. **Status Change Dialog** — inline `<p-dialog>` in the orders page for changing order status.
+
+#### Flow: orders table → detail → items
+
+```
+orders-page (table)
+  ├── viewDetail(order) → opens detail dialog
+  │     └── viewItems (eye button) → fetches full order via getById(), opens items dialog
+  │           └── saved → closes items dialog, reloads list, shows toast
+  ├── openStatusDialog(order) → opens status change dialog
+  └── confirmDelete(order) → confirmation → delete
+```
+
+#### Order Items Dialog — editable features
+
+When `ORDER_EDITABLE_STATUSES[order.status]` is true:
+
+- **Remove product**: marks item as `isRemoved` (existing) or splices from array (new). Stock is released on save.
+- **Change quantity**: `p-inputNumber` with stock validation. Effective blocked = `stockBlocked - originalQuantity + newQuantity`. Backend validates `stockAvailable >= qty` and `stockBlocked + qty <= stock`.
+- **Change price**: `p-select` dropdown populated from `priceApi.listByProductId()` showing available prices per price category (e.g., "Oferta — $5.00", "Mayorista — $3.50"). Falls back to `p-inputNumber` when no price options exist.
+- **Add product**: pushes new `EditableOrderItem` with `isNew: true`, `originalQuantity: 0`. Product select filtered by branch.
+- **Edit notes**: `p-floatlabel` textarea bound to `notes`.
+
+#### Validation matrix
+
+| Check | Frontend (UI warning) | Backend (reject) |
+|---|---|---|
+| Empty items list | ✅ | ✅ |
+| Quantity ≤ 0 | ✅ | ✅ (implicit) |
+| Duplicate products | ✅ | ❌ |
+| Stock available < quantity | ✅ (visual) | ✅ (hard reject) |
+| Stock blocked + qty > stock | ✅ (visual) | ✅ (hard reject) |
+| Order not editable | ✅ (hide save button) | ✅ (hard reject) |
+
+#### Centralized status maps (`core/models/order.model.ts`)
+
+All status-related maps are in one file for reuse:
+
+- `ORDER_STATUS_LABELS` — maps status codes to Spanish display labels
+- `ORDER_STATUS_SEVERITY` — maps statuses to PrimeNG tag severities (`warn`, `info`, `success`, `danger`, `secondary`)
+- `ORDER_TERMINAL_STATUSES` — statuses with no further transitions
+- `ORDER_EDITABLE_STATUSES` — statuses that allow item editing (`PENDING_REVIEW`, `UNDER_REVIEW`)
+- `ORDER_STATUS_TRANSITIONS` — full state machine defining allowed next statuses
+
+#### Stock blocking and releasing
+- **Blocking** (order creation): When an order is created, for each product item:
+  - `stock_available -= quantity`
+  - `stock_blocked += quantity`
+  - Validated: `stock_available >= quantity` AND `stock_blocked + quantity <= stock`. If either fails, the entire transaction rolls back.
+- **Releasing** (order rejection/cancellation): When an order transitions to `CANCELLED_BY_CUSTOMER` or `REJECTED_BY_VALIDATION`, OR when an order is deleted (which sets status to `CANCELLED_BY_CUSTOMER`):
+  - For each product item in the order: `stock_available += quantity`, `stock_blocked -= quantity`.
+  - Implemented in `releaseBlockedStock()` in `api/internal/order/service.go`.
+  - Called from `Delete()` and `ChangeStatus()` (when `isStockReleaseStatus(toStatus)` is true).
+- **Update** (order item editing): When items are edited in editable status:
+  - First releases ALL blocked stock for existing items (`releaseBlockedStock`).
+  - Deletes old items.
+  - For each new product item: validates stock and blocks new quantity (same as `Create`).
+  - If any validation fails, entire transaction rolls back (old stock restored via `defer tx.Rollback`).
+- **Important**: `Delete()` is only allowed for orders in `PENDING_REVIEW` status. The button is hidden in the UI for other statuses, and the backend rejects it for terminal statuses.
 
 ### Bundle status flow
 - `Draft` → `Published` (via `bundleApi.publish()`)

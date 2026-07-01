@@ -1,0 +1,114 @@
+<p-dialog [header]="isEditable ? 'Editar Orden' : 'Productos de la Orden'"
+          [visible]="visible" (visibleChange)="visibleChange.emit($event)"
+          [modal]="true" [dismissableMask]="true" [draggable]="false"
+          [style]="{width: 'min(750px, 95vw)'}"
+          [contentStyle]="{'max-height': '70vh', 'overflow': 'auto'}"
+          (onHide)="close()">
+  @if (order) {
+    <div class="order-items-form" [style]="{paddingTop: '20px'}">
+
+      <div class="order-header">
+        <div class="order-header-info">
+          <p-tag [value]="orderStatusLabel(order.status)" [severity]="orderStatusSeverity(order.status)" />
+          <span class="order-meta">{{ order.totalItems }} items &mdash; {{ order.priceTotal | currency:order.currency }}</span>
+        </div>
+      </div>
+
+      @if (isEditable) {
+        <div class="field">
+          <p-floatlabel>
+            <textarea pInputText id="notes" [(ngModel)]="notes" rows="2" style="width: 100%" placeholder=" "></textarea>
+            <label for="notes">Notas</label>
+          </p-floatlabel>
+        </div>
+      } @else if (order.notes) {
+        <div class="detail-notes">
+          <span class="detail-label">Notas</span>
+          <p>{{ order.notes }}</p>
+        </div>
+      }
+
+      <div class="items-section">
+        <div class="items-header">
+          <h3>Productos</h3>
+          @if (isEditable) {
+            <p-button label="Agregar" icon="pi pi-plus" [text]="true" size="small"
+                      (onClick)="addItem()" />
+          }
+        </div>
+
+        @if (submitted && visibleItems.length === 0) {
+          <small class="p-error">Debe haber al menos un producto</small>
+        }
+
+        @for (item of visibleItems; track $index; let i = $index) {
+          <div class="item-row" [class.item-duplicate]="isDuplicateItem(i)"
+               [class.item-over-stock]="isOverStock(i)">
+            @if (isEditable) {
+              <p-select [options]="products()" [(ngModel)]="item.productId"
+                        optionLabel="name" optionValue="productId"
+                        placeholder="Producto" [style]="{'flex':'1'}"
+                        (onChange)="onProductSelect(i)" />
+              <p-inputNumber [(ngModel)]="item.quantity" [min]="1" [maxFractionDigits]="2"
+                             placeholder="Cant." [style]="{'width':'90px'}" />
+              @if (item.priceOptions.length > 0) {
+                <p-select [options]="item.priceOptions" [(ngModel)]="item.unitPrice"
+                          optionLabel="label" optionValue="value"
+                          placeholder="Precio" [style]="{'width':'180px'}"
+                          appendTo="body" />
+              } @else {
+                <p-inputNumber [(ngModel)]="item.unitPrice" [min]="0" [minFractionDigits]="2"
+                               [maxFractionDigits]="2" prefix="$"
+                               placeholder="Precio" [style]="{'width':'130px'}" />
+              }
+              <span class="item-subtotal">{{ (item.quantity * item.unitPrice) | currency:order.currency }}</span>
+              <p-button icon="pi pi-times" [text]="true" severity="danger" [rounded]="true"
+                        (onClick)="removeItem(i)" />
+            } @else {
+              <span class="item-name">{{ getProductName(item.productId) }}</span>
+              <span class="item-qty">{{ item.quantity }}</span>
+              <span class="item-price">{{ item.unitPrice | currency:order.currency }}</span>
+              <span class="item-subtotal">{{ item.subtotal | currency:order.currency }}</span>
+            }
+          </div>
+          @if (isEditable && item.productId && getItemStockInfo(i)) {
+            <div class="item-stock-info" [class.stock-error]="isOverStock(i)">
+              <small>{{ getItemStockInfo(i) }}</small>
+            </div>
+          }
+        } @empty {
+          <div class="empty-items">
+            @if (isEditable) {
+              <p>No hay productos. Agregue items.</p>
+            } @else {
+              <p>La orden no tiene productos.</p>
+            }
+          </div>
+        }
+
+        @if (visibleItems.length > 0) {
+          <div class="items-total">
+            <span>Total ({{ totalItems }} items):</span>
+            <strong>{{ total | currency:order.currency }}</strong>
+          </div>
+        }
+      </div>
+
+      @if (submitted && hasDuplicates) {
+        <small class="p-error">Hay productos duplicados</small>
+      }
+      @if (submitted && hasStockIssues) {
+        <small class="p-error">Hay productos con stock insuficiente</small>
+      }
+    </div>
+  }
+
+  <ng-template pTemplate="footer">
+    <p-button label="Cerrar" severity="secondary" (onClick)="close()" />
+    @if (isEditable) {
+      <p-button label="Guardar Cambios" icon="pi pi-check" [loading]="saving()" (onClick)="save()" />
+    }
+  </ng-template>
+</p-dialog>
+
+<p-toast />

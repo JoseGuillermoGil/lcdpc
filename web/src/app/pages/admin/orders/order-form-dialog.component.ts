@@ -53,11 +53,10 @@ export class OrderFormDialogComponent implements OnChanges {
 
   protected form = this.emptyForm();
 
-  protected userSearchQuery = '';
-  protected userSearchResults = signal<AppUser[]>([]);
+  protected documentQuery = '';
   protected selectedUser = signal<AppUser | null>(null);
-  protected showUserDropdown = false;
-  private userSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+  protected userSearchError = signal('');
+  protected searchingUser = signal(false);
 
   protected get total(): number {
     return this.form.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
@@ -67,13 +66,60 @@ export class OrderFormDialogComponent implements OnChanges {
     return this.form.items.reduce((sum, item) => sum + item.quantity, 0);
   }
 
+  protected get duplicateProductIds(): Set<string> {
+    const seen = new Set<string>();
+    const dupes = new Set<string>();
+    for (const item of this.form.items) {
+      if (item.product_id && seen.has(item.product_id)) {
+        dupes.add(item.product_id);
+      }
+      seen.add(item.product_id);
+    }
+    return dupes;
+  }
+
+  protected get hasDuplicates(): boolean {
+    return this.duplicateProductIds.size > 0;
+  }
+
+  protected get hasStockIssues(): boolean {
+    return this.form.items.some((item) => {
+      if (!item.product_id) return false;
+      const product = this.products().find((p) => p.productId === item.product_id);
+      if (!product) return false;
+      return product.stockBlocked + item.quantity > product.stock;
+    });
+  }
+
+  protected isDuplicateItem(index: number): boolean {
+    const item = this.form.items[index];
+    return !!item.product_id && this.duplicateProductIds.has(item.product_id);
+  }
+
+  protected isOverStock(index: number): boolean {
+    const item = this.form.items[index];
+    if (!item.product_id) return false;
+    const product = this.products().find((p) => p.productId === item.product_id);
+    if (!product) return false;
+    return product.stockBlocked + item.quantity > product.stock;
+  }
+
+  protected getItemStockInfo(index: number): string {
+    const item = this.form.items[index];
+    if (!item.product_id) return '';
+    const product = this.products().find((p) => p.productId === item.product_id);
+    if (!product) return '';
+    const available = product.stock - product.stockBlocked;
+    return `Disponible: ${available} | Bloqueado: ${product.stockBlocked} | Total: ${product.stock}`;
+  }
+
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['visible'] && this.visible) {
       this.form = this.emptyForm();
       this.selectedUser.set(null);
-      this.userSearchQuery = '';
-      this.userSearchResults.set([]);
-      this.showUserDropdown = false;
+      this.documentQuery = '';
+      this.userSearchError.set('');
+      this.searchingUser.set(false);
       this.products.set([]);
       this.submitted = false;
 
@@ -97,44 +143,37 @@ export class OrderFormDialogComponent implements OnChanges {
     });
   }
 
-  protected onUserSearchInput(): void {
-    if (this.userSearchTimeout) {
-      clearTimeout(this.userSearchTimeout);
-    }
-    const query = this.userSearchQuery.trim();
-    if (query.length < 2) {
-      this.userSearchResults.set([]);
-      this.showUserDropdown = false;
-      return;
-    }
-    this.userSearchTimeout = setTimeout(() => {
-      this.userApi.search(query, 10).subscribe({
-        next: (res) => {
-          this.userSearchResults.set(res.items);
-          this.showUserDropdown = true;
-        },
-      });
-    }, 300);
-  }
+  protected searchByDocument(): void {
+    const doc = this.documentQuery.trim();
+    if (!doc) return;
 
-  protected selectUser(user: AppUser): void {
-    this.selectedUser.set(user);
-    this.form.client_user_id = user.id;
-    this.userSearchQuery = `${user.email} — ${[user.firstName, user.lastName].filter(Boolean).join(' ')}`;
-    this.userSearchResults.set([]);
-    this.showUserDropdown = false;
-  }
+    this.searchingUser.set(true);
+    this.userSearchError.set('');
+    this.selectedUser.set(null);
+    this.form.client_user_id = '';
 
-  protected formatUserName(user: AppUser): string {
-    return [user.firstName, user.lastName].filter((v) => !!v).join(' ') || user.email;
+    this.userApi.getByDocument(doc).subscribe({
+      next: (user) => {
+        this.selectedUser.set(user);
+        this.form.client_user_id = user.id;
+        this.searchingUser.set(false);
+      },
+      error: () => {
+        this.userSearchError.set('No se encontró un usuario con ese documento');
+        this.searchingUser.set(false);
+      },
+    });
   }
 
   protected clearUser(): void {
     this.selectedUser.set(null);
     this.form.client_user_id = '';
-    this.userSearchQuery = '';
-    this.userSearchResults.set([]);
-    this.showUserDropdown = false;
+    this.documentQuery = '';
+    this.userSearchError.set('');
+  }
+
+  protected formatUserName(user: AppUser): string {
+    return [user.firstName, user.lastName].filter((v) => !!v).join(' ') || user.email;
   }
 
   protected onProductSelect(index: number): void {
@@ -166,6 +205,8 @@ export class OrderFormDialogComponent implements OnChanges {
     if (!this.form.branch_id || !this.form.client_user_id) return;
     if (this.form.items.length === 0) return;
     if (this.form.items.some((i) => !i.product_id || i.quantity <= 0)) return;
+    if (this.hasDuplicates) return;
+    if (this.hasStockIssues) return;
 
     this.saving.set(true);
 
