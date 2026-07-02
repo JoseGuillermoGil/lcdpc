@@ -26,6 +26,12 @@ import {
   UpdateOrderRequest,
 } from '../../../core/models/order.model';
 
+interface PriceOption {
+  label: string;
+  id: string;
+  amount: number;
+}
+
 interface EditableOrderItem {
   id?: string;
   productId: string;
@@ -33,7 +39,8 @@ interface EditableOrderItem {
   originalQuantity: number;
   unitPrice: number;
   subtotal: number;
-  priceOptions: { label: string; value: number }[];
+  priceOptions: PriceOption[];
+  selectedPriceId: string | null;
   isNew?: boolean;
   isRemoved?: boolean;
 }
@@ -109,8 +116,10 @@ export class OrderItemsDialogComponent implements OnChanges {
       if (!item.productId) return false;
       const product = this.products().find((p) => p.productId === item.productId);
       if (!product) return false;
+      const additional = item.quantity - item.originalQuantity;
+      const available = product.stock - product.stockBlocked;
       const effectiveBlocked = product.stockBlocked - item.originalQuantity + item.quantity;
-      return effectiveBlocked > product.stock;
+      return effectiveBlocked > product.stock || additional > available;
     });
   }
 
@@ -139,6 +148,7 @@ export class OrderItemsDialogComponent implements OnChanges {
             unitPrice: item.unitPrice,
             subtotal: item.subtotal,
             priceOptions: [],
+            selectedPriceId: null,
           };
           this.items.push(editable);
           if (productId) {
@@ -149,21 +159,36 @@ export class OrderItemsDialogComponent implements OnChanges {
     }
   }
 
-  private loadPricesForItem(index: number, productId: string): void {
+  private loadPricesForItem(index: number, productId: string, autoSelectFirst = false): void {
     this.priceApi.listByProductId(productId).subscribe({
       next: (prices) => {
         if (index < this.items.length) {
-          this.items[index].priceOptions = this.formatPriceOptions(prices);
+          const opts = this.formatPriceOptions(prices);
+          this.items[index].priceOptions = opts;
+          if (autoSelectFirst || this.items[index].unitPrice === 0) {
+            const first = opts[0];
+            if (first) {
+              this.items[index].unitPrice = first.amount;
+              this.items[index].selectedPriceId = first.id;
+            }
+          } else {
+            const match = opts.find((o) => o.amount === this.items[index].unitPrice);
+            this.items[index].selectedPriceId = match?.id ?? opts[0]?.id ?? null;
+            if (!match && opts.length > 0) {
+              this.items[index].unitPrice = opts[0].amount;
+              this.items[index].selectedPriceId = opts[0].id;
+            }
+          }
         }
       },
     });
   }
 
-  private formatPriceOptions(prices: ProductBranchPrice[]): { label: string; value: number }[] {
+  private formatPriceOptions(prices: ProductBranchPrice[]): PriceOption[] {
     return prices.map((p) => {
       const cat = this.priceCategories().find((c) => c.id === p.priceCategoryId);
       const name = cat?.name ?? 'Precio base';
-      return { label: `${name} — $${p.amount.toFixed(2)}`, value: p.amount };
+      return { label: `${name} — $${p.amount.toFixed(2)}`, id: p.id, amount: p.amount };
     });
   }
 
@@ -175,6 +200,7 @@ export class OrderItemsDialogComponent implements OnChanges {
       unitPrice: 0,
       subtotal: 0,
       priceOptions: [],
+      selectedPriceId: null,
       isNew: true,
     });
   }
@@ -196,15 +222,8 @@ export class OrderItemsDialogComponent implements OnChanges {
 
     this.items[realIndex].unitPrice = 0;
     this.items[realIndex].priceOptions = [];
-    this.loadPricesForItem(realIndex, item.productId);
-
-    this.priceApi.listByProductId(item.productId).subscribe({
-      next: (prices) => {
-        if (prices.length > 0 && this.items[realIndex].unitPrice === 0) {
-          this.items[realIndex].unitPrice = prices[0].amount;
-        }
-      },
-    });
+    this.items[realIndex].selectedPriceId = null;
+    this.loadPricesForItem(realIndex, item.productId, true);
   }
 
   protected isDuplicateItem(visibleIndex: number): boolean {
@@ -217,8 +236,22 @@ export class OrderItemsDialogComponent implements OnChanges {
     if (!item.productId) return false;
     const product = this.products().find((p) => p.productId === item.productId);
     if (!product) return false;
+    const additional = item.quantity - item.originalQuantity;
+    const available = product.stock - product.stockBlocked;
     const effectiveBlocked = product.stockBlocked - item.originalQuantity + item.quantity;
-    return effectiveBlocked > product.stock;
+    return effectiveBlocked > product.stock || additional > available;
+  }
+
+  protected onPriceOptionSelect(visibleIndex: number, id: string): void {
+    const item = this.visibleItems[visibleIndex];
+    const realIndex = this.items.indexOf(item);
+    if (realIndex >= 0) {
+      this.items[realIndex].selectedPriceId = id;
+      const option = item.priceOptions.find((o) => o.id === id);
+      if (option) {
+        this.items[realIndex].unitPrice = option.amount;
+      }
+    }
   }
 
   protected getItemStockInfo(visibleIndex: number): string {
@@ -226,8 +259,15 @@ export class OrderItemsDialogComponent implements OnChanges {
     if (!item.productId) return '';
     const product = this.products().find((p) => p.productId === item.productId);
     if (!product) return '';
+    const additional = item.quantity - item.originalQuantity;
     const available = product.stock - product.stockBlocked;
-    return `Disponible: ${available} | Bloqueado: ${product.stockBlocked} | Total: ${product.stock}`;
+    if (additional > 0) {
+      return `Disponible: ${available} (se tomara ${additional} adicionales)`;
+    }
+    if (additional < 0) {
+      return `Disponible: ${available} (libera ${-additional})`;
+    }
+    return `Disponible: ${available}`;
   }
 
   protected getProductName(productId: string): string {

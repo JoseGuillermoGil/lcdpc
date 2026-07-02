@@ -75,6 +75,9 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if status := r.URL.Query().Get("status"); status != "" {
 		filter.Status = &status
 	}
+	if displayID := r.URL.Query().Get("display_id"); displayID != "" {
+		filter.DisplayID = &displayID
+	}
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if limit, err := strconv.Atoi(limitStr); err == nil {
 			filter.Limit = limit
@@ -146,7 +149,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Success(w, map[string]string{"status": "cancelled"})
+	response.Success(w, nil)
 }
 
 func (h *Handler) ChangeStatus(w http.ResponseWriter, r *http.Request) {

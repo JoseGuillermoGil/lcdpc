@@ -1,5 +1,6 @@
 export interface Order {
   id: string;
+  displayId: string;
   branchId: string;
   clientUserId: string;
   status: string;
@@ -7,6 +8,7 @@ export interface Order {
   totalItems: number;
   currency: string;
   notes: string | null;
+  deletedAt: string | null;
   createdAtUtc: string;
   updatedAtUtc: string;
   items?: OrderItem[];
@@ -63,6 +65,7 @@ export interface OrderFilter {
   branch_id?: string;
   client_user_id?: string;
   status?: string;
+  display_id?: string;
   limit?: number;
   offset?: number;
 }

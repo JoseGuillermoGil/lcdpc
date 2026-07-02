@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of, catchError } from 'rxjs';
 import { ProductApiService } from '../../../core/services/product-api.service';
 import { BundleApiService } from '../../../core/services/bundle-api.service';
 import { OrderApiService } from '../../../core/services/order-api.service';
@@ -26,11 +26,13 @@ export class DashboardPageComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    const fallback = { items: [], totalCount: 0, limit: 1, offset: 0 };
+
     forkJoin({
-      products: this.productApi.list({ limit: 1, is_active: true }),
-      bundles: this.bundleApi.list({ limit: 1 }),
-      orders: this.orderApi.list({ limit: 1 }),
-      pendingOrders: this.orderApi.list({ limit: 1, status: 'PENDING_REVIEW' }),
+      products: this.productApi.list({ limit: 1, is_active: true }).pipe(catchError(() => of(fallback))),
+      bundles: this.bundleApi.list({ limit: 1 }).pipe(catchError(() => of(fallback))),
+      orders: this.orderApi.list({ limit: 1 }).pipe(catchError(() => of(fallback))),
+      pendingOrders: this.orderApi.list({ limit: 1, status: 'PENDING_REVIEW' }).pipe(catchError(() => of(fallback))),
     }).subscribe({
       next: ({ products, bundles, orders, pendingOrders }) => {
         this.stats.set({

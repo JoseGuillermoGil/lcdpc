@@ -111,6 +111,7 @@ export class LandingPageComponent implements OnInit {
 
   constructor() {
     effect(() => {
+      this.cartStore.lastOrderCreatedAt();
       const branchId = this.branchStore.selectedBranchId();
       if (branchId) {
         this.loadProducts(branchId);

@@ -32,6 +32,11 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 		if item.ItemType == "bundle" && item.BundleID == uuid.Nil {
 			return nil, fmt.Errorf("bundle_id is required for bundle items")
 		}
+		if item.ItemType == "product" {
+			if err := s.validateItemPrice(ctx, item.ProductID, item.UnitPrice); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	tx, err := s.pool.Begin(ctx)
@@ -41,10 +46,17 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 	defer tx.Rollback(ctx)
 
 	orderID := uuid.New()
+
+	var displayID string
+	err = tx.QueryRow(ctx, `SELECT generate_order_display_id()`).Scan(&displayID)
+	if err != nil {
+		return nil, fmt.Errorf("generate display_id: %w", err)
+	}
+
 	_, err = tx.Exec(ctx, `
-		INSERT INTO orders (id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc)
-		VALUES ($1, $2, $3, $4, 0, 0, 'USD', $5, now(), now())
-	`, orderID, req.BranchID, req.ClientUserID, StatusPendingReview, nullString(req.Notes))
+		INSERT INTO orders (id, display_id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, $4, $5, 0, 0, 'USD', $6, now(), now())
+	`, orderID, displayID, req.BranchID, req.ClientUserID, StatusPendingReview, nullString(req.Notes))
 	if err != nil {
 		return nil, fmt.Errorf("insert order: %w", err)
 	}
@@ -124,10 +136,10 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Order, error) {
 	o := &Order{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc
-		FROM orders WHERE id = $1
-	`, id).Scan(&o.ID, &o.BranchID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
-		&o.Currency, &o.Notes, &o.CreatedAtUtc, &o.UpdatedAtUtc)
+		SELECT id, display_id, branch_id, client_user_id, status, price_total, total_items, currency, notes, deleted_at, created_at_utc, updated_at_utc
+		FROM orders WHERE id = $1 AND deleted_at IS NULL
+	`, id).Scan(&o.ID, &o.DisplayID, &o.BranchID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
+		&o.Currency, &o.Notes, &o.DeletedAt, &o.CreatedAtUtc, &o.UpdatedAtUtc)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("ORDER_NOT_FOUND")
 	}
@@ -144,8 +156,8 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Order, error) {
 }
 
 func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, int, error) {
-	countQuery := `SELECT COUNT(*) FROM orders WHERE 1=1`
-	dataQuery := `SELECT id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc FROM orders WHERE 1=1`
+	countQuery := `SELECT COUNT(*) FROM orders WHERE deleted_at IS NULL`
+	dataQuery := `SELECT id, display_id, branch_id, client_user_id, status, price_total, total_items, currency, notes, deleted_at, created_at_utc, updated_at_utc FROM orders WHERE deleted_at IS NULL`
 	args := []interface{}{}
 	argIdx := 1
 
@@ -170,6 +182,13 @@ func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, int, e
 		args = append(args, *filter.Status)
 		argIdx++
 	}
+	if filter.DisplayID != nil {
+		clause := fmt.Sprintf(" AND display_id ILIKE $%d", argIdx)
+		countQuery += clause
+		dataQuery += clause
+		args = append(args, "%"+*filter.DisplayID+"%")
+		argIdx++
+	}
 
 	var totalCount int
 	if err := s.pool.QueryRow(ctx, countQuery, args...).Scan(&totalCount); err != nil {
@@ -191,8 +210,8 @@ func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, int, e
 	orders := make([]Order, 0)
 	for rows.Next() {
 		var o Order
-		if err := rows.Scan(&o.ID, &o.BranchID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
-			&o.Currency, &o.Notes, &o.CreatedAtUtc, &o.UpdatedAtUtc); err != nil {
+		if err := rows.Scan(&o.ID, &o.DisplayID, &o.BranchID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
+			&o.Currency, &o.Notes, &o.DeletedAt, &o.CreatedAtUtc, &o.UpdatedAtUtc); err != nil {
 			return nil, 0, fmt.Errorf("scan order: %w", err)
 		}
 		orders = append(orders, o)
@@ -223,6 +242,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 			}
 			if item.ItemType == "bundle" && item.BundleID == uuid.Nil {
 				return nil, fmt.Errorf("bundle_id is required for bundle items")
+			}
+			if item.ItemType == "product" {
+				if err := s.validateItemPrice(ctx, item.ProductID, item.UnitPrice); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -319,8 +343,8 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, changedByUserID uuid
 		return err
 	}
 
-	if IsTerminal(o.Status) {
-		return fmt.Errorf("ORDER_IN_TERMINAL_STATUS")
+	if o.Status != StatusPendingReview {
+		return fmt.Errorf("ORDER_CANNOT_BE_DELETED")
 	}
 
 	tx, err := s.pool.Begin(ctx)
@@ -333,17 +357,9 @@ func (s *Service) Delete(ctx context.Context, id uuid.UUID, changedByUserID uuid
 		return err
 	}
 
-	_, err = tx.Exec(ctx, `UPDATE orders SET status = $2, updated_at_utc = now() WHERE id = $1`, id, StatusCancelledByCustomer)
+	_, err = tx.Exec(ctx, `UPDATE orders SET deleted_at = now(), updated_at_utc = now() WHERE id = $1`, id)
 	if err != nil {
-		return fmt.Errorf("cancel order: %w", err)
-	}
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO order_status_history (id, order_id, from_status, to_status, changed_by_user_id, notes, created_at_utc)
-		VALUES ($1, $2, $3, $4, $5, NULL, now())
-	`, uuid.New(), id, o.Status, StatusCancelledByCustomer, changedByUserID)
-	if err != nil {
-		return fmt.Errorf("insert history: %w", err)
+		return fmt.Errorf("soft delete order: %w", err)
 	}
 
 	return tx.Commit(ctx)
@@ -438,6 +454,31 @@ func nullString(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+func (s *Service) validateItemPrice(ctx context.Context, productID uuid.UUID, unitPrice float64) error {
+	var count int
+	err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM product_branch_prices WHERE product_id = $1
+	`, productID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check prices: %w", err)
+	}
+	if count == 0 {
+		return nil
+	}
+
+	var exists bool
+	err = s.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM product_branch_prices WHERE product_id = $1 AND amount = $2)
+	`, productID, unitPrice).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("validate price: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("PRICE_MISMATCH: product %s unit_price %.2f does not match any registered price", productID, unitPrice)
+	}
+	return nil
 }
 
 func isStockReleaseStatus(status string) bool {

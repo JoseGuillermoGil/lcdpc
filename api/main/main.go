@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,6 +30,17 @@ import (
 
 func main() {
 	_ = godotenv.Load()
+	encryptKey := flag.String("encrypt-paseto-key", "", "Encrypt paseto.key with the given master key (64 hex chars) and exit")
+	flag.Parse()
+
+	if *encryptKey != "" {
+		if err := auth.EncryptKeyFile("paseto.key", *encryptKey); err != nil {
+			slog.Error("failed to encrypt key file", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("paseto.key encrypted successfully")
+		return
+	}
 
 	ctx := context.Background()
 	cfg := configs.Load()
@@ -66,7 +78,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	keySvc, err := auth.NewKeyService(cfg.PasetoKeyPath)
+	keySvc, err := auth.NewKeyService(cfg.PasetoKeyPath, cfg.PasetoDecryptionKey)
 	if err != nil {
 		slog.Error("failed to initialize key service", "error", err)
 		os.Exit(1)

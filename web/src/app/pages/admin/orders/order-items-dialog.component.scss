@@ -39,13 +39,11 @@
   color: var(--text-soft);
 }
 
-.detail-notes {
-  p {
-    font-family: var(--font-body);
-    font-size: 0.9rem;
-    color: var(--text-soft);
-    margin: 0.25rem 0 0;
-  }
+.detail-notes p {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  margin: 0.25rem 0 0;
 }
 
 .items-section {
@@ -68,10 +66,12 @@
   }
 }
 
+/* === ITEM ROW: CSS GRID === */
 .item-row {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 60px 150px 80px 32px;
   gap: 0.5rem;
+  align-items: center;
   margin-bottom: 0.5rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid rgba(0, 0, 0, 0.04);
@@ -81,13 +81,7 @@
     padding-bottom: 0;
   }
 
-  &.item-duplicate {
-    background: rgba(217, 37, 37, 0.06);
-    border-radius: 6px;
-    padding: 0.5rem;
-    border-color: rgba(217, 37, 37, 0.3);
-  }
-
+  &.item-duplicate,
   &.item-over-stock {
     background: rgba(217, 37, 37, 0.06);
     border-radius: 6px;
@@ -96,33 +90,72 @@
   }
 }
 
+.product-field {
+  grid-column: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+.qty-field {
+  grid-column: 2;
+  width: 100%;
+}
+
+.price-field {
+  grid-column: 3;
+  width: 100%;
+}
+
+.item-subtotal {
+  grid-column: 4;
+  font-weight: 600;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  min-width: 70px;
+  text-align: right;
+}
+
+.remove-btn {
+  grid-column: 5;
+  justify-self: end;
+}
+
+/* Force PrimeNG components to fill their grid cell */
+:host ::ng-deep .item-row .p-select,
+:host ::ng-deep .item-row .p-inputnumber,
+:host ::ng-deep .item-row .p-inputtext {
+  width: 100% !important;
+}
+
+/* === READ-ONLY MODE === */
 .item-name {
-  flex: 1;
+  grid-column: 1;
   font-family: var(--font-body);
   font-size: 0.9rem;
   font-weight: 500;
 }
 
 .item-qty {
+  grid-column: 2;
   font-family: var(--font-body);
   font-size: 0.9rem;
-  min-width: 60px;
   text-align: center;
 }
 
 .item-price {
+  grid-column: 3 / 4;
   font-family: var(--font-body);
   font-size: 0.9rem;
-  min-width: 80px;
   text-align: right;
 }
 
+/* === STOCK INFO === */
 .item-stock-info {
   font-size: 0.75rem;
   color: var(--text-soft);
-  padding-left: 0.5rem;
-  margin-bottom: 0.5rem;
+  grid-column: 1 / -1;
   margin-top: -0.25rem;
+  margin-bottom: 0.75rem;
 
   &.stock-error {
     color: #ba1a1a;
@@ -130,13 +163,7 @@
   }
 }
 
-.item-subtotal {
-  font-weight: 600;
-  font-size: 0.85rem;
-  min-width: 80px;
-  text-align: right;
-}
-
+/* === TOTAL FOOTER === */
 .items-total {
   display: flex;
   justify-content: flex-end;
@@ -166,31 +193,44 @@
   display: block;
 }
 
-:host ::ng-deep {
-  .p-dialog-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-}
-
-.footer-left {
+/* === FOOTER === */
+:host ::ng-deep .p-dialog-footer {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
 }
 
+.footer-left,
 .footer-right {
   display: flex;
   gap: 0.5rem;
 }
 
-@media (max-width: 600px) {
+/* === RESPONSIVE === */
+
+@media (max-width: 700px) {
   .item-row {
-    flex-wrap: wrap;
+    grid-template-columns: minmax(140px, 1fr) 60px 150px 80px 32px;
   }
 
-  .item-subtotal {
-    width: 100%;
-    text-align: left;
+  .product-field,
+  .item-name {
+    grid-column: 1 / -1;
   }
+}
+
+@media (max-width: 500px) {
+  .item-row {
+    grid-template-columns: 60px 1fr 32px;
+  }
+
+  .product-field { grid-column: 1 / -1; }
+  .qty-field     { grid-column: 1; }
+  .price-field   { grid-column: 2; }
+  .item-subtotal { grid-column: 1 / -1; text-align: left; padding-top: 0.25rem; }
+  .remove-btn    { grid-column: 3; grid-row: 2; align-self: center; }
+
+  .item-name  { grid-column: 1 / -1; }
+  .item-qty   { grid-column: 1; }
+  .item-price { grid-column: 2; }
 }

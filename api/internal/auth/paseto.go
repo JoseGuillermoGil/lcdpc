@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
@@ -42,11 +45,11 @@ type KeyService struct {
 	symmetricKey []byte
 }
 
-func NewKeyService(keyPath string) (*KeyService, error) {
+func NewKeyService(keyPath, decryptionKeyHex string) (*KeyService, error) {
 	ks := &KeyService{}
 
 	if keyPath != "" {
-		if err := ks.loadFromFile(keyPath); err != nil {
+		if err := ks.loadFromFile(keyPath, decryptionKeyHex); err != nil {
 			return nil, fmt.Errorf("load PASETO key: %w", err)
 		}
 	} else {
@@ -62,10 +65,18 @@ func (ks *KeyService) Key() []byte {
 	return ks.symmetricKey
 }
 
-func (ks *KeyService) loadFromFile(path string) error {
+func (ks *KeyService) loadFromFile(path, decryptionKeyHex string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
+	}
+
+	if decryptionKeyHex != "" {
+		keyHex, err := decryptAESGCM(data, decryptionKeyHex)
+		if err != nil {
+			return fmt.Errorf("decrypt key file: %w", err)
+		}
+		data = []byte(keyHex)
 	}
 
 	keyHex := string(data)
@@ -163,4 +174,75 @@ func branchIDToString(branchID *uuid.UUID) string {
 		return ""
 	}
 	return branchID.String()
+}
+
+// EncryptKeyFile reads a plaintext hex key file, encrypts it with AES-256-GCM
+// using the given master key (64 hex chars), and writes the result back.
+func EncryptKeyFile(path, masterKeyHex string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read key file: %w", err)
+	}
+
+	masterKey, err := hex.DecodeString(masterKeyHex)
+	if err != nil {
+		return fmt.Errorf("invalid master key hex: %w", err)
+	}
+	if len(masterKey) != 32 {
+		return fmt.Errorf("master key must be 32 bytes, got %d", len(masterKey))
+	}
+
+	block, err := aes.NewCipher(masterKey)
+	if err != nil {
+		return fmt.Errorf("create cipher: %w", err)
+	}
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return fmt.Errorf("create GCM: %w", err)
+	}
+
+	nonce := make([]byte, aesgcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return fmt.Errorf("generate nonce: %w", err)
+	}
+
+	ciphertext := aesgcm.Seal(nil, nonce, data, nil)
+	out := append(nonce, ciphertext...)
+
+	if err := os.WriteFile(path, out, 0644); err != nil {
+		return fmt.Errorf("write encrypted key file: %w", err)
+	}
+
+	return nil
+}
+
+func decryptAESGCM(data []byte, masterKeyHex string) (string, error) {
+	masterKey, err := hex.DecodeString(masterKeyHex)
+	if err != nil {
+		return "", fmt.Errorf("invalid decryption key hex: %w", err)
+	}
+
+	block, err := aes.NewCipher(masterKey)
+	if err != nil {
+		return "", fmt.Errorf("create cipher: %w", err)
+	}
+
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", fmt.Errorf("create GCM: %w", err)
+	}
+
+	nonceSize := aesgcm.NonceSize()
+	if len(data) < nonceSize {
+		return "", fmt.Errorf("encrypted file too short")
+	}
+
+	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
+	plaintext, err := aesgcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", fmt.Errorf("decrypt: %w", err)
+	}
+
+	return string(plaintext), nil
 }

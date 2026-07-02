@@ -8,6 +8,7 @@ import (
 
 type Order struct {
 	ID           uuid.UUID     `json:"id"`
+	DisplayID    string        `json:"display_id"`
 	BranchID     uuid.UUID     `json:"branch_id"`
 	ClientUserID uuid.UUID     `json:"client_user_id"`
 	Status       string        `json:"status"`
@@ -15,6 +16,7 @@ type Order struct {
 	TotalItems   int           `json:"total_items"`
 	Currency     string        `json:"currency"`
 	Notes        *string       `json:"notes"`
+	DeletedAt    *time.Time    `json:"deleted_at"`
 	CreatedAtUtc  time.Time    `json:"created_at_utc"`
 	UpdatedAtUtc  time.Time    `json:"updated_at_utc"`
 	Items        []OrderItem   `json:"items,omitempty"`
@@ -74,6 +76,7 @@ type OrderFilter struct {
 	BranchID     *uuid.UUID
 	ClientUserID *uuid.UUID
 	Status       *string
+	DisplayID    *string
 	Limit        int
 	Offset       int
 }

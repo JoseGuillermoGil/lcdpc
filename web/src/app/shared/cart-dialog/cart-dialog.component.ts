@@ -128,6 +128,7 @@ export class CartDialogComponent {
     this.orderApi.create(req).subscribe({
       next: () => {
         this.cartStore.clear();
+        this.cartStore.notifyOrderCreated();
         this.buying.set(false);
         this.messageService.add({
           severity: 'success',

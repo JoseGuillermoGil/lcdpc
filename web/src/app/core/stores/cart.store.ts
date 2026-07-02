@@ -30,8 +30,10 @@ function saveCart(items: CartItem[]): void {
 @Injectable({ providedIn: 'root' })
 export class CartStore {
   private readonly _items = signal<CartItem[]>(loadCart());
+  private readonly _lastOrderCreatedAt = signal(0);
 
   readonly items = this._items.asReadonly();
+  readonly lastOrderCreatedAt = this._lastOrderCreatedAt.asReadonly();
 
   readonly totalItems = computed(() => this._items().length);
 
@@ -131,5 +133,9 @@ export class CartStore {
   clear(): void {
     this._items.set([]);
     localStorage.removeItem(CART_KEY);
+  }
+
+  notifyOrderCreated(): void {
+    this._lastOrderCreatedAt.update((v) => v + 1);
   }
 }

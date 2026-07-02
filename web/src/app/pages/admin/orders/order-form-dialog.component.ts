@@ -15,13 +15,24 @@ import { UserApiService } from '../../../core/services/user-api.service';
 import { OrderApiService } from '../../../core/services/order-api.service';
 import { ProductApiService } from '../../../core/services/product-api.service';
 import { PriceApiService } from '../../../core/services/price-api.service';
+import { PriceCategoryApiService } from '../../../core/services/price-category-api.service';
 import { Product } from '../../../core/models/product.model';
+import { PriceCategory } from '../../../core/models/price-category.model';
+import { ProductBranchPrice } from '../../../core/models/price.model';
 import { CreateOrderRequest } from '../../../core/models/order.model';
+
+interface PriceOption {
+  label: string;
+  id: string;
+  amount: number;
+}
 
 interface OrderItemForm {
   product_id: string;
   quantity: number;
   unit_price: number;
+  priceOptions: PriceOption[];
+  selectedPriceId: string | null;
 }
 
 @Component({
@@ -46,11 +57,13 @@ export class OrderFormDialogComponent implements OnChanges {
   private readonly orderApi = inject(OrderApiService);
   private readonly productApi = inject(ProductApiService);
   private readonly priceApi = inject(PriceApiService);
+  private readonly priceCategoryApi = inject(PriceCategoryApiService);
 
   protected readonly saving = signal(false);
   protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
   protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
   protected readonly products = signal<Product[]>([]);
+  protected readonly priceCategories = signal<PriceCategory[]>([]);
   protected readonly DOCUMENT_TYPE_OPTIONS = DOCUMENT_TYPE_OPTIONS;
   protected submitted = false;
 
@@ -128,6 +141,10 @@ export class OrderFormDialogComponent implements OnChanges {
       this.products.set([]);
       this.submitted = false;
 
+      this.priceCategoryApi.list().subscribe({
+        next: (cats) => this.priceCategories.set(cats),
+      });
+
       if (!this.canViewAllBranches() && this.userBranchId()) {
         this.form.branch_id = this.userBranchId()!;
         this.loadProducts(this.form.branch_id);
@@ -181,17 +198,55 @@ export class OrderFormDialogComponent implements OnChanges {
   protected onProductSelect(index: number): void {
     const item = this.form.items[index];
     if (!item.product_id) return;
-    this.priceApi.listByProductId(item.product_id).subscribe({
+    item.unit_price = 0;
+    item.priceOptions = [];
+    item.selectedPriceId = null;
+    this.loadPricesForItem(index, item.product_id, true);
+  }
+
+  private loadPricesForItem(index: number, productId: string, autoSelectFirst = false): void {
+    this.priceApi.listByProductId(productId).subscribe({
       next: (prices) => {
-        if (prices.length > 0 && item.unit_price === 0) {
-          item.unit_price = prices[0].amount;
+        if (index < this.form.items.length) {
+          const opts = this.formatPriceOptions(prices);
+          this.form.items[index].priceOptions = opts;
+          if (autoSelectFirst || this.form.items[index].unit_price === 0) {
+            const first = opts[0];
+            if (first) {
+              this.form.items[index].unit_price = first.amount;
+              this.form.items[index].selectedPriceId = first.id;
+            }
+          } else {
+            const match = opts.find((o) => o.amount === this.form.items[index].unit_price);
+            this.form.items[index].selectedPriceId = match?.id ?? opts[0]?.id ?? null;
+            if (!match && opts.length > 0) {
+              this.form.items[index].unit_price = opts[0].amount;
+              this.form.items[index].selectedPriceId = opts[0].id;
+            }
+          }
         }
       },
     });
   }
 
+  private formatPriceOptions(prices: ProductBranchPrice[]): PriceOption[] {
+    return prices.map((p) => {
+      const cat = this.priceCategories().find((c) => c.id === p.priceCategoryId);
+      const name = cat?.name ?? 'Precio base';
+      return { label: `${name} — $${p.amount.toFixed(2)}`, id: p.id, amount: p.amount };
+    });
+  }
+
+  protected onPriceOptionSelect(index: number, id: string): void {
+    const option = this.form.items[index].priceOptions.find((o) => o.id === id);
+    if (option) {
+      this.form.items[index].selectedPriceId = id;
+      this.form.items[index].unit_price = option.amount;
+    }
+  }
+
   protected addItem(): void {
-    this.form.items.push({ product_id: '', quantity: 1, unit_price: 0 });
+    this.form.items.push({ product_id: '', quantity: 1, unit_price: 0, priceOptions: [], selectedPriceId: null });
   }
 
   protected removeItem(index: number): void {

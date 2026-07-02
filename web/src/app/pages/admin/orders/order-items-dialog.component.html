@@ -45,25 +45,19 @@
           <div class="item-row" [class.item-duplicate]="isDuplicateItem(i)"
                [class.item-over-stock]="isOverStock(i)">
             @if (isEditable) {
-              <p-select [options]="products()" [(ngModel)]="item.productId"
+              <p-select class="product-field" [options]="products()" [(ngModel)]="item.productId"
                         optionLabel="name" optionValue="productId"
-                        placeholder="Producto" [style]="{'flex':'1'}"
-                        (onChange)="onProductSelect(i)" />
-              <p-inputNumber [(ngModel)]="item.quantity" [min]="1" [maxFractionDigits]="2"
-                             placeholder="Cant." [style]="{'width':'90px'}" />
-              @if (item.priceOptions.length > 0) {
-                <p-select [options]="item.priceOptions" [(ngModel)]="item.unitPrice"
-                          optionLabel="label" optionValue="value"
-                          placeholder="Precio" [style]="{'width':'180px'}"
-                          appendTo="body" />
-              } @else {
-                <p-inputNumber [(ngModel)]="item.unitPrice" [min]="0" [minFractionDigits]="2"
-                               [maxFractionDigits]="2" prefix="$"
-                               placeholder="Precio" [style]="{'width':'130px'}" />
-              }
+                        placeholder="Producto" (onChange)="onProductSelect(i)" />
+              <p-inputNumber class="qty-field" [(ngModel)]="item.quantity" [min]="1"
+                             [maxFractionDigits]="2" placeholder="Cant." />
+              <p-select class="price-field" [options]="item.priceOptions"
+                        [(ngModel)]="item.selectedPriceId" optionLabel="label" optionValue="id"
+                        (onChange)="onPriceOptionSelect(i, $event.value)"
+                        [disabled]="item.priceOptions.length === 0"
+                        placeholder="Precio" appendTo="body" />
               <span class="item-subtotal">{{ (item.quantity * item.unitPrice) | currency:order.currency }}</span>
-              <p-button icon="pi pi-times" [text]="true" severity="danger" [rounded]="true"
-                        (onClick)="removeItem(i)" />
+              <p-button class="remove-btn" icon="pi pi-times" [text]="true" severity="danger"
+                        [rounded]="true" (onClick)="removeItem(i)" />
             } @else {
               <span class="item-name">{{ getProductName(item.productId) }}</span>
               <span class="item-qty">{{ item.quantity }}</span>

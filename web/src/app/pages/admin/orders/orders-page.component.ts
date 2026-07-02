@@ -6,6 +6,7 @@ import { TableModule } from 'primeng/table';
 import { TagModule } from 'primeng/tag';
 import { SelectModule } from 'primeng/select';
 import { InputTextModule } from 'primeng/inputtext';
+import { InputGroupModule } from 'primeng/inputgroup';
 import { DialogModule } from 'primeng/dialog';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToastModule } from 'primeng/toast';
@@ -24,7 +25,7 @@ import { OrderItemsDialogComponent } from './order-items-dialog.component';
   standalone: true,
   imports: [
     CommonModule, FormsModule, ButtonModule, TableModule, TagModule,
-    SelectModule, InputTextModule, DialogModule, ConfirmDialogModule,
+    SelectModule, InputTextModule, InputGroupModule, DialogModule, ConfirmDialogModule,
     ToastModule, TooltipModule, OrderDetailDialogComponent, OrderFormDialogComponent, OrderItemsDialogComponent
   ],
   providers: [ConfirmationService, MessageService],
@@ -53,6 +54,7 @@ export class OrdersPageComponent implements OnInit {
 
   protected selectedStatus: string | null = null;
   protected selectedBranch: string | null = null;
+  protected searchDisplayId: string = '';
 
   protected readonly statusOptions = Object.entries(ORDER_STATUS_LABELS).map(([value, label]) => ({ label, value }));
   protected readonly ORDER_STATUS_TRANSITIONS = ORDER_STATUS_TRANSITIONS;
@@ -80,6 +82,7 @@ export class OrdersPageComponent implements OnInit {
 
     const filter: Record<string, any> = { limit, offset };
     if (this.selectedStatus) filter['status'] = this.selectedStatus;
+    if (this.searchDisplayId.trim()) filter['display_id'] = this.searchDisplayId.trim();
     if (this.selectedBranch) {
       filter['branch_id'] = this.selectedBranch;
     } else if (!this.canViewAllBranches() && this.userBranchId()) {
@@ -147,8 +150,19 @@ export class OrdersPageComponent implements OnInit {
 
   onItemsSaved(): void {
     this.itemsDialogVisible.set(false);
-    this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Orden actualizada' });
     this.applyFilters();
+    const order = this.selectedOrder();
+    if (order) {
+      this.orderApi.getById(order.id).subscribe({
+        next: (fullOrder) => {
+          this.selectedOrder.set(fullOrder);
+          this.detailVisible.set(true);
+        },
+        error: () => {
+          this.detailVisible.set(true);
+        },
+      });
+    }
   }
 
   openStatusDialog(order: Order): void {
@@ -191,7 +205,7 @@ export class OrdersPageComponent implements OnInit {
 
   confirmDelete(order: Order): void {
     this.confirmationService.confirm({
-      message: `Eliminar orden ${order.id.slice(0, 8)}...?`,
+      message: `Eliminar orden ${order.displayId}?`,
       header: 'Confirmar eliminacion',
       icon: 'pi pi-exclamation-triangle',
       acceptLabel: 'Eliminar',

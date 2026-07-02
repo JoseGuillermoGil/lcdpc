@@ -21,6 +21,7 @@ interface JsendEnvelope<T> {
 
 interface OrderGoData {
   id: string;
+  display_id: string;
   branch_id: string;
   client_user_id: string;
   status: string;
@@ -28,6 +29,7 @@ interface OrderGoData {
   total_items: number;
   currency: string;
   notes: string | null;
+  deleted_at: string | null;
   created_at_utc: string;
   updated_at_utc: string;
   items?: OrderItemGoData[];
@@ -78,6 +80,7 @@ export class OrderApiService {
     if (filter?.branch_id) params['branch_id'] = filter.branch_id;
     if (filter?.client_user_id) params['client_user_id'] = filter.client_user_id;
     if (filter?.status) params['status'] = filter.status;
+    if (filter?.display_id) params['display_id'] = filter.display_id;
     if (filter?.limit != null) params['limit'] = String(filter.limit);
     if (filter?.offset != null) params['offset'] = String(filter.offset);
 
@@ -145,6 +148,7 @@ export class OrderApiService {
   private mapOrder(raw: OrderGoData): Order {
     return {
       id: raw.id,
+      displayId: raw.display_id,
       branchId: raw.branch_id,
       clientUserId: raw.client_user_id,
       status: raw.status,
@@ -152,6 +156,7 @@ export class OrderApiService {
       totalItems: raw.total_items,
       currency: raw.currency,
       notes: raw.notes,
+      deletedAt: raw.deleted_at,
       createdAtUtc: raw.created_at_utc,
       updatedAtUtc: raw.updated_at_utc,
       items: raw.items?.map((i) => this.mapOrderItem(i)),

@@ -37,6 +37,7 @@ type Config struct {
 	OAuth2RefreshTokenTTLDays  int
 	OAuth2AuthCodeTTLMinutes   int
 	PasetoKeyPath              string
+	PasetoDecryptionKey        string
 
 	// Email
 	EmailDriver  string
@@ -92,6 +93,7 @@ func Load() *Config {
 		OAuth2RefreshTokenTTLDays: getEnvInt("OAUTH2_REFRESH_TOKEN_TTL_DAYS", 30),
 		OAuth2AuthCodeTTLMinutes:  getEnvInt("OAUTH2_AUTHORIZATION_CODE_TTL_MINUTES", 10),
 		PasetoKeyPath:             getEnv("PASETO_KEY_PATH", ""),
+		PasetoDecryptionKey:       getEnv("PASETO_DECRYPTION_KEY", ""),
 
 		EmailDriver:  getEnv("EMAIL_DRIVER", "resend"),
 		ResendAPIKey: getEnv("RESEND_APITOKEN", ""),
