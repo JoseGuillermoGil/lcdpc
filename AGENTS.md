@@ -56,6 +56,8 @@ High-signal guidance for OpenCode sessions in this repo.
 - The OAuth2 server is custom-built (authorize, token, introspect, revoke). It is NOT using `golang.org/x/oauth2` as a server.
 - `golang.org/x/oauth2` is used only as a Google OAuth **client**.
 - Package structure: `internal/auth/` (auth + OAuth2), `internal/pricing/` (products, bundles, prices), `internal/branch/`, `internal/category/`, `internal/sync/`, `internal/email/`, `internal/db/`, `internal/rbac/` (RBAC store + CRUD), `internal/order/` (orders, items, status transitions), `internal/staff/`, `internal/admin/`, `internal/user/`.
+- **User-profile relationship**: `users` table has `name VARCHAR(200)` and `profile_id UUID REFERENCES profiles(id) ON DELETE SET NULL`. `profiles` table has `id`, `name`, `code`, `created_at_utc`, `updated_at_utc` — NO `user_id` column. To get the profile for a user: `SELECT profile_id FROM users WHERE id = $1`. To get the user for a profile: `SELECT * FROM users WHERE profile_id = $1`. Multiple users can share the same profile. The `ProfileResponse` uses `user_count` (not `user_id`) to indicate how many users are assigned.
+- **`UserModel`** in `internal/user/service.go` uses `Name *string` (not `FirstName`/`LastName`). The frontend `AppUser` model mirrors this with a single `name: string | null` field.
 
 ## Frontend facts agents often guess wrong
 
@@ -238,6 +240,18 @@ web/src/app/
 - Nullable fields typed as `T | null`.
 - Pagination model in `pagination.model.ts`: `PaginatedResponse<T>`, `ProductListFilter`, `BundleListFilter`.
 
+### Customer identification (document types)
+- Venezuelan identity document types are: `V` (Venezolano), `E` (Extranjero), `J` (Jurídico), `G` (Gobierno), `C` (Civil/Diplomático).
+- Defined in `core/models/document-type.model.ts` as `DOCUMENT_TYPE_OPTIONS` (array of `{label, value}` objects) and `DocumentType` type.
+- The backend stores the type as a **prefix** in `users.identity_document` (VARCHAR(40)), e.g., `"V12345678"` — there is no separate `document_type` column.
+- Search by document: `GET /api/v1/users/by-document/{doc}` receives the concatenated string (e.g., `"V12345678"`).
+- Frontend pattern: let the user select the type via `<p-select>` and type the number in a separate `<input>`, then concatenate before calling the API:
+  ```typescript
+  const doc = `${this.documentType}${this.documentNumber}`;
+  this.userApi.getByDocument(doc).subscribe(...)
+  ```
+- This pattern is used in `order-form-dialog.component.ts` and `register-page.component.ts`.
+
 ### Services (`core/services/`)
 - One service per domain: `product-api.service.ts`, `bundle-api.service.ts`, etc.
 - Inject `HttpClient` and `API_BASE_URL` (injection token).
@@ -323,6 +337,33 @@ web/src/app/
 - Inline templates for simple dialogs (categories, price-categories, measurement-units, classifications, staff).
 - Separate HTML templates for complex dialogs (products, bundles, orders).
 
+#### Nested dialog navigation pattern
+- When a dialog opens a second dialog (e.g., detail → items), the second dialog must have a `@Output() back` event.
+- The "Volver" button emits `back` and closes itself; the parent handler reopens the first dialog.
+- Footer uses a split layout: `.footer-left` (back) and `.footer-right` (close + primary actions).
+- Style the footer with `:host ::ng-deep .p-dialog-footer { display: flex; justify-content: space-between; }`.
+
+```html
+<ng-template pTemplate="footer">
+  <div class="footer-left">
+    <p-button label="Volver" icon="pi pi-arrow-left" severity="secondary" (onClick)="goBack()" />
+  </div>
+  <div class="footer-right">
+    <p-button label="Cerrar" severity="secondary" (onClick)="close()" />
+    @if (isEditable) {
+      <p-button label="Guardar Cambios" ... (onClick)="save()" />
+    }
+  </div>
+</ng-template>
+```
+```typescript
+@Output() back = new EventEmitter<void>();
+protected goBack(): void {
+  this.visibleChange.emit(false);
+  this.back.emit();
+}
+```
+
 #### Form dialog styling standards
 - Dialog padding-top: always add `paddingTop: '20px'` to dialog `[style]` so the first floatlabel is visible.
 - Floatlabel inputs: every `p-floatlabel` input must have `placeholder=" "` (space) so PrimeNG detects pre-filled values via `ngModel`.
@@ -361,7 +402,7 @@ All paginated list pages must follow the products page pattern — **never** use
 
 The orders page has a **three-dialog chain**:
 
-1. **Detail Dialog** (`order-detail-dialog`) — read-only overview of the order (ID, status tag, branch, total, notes, history). Uses `ORDER_STATUS_LABELS` and `ORDER_STATUS_SEVERITY` maps for all status tags. Contains an eye button (`pi pi-eye`) that opens the items dialog.
+1. **Detail Dialog** (`order-detail-dialog`) — read-only overview of the order (ID, status tag, branch, total, notes, history). Uses `ORDER_STATUS_LABELS` and `ORDER_STATUS_SEVERITY` maps for all status tags. Eye button (`pi pi-eye`) next to the Items label opens the items dialog.
 
 2. **Items Dialog** (`order-items-dialog`) — specialized dialog for viewing and editing order products. Opened from the detail dialog's eye button. Behavior depends on order status:
    - **Read-only mode** (non-editable statuses): shows items as a static list (product name, quantity, price, subtotal).
@@ -375,10 +416,32 @@ The orders page has a **three-dialog chain**:
 orders-page (table)
   ├── viewDetail(order) → opens detail dialog
   │     └── viewItems (eye button) → fetches full order via getById(), opens items dialog
+  │           ├── back (Volver) → closes items dialog, reopens detail dialog
   │           └── saved → closes items dialog, reloads list, shows toast
   ├── openStatusDialog(order) → opens status change dialog
   └── confirmDelete(order) → confirmation → delete
 ```
+
+#### Detail dialog component contract
+
+- `@Input() visible: boolean` + `@Output() visibleChange`
+- `@Input() order: Order | null`
+- `@Input() branches: { id: string; name: string }[]`
+- `@Output() viewItems = new EventEmitter<void>()` — emitted when eye button is clicked
+- `ngOnChanges`: loads `history` from `orderApi.getHistory()` when dialog opens
+- Eye button is placed inline next to the Items value using `.detail-item-items > .detail-item-row` flex layout, NOT in the header area
+
+#### Items dialog component contract
+
+- `@Input() visible: boolean` + `@Output() visibleChange`
+- `@Input() order: Order | null`
+- `@Input() branches: { id: string; name: string }[]`
+- `@Output() saved = new EventEmitter<void>()` — emitted after successful update
+- `@Output() back = new EventEmitter<void>()` — emitted when "Volver" is clicked
+- `isEditable` getter derived from `ORDER_EDITABLE_STATUSES[order.status]`
+- `ngOnChanges`: loads products (filtered by branch) and price categories when dialog opens
+- Uses `MessageService` with `ToastModule` import and `<p-toast />` in template
+- Footer layout: left side has "Volver", right side has "Cerrar" + "Guardar Cambios" (editable only)
 
 #### Order Items Dialog — editable features
 

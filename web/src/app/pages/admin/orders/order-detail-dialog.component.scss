@@ -44,6 +44,14 @@
   gap: 0.15rem;
 }
 
+.detail-item-items {
+  .detail-item-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+}
+
 .detail-label {
   font-family: var(--font-body);
   font-size: 0.75rem;

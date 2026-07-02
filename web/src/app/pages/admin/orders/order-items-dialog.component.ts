@@ -57,6 +57,7 @@ export class OrderItemsDialogComponent implements OnChanges {
 
   @Output() visibleChange = new EventEmitter<boolean>();
   @Output() saved = new EventEmitter<void>();
+  @Output() back = new EventEmitter<void>();
 
   private readonly orderApi = inject(OrderApiService);
   private readonly productApi = inject(ProductApiService);
@@ -275,6 +276,11 @@ export class OrderItemsDialogComponent implements OnChanges {
         this.messageService.add({ severity: 'error', summary: 'Error', detail: msg });
       },
     });
+  }
+
+  protected goBack(): void {
+    this.visibleChange.emit(false);
+    this.back.emit();
   }
 
   protected close(): void {

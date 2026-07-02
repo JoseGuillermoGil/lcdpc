@@ -45,10 +45,10 @@ type AssignResourceRequest struct {
 
 type ProfileResponse struct {
 	ID        uuid.UUID   `json:"id"`
-	UserID    *uuid.UUID  `json:"user_id,omitempty"`
 	Name      string      `json:"name"`
 	Code      string      `json:"code"`
 	Roles     []RoleEntry `json:"roles"`
+	UserCount int         `json:"user_count"`
 	CreatedAt time.Time   `json:"created_at_utc"`
 	UpdatedAt time.Time   `json:"updated_at_utc"`
 }

@@ -166,6 +166,24 @@
   display: block;
 }
 
+:host ::ng-deep {
+  .p-dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.footer-left {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.footer-right {
+  display: flex;
+  gap: 0.5rem;
+}
+
 @media (max-width: 600px) {
   .item-row {
     flex-wrap: wrap;

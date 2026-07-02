@@ -7,8 +7,6 @@
           <div class="detail-id"><code>{{ order.id }}</code></div>
           <p-tag [value]="orderStatusLabel(order.status)" [severity]="orderStatusSeverity(order.status)" />
         </div>
-        <p-button icon="pi pi-eye" [text]="true" [rounded]="true"
-                  (onClick)="viewItems.emit()" pTooltip="Ver productos" />
       </div>
 
       <div class="detail-grid">
@@ -20,9 +18,13 @@
           <span class="detail-label">Total</span>
           <span class="detail-value">{{ order.priceTotal | currency:order.currency }}</span>
         </div>
-        <div class="detail-item">
+        <div class="detail-item detail-item-items">
           <span class="detail-label">Items</span>
-          <span class="detail-value">{{ order.totalItems }}</span>
+          <div class="detail-item-row">
+            <span class="detail-value">{{ order.totalItems }}</span>
+            <p-button icon="pi pi-eye" [text]="true" [rounded]="true"
+                      (onClick)="viewItems.emit()" pTooltip="Ver productos" />
+          </div>
         </div>
         <div class="detail-item">
           <span class="detail-label">Creada</span>

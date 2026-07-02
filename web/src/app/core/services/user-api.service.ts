@@ -14,8 +14,7 @@ interface JsendEnvelope<T> {
 interface UserGoData {
   id: string;
   email: string;
-  first_name: string | null;
-  last_name: string | null;
+  name: string | null;
   status: string;
   created_at_utc: string;
 }
@@ -82,8 +81,7 @@ export class UserApiService {
     return {
       id: raw.id,
       email: raw.email,
-      firstName: raw.first_name,
-      lastName: raw.last_name,
+      name: raw.name,
       status: raw.status,
       createdAtUtc: raw.created_at_utc,
     };

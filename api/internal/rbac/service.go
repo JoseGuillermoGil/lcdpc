@@ -212,8 +212,10 @@ func (s *Service) RemoveResourceFromRole(ctx context.Context, roleID, resourceID
 
 func (s *Service) ListProfiles(ctx context.Context) ([]ProfileResponse, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, user_id, name, code, created_at_utc, updated_at_utc
-		FROM profiles ORDER BY created_at_utc DESC
+		SELECT p.id, p.name, p.code, p.created_at_utc, p.updated_at_utc,
+		       (SELECT COUNT(*) FROM users u WHERE u.profile_id = p.id) AS user_count
+		FROM profiles p
+		ORDER BY p.created_at_utc DESC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("list profiles: %w", err)
@@ -223,7 +225,7 @@ func (s *Service) ListProfiles(ctx context.Context) ([]ProfileResponse, error) {
 	var profiles []ProfileResponse
 	for rows.Next() {
 		var p ProfileResponse
-		if err := rows.Scan(&p.ID, &p.UserID, &p.Name, &p.Code, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Code, &p.CreatedAt, &p.UpdatedAt, &p.UserCount); err != nil {
 			return nil, fmt.Errorf("scan profile: %w", err)
 		}
 		p.Roles, _ = s.getRolesForProfile(ctx, p.ID)
@@ -235,9 +237,10 @@ func (s *Service) ListProfiles(ctx context.Context) ([]ProfileResponse, error) {
 func (s *Service) GetProfile(ctx context.Context, id uuid.UUID) (*ProfileResponse, error) {
 	var p ProfileResponse
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, user_id, name, code, created_at_utc, updated_at_utc
-		FROM profiles WHERE id = $1
-	`, id).Scan(&p.ID, &p.UserID, &p.Name, &p.Code, &p.CreatedAt, &p.UpdatedAt)
+		SELECT p.id, p.name, p.code, p.created_at_utc, p.updated_at_utc,
+		       (SELECT COUNT(*) FROM users u WHERE u.profile_id = p.id) AS user_count
+		FROM profiles p WHERE p.id = $1
+	`, id).Scan(&p.ID, &p.Name, &p.Code, &p.CreatedAt, &p.UpdatedAt, &p.UserCount)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("PROFILE_NOT_FOUND")
 	}
@@ -253,13 +256,14 @@ func (s *Service) CreateProfile(ctx context.Context, req CreateProfileRequest) (
 	err := s.pool.QueryRow(ctx, `
 		INSERT INTO profiles (id, name, code, created_at_utc, updated_at_utc)
 		VALUES ($1, $2, $3, now(), now())
-		RETURNING id, user_id, name, code, created_at_utc, updated_at_utc
+		RETURNING id, name, code, created_at_utc, updated_at_utc
 	`, uuid.New(), req.Name, req.Code).Scan(
-		&p.ID, &p.UserID, &p.Name, &p.Code, &p.CreatedAt, &p.UpdatedAt,
+		&p.ID, &p.Name, &p.Code, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
 	}
+	p.UserCount = 0
 	p.Roles = []RoleEntry{}
 	return &p, nil
 }
@@ -269,10 +273,13 @@ func (s *Service) UpdateProfile(ctx context.Context, id uuid.UUID, req UpdatePro
 	err := s.pool.QueryRow(ctx, `
 		UPDATE profiles SET name = $2, code = $3, updated_at_utc = now()
 		WHERE id = $1
-		RETURNING id, user_id, name, code, created_at_utc, updated_at_utc
+		RETURNING id, name, code, created_at_utc, updated_at_utc
 	`, id, req.Name, req.Code).Scan(
-		&p.ID, &p.UserID, &p.Name, &p.Code, &p.CreatedAt, &p.UpdatedAt,
+		&p.ID, &p.Name, &p.Code, &p.CreatedAt, &p.UpdatedAt,
 	)
+	if err == nil {
+		p.UserCount, _ = s.getUserCountForProfile(ctx, id)
+	}
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("PROFILE_NOT_FOUND")
 	}
@@ -331,12 +338,12 @@ func (s *Service) RemoveRoleFromProfile(ctx context.Context, profileID, roleID u
 // Users
 
 func (s *Service) AssignProfileToUser(ctx context.Context, userID, profileID uuid.UUID) error {
-	tag, err := s.pool.Exec(ctx, `UPDATE profiles SET user_id = $2, updated_at_utc = now() WHERE id = $1`, profileID, userID)
+	tag, err := s.pool.Exec(ctx, `UPDATE users SET profile_id = $2 WHERE id = $1`, userID, profileID)
 	if err != nil {
 		return fmt.Errorf("assign profile: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("PROFILE_NOT_FOUND")
+		return fmt.Errorf("USER_NOT_FOUND")
 	}
 	return nil
 }
@@ -363,6 +370,12 @@ func (s *Service) getResourcesForRole(ctx context.Context, roleID uuid.UUID) ([]
 		resources = append(resources, r)
 	}
 	return resources, nil
+}
+
+func (s *Service) getUserCountForProfile(ctx context.Context, profileID uuid.UUID) (int, error) {
+	var count int
+	err := s.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE profile_id = $1`, profileID).Scan(&count)
+	return count, err
 }
 
 func (s *Service) getRolesForProfile(ctx context.Context, profileID uuid.UUID) ([]RoleEntry, error) {

@@ -19,13 +19,17 @@
       <label class="field-label">Cliente *</label>
       <div class="user-search">
         <div class="user-search-input">
-          <input pInputText [(ngModel)]="documentQuery"
-                 placeholder="Buscar por documento de identidad..."
+          <p-select [options]="DOCUMENT_TYPE_OPTIONS" [(ngModel)]="documentType"
+                    optionLabel="label" optionValue="value"
+                    [style]="{'width': '80px', 'flex-shrink': '0'}" />
+          <input pInputText [(ngModel)]="documentNumber"
+                 placeholder="Numero de documento..."
                  [class.ng-invalid]="submitted && !form.client_user_id"
                  (keydown.enter)="searchByDocument(); $event.preventDefault()"
                  style="width: 100%" />
-          <p-button icon="pi pi-search" [text]="true" [rounded]="true"
+          <p-button icon="pi pi-search" severity="primary"
                     [loading]="searchingUser()"
+                    pTooltip="Buscar cliente"
                     (onClick)="searchByDocument()" />
           @if (selectedUser()) {
             <p-button icon="pi pi-times" [text]="true" [rounded]="true" severity="danger"
@@ -38,7 +42,11 @@
         @if (selectedUser()) {
           <div class="user-selected">
             <i class="pi pi-user"></i>
-            <span>{{ formatUserName(selectedUser()!) }} — {{ selectedUser()!.email }}</span>
+            @if (selectedUser()!.name) {
+              <span>{{ selectedUser()!.name }} — {{ selectedUser()!.email }}</span>
+            } @else {
+              <span>{{ selectedUser()!.email }}</span>
+            }
           </div>
         }
       </div>

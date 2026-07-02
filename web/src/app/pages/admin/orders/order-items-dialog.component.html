@@ -104,10 +104,15 @@
   }
 
   <ng-template pTemplate="footer">
-    <p-button label="Cerrar" severity="secondary" (onClick)="close()" />
-    @if (isEditable) {
-      <p-button label="Guardar Cambios" icon="pi pi-check" [loading]="saving()" (onClick)="save()" />
-    }
+    <div class="footer-left">
+      <p-button label="Volver" icon="pi pi-arrow-left" severity="secondary" (onClick)="goBack()" />
+    </div>
+    <div class="footer-right">
+      <p-button label="Cerrar" severity="secondary" (onClick)="close()" />
+      @if (isEditable) {
+        <p-button label="Guardar Cambios" icon="pi pi-check" [loading]="saving()" (onClick)="save()" />
+      }
+    </div>
   </ng-template>
 </p-dialog>
 

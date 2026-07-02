@@ -7,8 +7,10 @@ import { InputTextModule } from 'primeng/inputtext';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { FloatLabelModule } from 'primeng/floatlabel';
+import { TooltipModule } from 'primeng/tooltip';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { AppUser } from '../../../core/models/user.model';
+import { DOCUMENT_TYPE_OPTIONS } from '../../../core/models/document-type.model';
 import { UserApiService } from '../../../core/services/user-api.service';
 import { OrderApiService } from '../../../core/services/order-api.service';
 import { ProductApiService } from '../../../core/services/product-api.service';
@@ -27,7 +29,7 @@ interface OrderItemForm {
   standalone: true,
   imports: [
     CommonModule, FormsModule, ButtonModule, DialogModule,
-    InputTextModule, InputNumberModule, SelectModule, FloatLabelModule
+    InputTextModule, InputNumberModule, SelectModule, FloatLabelModule, TooltipModule
   ],
   templateUrl: './order-form-dialog.component.html',
   styleUrl: './order-form-dialog.component.scss'
@@ -49,11 +51,13 @@ export class OrderFormDialogComponent implements OnChanges {
   protected readonly canViewAllBranches = computed(() => this.authStore.hasPermission('view:branch:all'));
   protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
   protected readonly products = signal<Product[]>([]);
+  protected readonly DOCUMENT_TYPE_OPTIONS = DOCUMENT_TYPE_OPTIONS;
   protected submitted = false;
 
   protected form = this.emptyForm();
 
-  protected documentQuery = '';
+  protected documentType = 'V';
+  protected documentNumber = '';
   protected selectedUser = signal<AppUser | null>(null);
   protected userSearchError = signal('');
   protected searchingUser = signal(false);
@@ -117,7 +121,8 @@ export class OrderFormDialogComponent implements OnChanges {
     if (changes['visible'] && this.visible) {
       this.form = this.emptyForm();
       this.selectedUser.set(null);
-      this.documentQuery = '';
+      this.documentType = 'V';
+      this.documentNumber = '';
       this.userSearchError.set('');
       this.searchingUser.set(false);
       this.products.set([]);
@@ -144,8 +149,8 @@ export class OrderFormDialogComponent implements OnChanges {
   }
 
   protected searchByDocument(): void {
-    const doc = this.documentQuery.trim();
-    if (!doc) return;
+    const doc = `${this.documentType}${this.documentNumber}`.trim();
+    if (!doc || !this.documentNumber.trim()) return;
 
     this.searchingUser.set(true);
     this.userSearchError.set('');
@@ -168,12 +173,9 @@ export class OrderFormDialogComponent implements OnChanges {
   protected clearUser(): void {
     this.selectedUser.set(null);
     this.form.client_user_id = '';
-    this.documentQuery = '';
+    this.documentType = 'V';
+    this.documentNumber = '';
     this.userSearchError.set('');
-  }
-
-  protected formatUserName(user: AppUser): string {
-    return [user.firstName, user.lastName].filter((v) => !!v).join(' ') || user.email;
   }
 
   protected onProductSelect(index: number): void {

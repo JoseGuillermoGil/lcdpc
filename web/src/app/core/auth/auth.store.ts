@@ -123,6 +123,7 @@ export class AuthStore {
     this.expiresAt.set(null);
     localStorage.removeItem(EXPIRES_AT_KEY);
     this.clearExpirationTimer();
+    this.router.navigate(['/login']);
   }
 
   hasPermission(resourceCode: string): boolean {
@@ -178,7 +179,6 @@ export class AuthStore {
     const delay = Math.max(0, exp - Date.now() - 30_000);
     this.expirationTimer = setTimeout(() => {
       this.clear();
-      this.router.navigate(['/login']);
     }, delay);
   }
 

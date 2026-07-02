@@ -91,7 +91,7 @@ func (s *Service) List(ctx context.Context, filter StaffFilter) ([]StaffMember, 
 	countQuery := `
 		SELECT COUNT(*)
 		FROM users u
-		JOIN profiles p ON p.user_id = u.id
+		JOIN profiles p ON p.id = u.profile_id
 		JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
 		JOIN roles r ON r.id = pra.role_id
 		WHERE r.code NOT IN ('global_admin', 'branch_admin', 'client')
@@ -99,10 +99,10 @@ func (s *Service) List(ctx context.Context, filter StaffFilter) ([]StaffMember, 
 	dataQuery := `
 		SELECT u.id, u.email, u.status, u.branch_id, b.store_name,
 		       u.identity_document, u.whatsapp_phone,
-		       p.id, p.name, p.code,
+		       p.id, u.name, p.code,
 		       r.code, r.name, u.created_at_utc
 		FROM users u
-		JOIN profiles p ON p.user_id = u.id
+		JOIN profiles p ON p.id = u.profile_id
 		JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
 		JOIN roles r ON r.id = pra.role_id
 		LEFT JOIN branches b ON b.id = u.branch_id
@@ -127,7 +127,7 @@ func (s *Service) List(ctx context.Context, filter StaffFilter) ([]StaffMember, 
 		argIdx++
 	}
 	if filter.Search != nil && *filter.Search != "" {
-		clause := fmt.Sprintf(` AND (p.name ILIKE '%%' || $%d || '%%' OR u.email ILIKE '%%' || $%d || '%%')`, argIdx, argIdx)
+		clause := fmt.Sprintf(` AND (u.name ILIKE '%%' || $%d || '%%' OR u.email ILIKE '%%' || $%d || '%%')`, argIdx, argIdx)
 		countQuery += clause
 		dataQuery += clause
 		args = append(args, *filter.Search)
@@ -170,10 +170,10 @@ func (s *Service) GetByID(ctx context.Context, userID uuid.UUID) (*StaffMember, 
 	err := s.pool.QueryRow(ctx, `
 		SELECT u.id, u.email, u.status, u.branch_id, b.store_name,
 		       u.identity_document, u.whatsapp_phone,
-		       p.id, p.name, p.code,
+		       p.id, u.name, p.code,
 		       r.code, r.name, u.created_at_utc
 		FROM users u
-		JOIN profiles p ON p.user_id = u.id
+		JOIN profiles p ON p.id = u.profile_id
 		JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
 		JOIN roles r ON r.id = pra.role_id
 		LEFT JOIN branches b ON b.id = u.branch_id
@@ -206,19 +206,20 @@ func (s *Service) Create(ctx context.Context, req CreateStaffRequest) (*StaffMem
 	defer tx.Rollback(ctx)
 
 	userID := uuid.New()
+	profileID := uuid.New()
+
 	_, err = tx.Exec(ctx, `
-		INSERT INTO users (id, email, password_hash, onboarding_status, status, identity_document, whatsapp_phone, full_address, branch_id, created_at_utc)
-		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, $6, $7, now())
-	`, userID, req.Email, pwHash, req.IdentityDocument, req.WhatsAppPhone, req.FullAddress, req.BranchID)
+		INSERT INTO users (id, email, password_hash, onboarding_status, status, name, profile_id, identity_document, whatsapp_phone, full_address, branch_id, created_at_utc)
+		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, $6, $7, $8, $9, now())
+	`, userID, req.Email, pwHash, req.Name, profileID, req.IdentityDocument, req.WhatsAppPhone, req.FullAddress, req.BranchID)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 
-	profileID := uuid.New()
 	_, err = tx.Exec(ctx, `
-		INSERT INTO profiles (id, user_id, name, code, created_at_utc, updated_at_utc)
-		VALUES ($1, $2, $3, $4, now(), now())
-	`, profileID, userID, req.Name, req.Code)
+		INSERT INTO profiles (id, name, code, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, now(), now())
+	`, profileID, req.Name, req.Code)
 	if err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
 	}
@@ -273,22 +274,22 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, req UpdateStaffR
 
 	// Get profile ID
 	var profileID uuid.UUID
-	err = tx.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, userID).Scan(&profileID)
+	err = tx.QueryRow(ctx, `SELECT profile_id FROM users WHERE id = $1`, userID).Scan(&profileID)
 	if err != nil {
 		return nil, fmt.Errorf("get profile: %w", err)
 	}
 
-	// Update profile fields
-	if req.Name != "" || req.Code != "" {
-		_, err = tx.Exec(ctx, `
-			UPDATE profiles SET
-				name = COALESCE(NULLIF($2, ''), name),
-				code = COALESCE(NULLIF($3, ''), code),
-				updated_at_utc = now()
-			WHERE id = $1
-		`, profileID, req.Name, req.Code)
+	// Update user name + profile code
+	if req.Name != "" {
+		_, err = tx.Exec(ctx, `UPDATE users SET name = $2 WHERE id = $1`, userID, req.Name)
 		if err != nil {
-			return nil, fmt.Errorf("update profile: %w", err)
+			return nil, fmt.Errorf("update user name: %w", err)
+		}
+	}
+	if req.Code != "" {
+		_, err = tx.Exec(ctx, `UPDATE profiles SET code = $2, updated_at_utc = now() WHERE id = $1`, profileID, req.Code)
+		if err != nil {
+			return nil, fmt.Errorf("update profile code: %w", err)
 		}
 	}
 
@@ -332,7 +333,7 @@ func (s *Service) Delete(ctx context.Context, userID uuid.UUID) error {
 
 	// Delete profile_role_assignments
 	var profileID uuid.UUID
-	err = tx.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, userID).Scan(&profileID)
+	err = tx.QueryRow(ctx, `SELECT profile_id FROM users WHERE id = $1`, userID).Scan(&profileID)
 	if err != nil {
 		return fmt.Errorf("get profile: %w", err)
 	}

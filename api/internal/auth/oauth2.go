@@ -266,10 +266,8 @@ func (s *OAuth2Service) ExchangeCode(ctx context.Context, code, codeVerifier, re
 
 	// Get profile ID + branch ID
 	var profileID uuid.UUID
-	s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, authCode.UserID).Scan(&profileID)
-
 	var branchID *uuid.UUID
-	s.pool.QueryRow(ctx, `SELECT branch_id FROM users WHERE id = $1`, authCode.UserID).Scan(&branchID)
+	s.pool.QueryRow(ctx, `SELECT profile_id, branch_id FROM users WHERE id = $1`, authCode.UserID).Scan(&profileID, &branchID)
 
 	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, authCode.UserID, profileID, branchID, clientID, authCode.Scope, email)
 	if err != nil {
@@ -354,10 +352,8 @@ func (s *OAuth2Service) RefreshToken(ctx context.Context, refreshToken, clientID
 
 	// Get profile ID + branch ID
 	var profileID uuid.UUID
-	s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, rt.UserID).Scan(&profileID)
-
 	var branchID *uuid.UUID
-	s.pool.QueryRow(ctx, `SELECT branch_id FROM users WHERE id = $1`, rt.UserID).Scan(&branchID)
+	s.pool.QueryRow(ctx, `SELECT profile_id, branch_id FROM users WHERE id = $1`, rt.UserID).Scan(&profileID, &branchID)
 
 	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, profileID, branchID, clientID, rt.Scope, email)
 	if err != nil {

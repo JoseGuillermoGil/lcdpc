@@ -63,13 +63,7 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 	}
 
 	userID := uuid.New()
-	_, err = pool.Exec(ctx, `
-		INSERT INTO users (id, email, password_hash, onboarding_status, status, identity_document, whatsapp_phone, full_address, created_at_utc)
-		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, $6, now())
-	`, userID, email, pwHash, cfg.SuperUserIdentityDocument, cfg.SuperUserWhatsAppPhone, cfg.SuperUserFullAddress)
-	if err != nil {
-		return err
-	}
+	profileID := uuid.New()
 
 	profileName := cfg.SuperUserFirstName
 	if cfg.SuperUserLastName != "" {
@@ -77,21 +71,23 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 	}
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO profiles (id, user_id, name, code, created_at_utc, updated_at_utc)
-		VALUES ($1, $2, $3, $4, now(), now())
-	`, uuid.New(), userID, profileName, cfg.SuperUserIdentityDocument)
+		INSERT INTO users (id, email, password_hash, onboarding_status, status, name, profile_id, identity_document, whatsapp_phone, full_address, created_at_utc)
+		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, $6, $7, $8, now())
+	`, userID, email, pwHash, profileName, profileID, cfg.SuperUserIdentityDocument, cfg.SuperUserWhatsAppPhone, cfg.SuperUserFullAddress)
+	if err != nil {
+		return err
+	}
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO profiles (id, name, code, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, now(), now())
+	`, profileID, profileName, cfg.SuperUserIdentityDocument)
 	if err != nil {
 		return err
 	}
 
 	var adminRoleID uuid.UUID
 	err = pool.QueryRow(ctx, `SELECT id FROM roles WHERE code = 'global_admin'`).Scan(&adminRoleID)
-	if err != nil {
-		return err
-	}
-
-	var profileID uuid.UUID
-	err = pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, userID).Scan(&profileID)
 	if err != nil {
 		return err
 	}

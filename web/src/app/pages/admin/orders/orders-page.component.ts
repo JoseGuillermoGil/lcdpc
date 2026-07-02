@@ -140,6 +140,11 @@ export class OrdersPageComponent implements OnInit {
     });
   }
 
+  onItemsBack(): void {
+    this.itemsDialogVisible.set(false);
+    this.detailVisible.set(true);
+  }
+
   onItemsSaved(): void {
     this.itemsDialogVisible.set(false);
     this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Orden actualizada' });

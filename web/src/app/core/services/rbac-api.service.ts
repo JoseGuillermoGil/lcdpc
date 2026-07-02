@@ -39,10 +39,10 @@ interface RoleGoData {
 
 interface ProfileGoData {
   id: string;
-  user_id?: string;
   name: string;
   code: string;
   roles: RoleEntry[];
+  user_count: number;
   created_at_utc: string;
   updated_at_utc: string;
 }
@@ -252,10 +252,10 @@ export class RbacApiService {
   private mapProfile(raw: ProfileGoData): Profile {
     return {
       id: raw.id,
-      userId: raw.user_id,
       name: raw.name,
       code: raw.code,
       roles: raw.roles,
+      userCount: raw.user_count,
       createdAtUtc: raw.created_at_utc,
       updatedAtUtc: raw.updated_at_utc,
     };

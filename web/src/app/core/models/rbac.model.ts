@@ -42,10 +42,10 @@ export interface AssignResourceRequest {
 
 export interface Profile {
   id: string;
-  userId?: string;
   name: string;
   code: string;
   roles: RoleEntry[];
+  userCount: number;
   createdAtUtc: string;
   updatedAtUtc: string;
 }

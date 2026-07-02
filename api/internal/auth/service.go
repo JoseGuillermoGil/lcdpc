@@ -315,25 +315,26 @@ func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileReques
 	defer tx.Rollback(ctx)
 
 	userID := uuid.New()
+	profileID := uuid.New()
+
+	userName := req.FirstName
+	if req.LastName != "" {
+		userName = req.FirstName + " " + req.LastName
+	}
+
 	_, err = tx.Exec(ctx, `
-		INSERT INTO users (id, email, password_hash, onboarding_status, email_verified_at_utc, status, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc)
-		VALUES ($1, $2, $3, 'active', $4, 'Active', $5, $6, $7, $8, now())
-	`, userID, normalizedEmail, pwHash, flow.VerifiedAtUtc, req.IdentityDocument,
+		INSERT INTO users (id, email, password_hash, onboarding_status, email_verified_at_utc, status, name, profile_id, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc)
+		VALUES ($1, $2, $3, 'active', $4, 'Active', $5, $6, $7, $8, $9, $10, now())
+	`, userID, normalizedEmail, pwHash, flow.VerifiedAtUtc, userName, profileID, req.IdentityDocument,
 		nullString(req.TaxID), req.WhatsAppPhone, req.FullAddress)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 
-	profileName := req.FirstName
-	if req.LastName != "" {
-		profileName = req.FirstName + " " + req.LastName
-	}
-
-	profileID := uuid.New()
 	_, err = tx.Exec(ctx, `
-		INSERT INTO profiles (id, user_id, name, code, created_at_utc, updated_at_utc)
-		VALUES ($1, $2, $3, $4, now(), now())
-	`, profileID, userID, profileName, req.IdentityDocument)
+		INSERT INTO profiles (id, name, code, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, now(), now())
+	`, profileID, userName, req.IdentityDocument)
 	if err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
 	}
@@ -410,13 +411,9 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 	// Get profile ID + branch ID
 	var profileID uuid.UUID
 	var branchID *uuid.UUID
-	err = s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, user.ID).Scan(&profileID)
+	err = s.pool.QueryRow(ctx, `SELECT profile_id, branch_id FROM users WHERE id = $1`, user.ID).Scan(&profileID, &branchID)
 	if err != nil {
 		return nil, fmt.Errorf("get profile: %w", err)
-	}
-	err = s.pool.QueryRow(ctx, `SELECT branch_id FROM users WHERE id = $1`, user.ID).Scan(&branchID)
-	if err != nil {
-		branchID = nil
 	}
 
 	// Generate access token
@@ -530,9 +527,8 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 
 	err = s.pool.QueryRow(ctx, `
 		SELECT u.id, u.email, u.status, u.onboarding_status, u.email_verified_at_utc,
-		       p.name, p.id, u.branch_id
+		       u.name, u.profile_id, u.branch_id
 		FROM users u
-		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE u.id = $1
 	`, session.UserID).Scan(&user.ID, &user.Email, &user.Status, &user.OnboardingStatus,
 		&user.EmailVerifiedAt, &user.Name, &user.ProfileID, &user.BranchID)
@@ -634,21 +630,11 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*LoginRespo
 
 	// Generate new tokens
 	var profileID uuid.UUID
-	err = s.pool.QueryRow(ctx, `SELECT id FROM profiles WHERE user_id = $1`, rt.UserID).Scan(&profileID)
-	if err != nil {
-		return nil, fmt.Errorf("get profile: %w", err)
-	}
-
 	var email string
-	err = s.pool.QueryRow(ctx, `SELECT email FROM users WHERE id = $1`, rt.UserID).Scan(&email)
-	if err != nil {
-		return nil, fmt.Errorf("get user email: %w", err)
-	}
-
 	var branchID *uuid.UUID
-	err = s.pool.QueryRow(ctx, `SELECT branch_id FROM users WHERE id = $1`, rt.UserID).Scan(&branchID)
+	err = s.pool.QueryRow(ctx, `SELECT profile_id, email, branch_id FROM users WHERE id = $1`, rt.UserID).Scan(&profileID, &email, &branchID)
 	if err != nil {
-		branchID = nil
+		return nil, fmt.Errorf("get user: %w", err)
 	}
 
 	accessToken, err := GenerateAccessToken(s.keySvc.Key(), s.tokenCfg, rt.UserID, profileID, branchID, rt.ClientID, rt.Scope, email)
