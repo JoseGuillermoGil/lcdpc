@@ -165,24 +165,23 @@ func NewServer(
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
 			r.Use(middleware.RequireAuth())
-			r.Use(middleware.RequirePermission(rbacStore, "bundle:create"))
-
-			r.Post("/", bundleH.Create)
 
 			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission(rbacStore, "bundle:publish"))
-				r.Post("/{id}/publish", bundleH.Publish)
-			})
-
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequirePermission(rbacStore, "bundle:pause"))
-				r.Post("/{id}/pause", bundleH.Pause)
+				r.Use(middleware.RequirePermission(rbacStore, "bundle:create"))
+				r.Post("/", bundleH.Create)
 			})
 
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequirePermission(rbacStore, "bundle:update"))
 				r.Put("/{id}", bundleH.Update)
 				r.Put("/{id}/image", bundleH.UpdateImage)
+				r.Patch("/{id}/toggle-active", bundleH.ToggleActive)
+
+				// Bundle prices CRUD
+				r.Get("/{id}/prices", bundleH.ListPrices)
+				r.Post("/{id}/prices", bundleH.CreatePrice)
+				r.Put("/{id}/prices/{priceId}", bundleH.UpdatePrice)
+				r.Delete("/{id}/prices/{priceId}", bundleH.DeletePrice)
 			})
 
 			r.Group(func(r chi.Router) {

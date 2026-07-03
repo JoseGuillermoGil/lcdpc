@@ -76,7 +76,7 @@ INSERT INTO role_resources (role_id, resource_id)
 SELECT '55555555-5555-5555-5555-555555555555', id FROM resources
 WHERE code IN (
     'product:view', 'product:create', 'product:update',
-    'bundle:view', 'bundle:create', 'bundle:update', 'bundle:publish', 'bundle:pause',
+    'bundle:view', 'bundle:create', 'bundle:update', 'bundle:delete',
     'price:view', 'price:create', 'price:update',
     'branch:view',
     'order:view', 'order:create', 'order:update', 'order:delete', 'order:status:change'

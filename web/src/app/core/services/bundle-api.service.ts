@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Inject, Injectable } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { API_BASE_URL } from '../../pages/auth-page/auth-api-go.service';
-import { Bundle, CreateBundleRequest } from '../models/bundle.model';
+import { Bundle, BundlePrice, CreateBundleRequest } from '../models/bundle.model';
 import { BundleListFilter, PaginatedResponse } from '../models/pagination.model';
 
 interface JsendEnvelope<T> {
@@ -20,12 +20,8 @@ interface BundleGoData {
   stock: number;
   stock_available: number;
   stock_blocked: number;
-
-  total_price: number;
-  total_price_currency: string;
-  promotional_price: number | null;
-  promotional_price_currency: string | null;
   items: BundleItemGoData[] | null;
+  prices: BundlePriceGoData[];
   img: string | null;
   category_id: string | null;
 }
@@ -35,6 +31,13 @@ interface BundleItemGoData {
   bundle_id: string;
   product_id: string;
   quantity: number;
+}
+
+interface BundlePriceGoData {
+  id: string;
+  bundle_id: string;
+  price_category_id: string | null;
+  amount: number;
 }
 
 interface PaginatedGoData<T> {
@@ -126,20 +129,10 @@ export class BundleApiService {
       .pipe(map(() => undefined));
   }
 
-  publish(id: string): Observable<Bundle> {
+  toggleActive(id: string): Observable<Bundle> {
     return this.http
-      .post<JsendEnvelope<BundleGoData>>(
-        `${this.baseUrl}/api/v1/bundles/${id}/publish`,
-        {},
-        { withCredentials: true }
-      )
-      .pipe(map((res) => this.map(res.data)));
-  }
-
-  pause(id: string): Observable<Bundle> {
-    return this.http
-      .post<JsendEnvelope<BundleGoData>>(
-        `${this.baseUrl}/api/v1/bundles/${id}/pause`,
+      .patch<JsendEnvelope<BundleGoData>>(
+        `${this.baseUrl}/api/v1/bundles/${id}/toggle-active`,
         {},
         { withCredentials: true }
       )
@@ -164,6 +157,53 @@ export class BundleApiService {
     return `${this.baseUrl}${img}`;
   }
 
+  // Bundle Prices
+  listPrices(bundleId: string): Observable<BundlePrice[]> {
+    return this.http
+      .get<JsendEnvelope<BundlePriceGoData[]>>(`${this.baseUrl}/api/v1/bundles/${bundleId}/prices`, {
+        withCredentials: true,
+      })
+      .pipe(map((res) => res.data.map((p) => this.mapPrice(p))));
+  }
+
+  createPrice(bundleId: string, priceCategoryId: string | null, amount: number): Observable<BundlePrice> {
+    return this.http
+      .post<JsendEnvelope<BundlePriceGoData>>(
+        `${this.baseUrl}/api/v1/bundles/${bundleId}/prices`,
+        { price_category_id: priceCategoryId, amount },
+        { withCredentials: true }
+      )
+      .pipe(map((res) => this.mapPrice(res.data)));
+  }
+
+  updatePrice(bundleId: string, priceId: string, priceCategoryId: string | null, amount: number): Observable<BundlePrice> {
+    return this.http
+      .put<JsendEnvelope<BundlePriceGoData>>(
+        `${this.baseUrl}/api/v1/bundles/${bundleId}/prices/${priceId}`,
+        { price_category_id: priceCategoryId, amount },
+        { withCredentials: true }
+      )
+      .pipe(map((res) => this.mapPrice(res.data)));
+  }
+
+  deletePrice(bundleId: string, priceId: string): Observable<void> {
+    return this.http
+      .delete<JsendEnvelope<{ status: string }>>(
+        `${this.baseUrl}/api/v1/bundles/${bundleId}/prices/${priceId}`,
+        { withCredentials: true }
+      )
+      .pipe(map(() => undefined));
+  }
+
+  private mapPrice(raw: BundlePriceGoData): BundlePrice {
+    return {
+      id: raw.id,
+      bundleId: raw.bundle_id,
+      priceCategoryId: raw.price_category_id,
+      amount: raw.amount,
+    };
+  }
+
   private map(raw: BundleGoData): Bundle {
     return {
       bundleId: raw.bundle_id,
@@ -174,11 +214,6 @@ export class BundleApiService {
       stock: raw.stock,
       stockAvailable: raw.stock_available,
       stockBlocked: raw.stock_blocked,
-
-      totalPrice: raw.total_price,
-      totalPriceCurrency: raw.total_price_currency,
-      promotionalPrice: raw.promotional_price,
-      promotionalPriceCurrency: raw.promotional_price_currency,
       items: raw.items
         ? raw.items.map((i) => ({
             id: i.id,
@@ -187,6 +222,7 @@ export class BundleApiService {
             quantity: i.quantity,
           }))
         : null,
+      prices: raw.prices ? raw.prices.map((p) => this.mapPrice(p)) : [],
       img: raw.img,
       categoryId: raw.category_id,
     };

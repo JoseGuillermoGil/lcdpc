@@ -273,21 +273,25 @@ func (s *Service) UpdateProductImage(ctx context.Context, id uuid.UUID, img stri
 // Bundle
 
 type Bundle struct {
-	BundleID                 uuid.UUID    `json:"bundle_id"`
-	Code                     string       `json:"code"`
-	Name                     string       `json:"name"`
-	Status                   string       `json:"status"`
-	BranchID                 *uuid.UUID   `json:"branch_id"`
-	TotalPrice               float64      `json:"total_price"`
-	TotalPriceCurrency       string       `json:"total_price_currency"`
-	PromotionalPrice         *float64     `json:"promotional_price"`
-	PromotionalPriceCurrency *string      `json:"promotional_price_currency"`
-	Items                    []BundleItem `json:"items"`
-	Img                      *string      `json:"img"`
-	CategoryID               *uuid.UUID   `json:"category_id"`
-	Stock                    int          `json:"stock"`
-	StockAvailable           int          `json:"stock_available"`
-	StockBlocked             int          `json:"stock_blocked"`
+	BundleID       uuid.UUID      `json:"bundle_id"`
+	Code           string         `json:"code"`
+	Name           string         `json:"name"`
+	Status         string         `json:"status"`
+	BranchID       *uuid.UUID     `json:"branch_id"`
+	Items          []BundleItem   `json:"items"`
+	Prices         []BundlePrice  `json:"prices"`
+	Img            *string        `json:"img"`
+	CategoryID     *uuid.UUID     `json:"category_id"`
+	Stock          int            `json:"stock"`
+	StockAvailable int            `json:"stock_available"`
+	StockBlocked   int            `json:"stock_blocked"`
+}
+
+type BundlePrice struct {
+	ID              uuid.UUID  `json:"id"`
+	BundleID        uuid.UUID  `json:"bundle_id"`
+	PriceCategoryID *uuid.UUID `json:"price_category_id"`
+	Amount          float64    `json:"amount"`
 }
 
 type BundleItem struct {
@@ -323,12 +327,12 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 
 	bundle := &Bundle{}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO bundles (bundle_id, code, name, status, branch_id, total_price, total_price_currency, img, category_id, stock, stock_available, stock_blocked)
-		VALUES ($1, $2, $3, 'Draft', $4, 0, 'USD', $5, $6, COALESCE($7, 0), COALESCE($8, 0), COALESCE($9, 0))
-		RETURNING bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id, stock, stock_available, stock_blocked
+		INSERT INTO bundles (bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked)
+		VALUES ($1, $2, $3, 'Active', $4, $5, $6, COALESCE($7, 0), COALESCE($8, 0), COALESCE($9, 0))
+		RETURNING bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked
 	`, uuid.New(), req.Code, req.Name, req.BranchID, req.Img, req.CategoryID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
 		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.BranchID,
-		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency, &bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked,
+		&bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create bundle: %w", err)
@@ -349,6 +353,8 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 		bundle.Items = append(bundle.Items, bi)
 	}
 
+	bundle.Prices = []BundlePrice{}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
@@ -359,11 +365,11 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 func (s *Service) GetBundleByID(ctx context.Context, id uuid.UUID) (*Bundle, error) {
 	bundle := &Bundle{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id, stock, stock_available, stock_blocked
+		SELECT bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked
 		FROM bundles WHERE bundle_id = $1
 	`, id).Scan(
 		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.BranchID,
-		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency, &bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked,
+		&bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
@@ -373,18 +379,33 @@ func (s *Service) GetBundleByID(ctx context.Context, id uuid.UUID) (*Bundle, err
 	}
 
 	// Load items
-	rows, err := s.pool.Query(ctx, `SELECT id, bundle_id, product_id, quantity FROM bundle_items WHERE bundle_id = $1`, id)
+	itemRows, err := s.pool.Query(ctx, `SELECT id, bundle_id, product_id, quantity FROM bundle_items WHERE bundle_id = $1`, id)
 	if err != nil {
 		return nil, fmt.Errorf("get bundle items: %w", err)
 	}
-	defer rows.Close()
+	defer itemRows.Close()
 
-	for rows.Next() {
+	for itemRows.Next() {
 		var bi BundleItem
-		if err := rows.Scan(&bi.ID, &bi.BundleID, &bi.ProductID, &bi.Quantity); err != nil {
+		if err := itemRows.Scan(&bi.ID, &bi.BundleID, &bi.ProductID, &bi.Quantity); err != nil {
 			return nil, fmt.Errorf("scan bundle item: %w", err)
 		}
 		bundle.Items = append(bundle.Items, bi)
+	}
+
+	// Load prices
+	priceRows, err := s.pool.Query(ctx, `SELECT id, bundle_id, price_category_id, amount FROM bundle_prices WHERE bundle_id = $1`, id)
+	if err != nil {
+		return nil, fmt.Errorf("get bundle prices: %w", err)
+	}
+	defer priceRows.Close()
+
+	for priceRows.Next() {
+		var bp BundlePrice
+		if err := priceRows.Scan(&bp.ID, &bp.BundleID, &bp.PriceCategoryID, &bp.Amount); err != nil {
+			return nil, fmt.Errorf("scan bundle price: %w", err)
+		}
+		bundle.Prices = append(bundle.Prices, bp)
 	}
 
 	return bundle, nil
@@ -397,7 +418,7 @@ func (s *Service) ListBundles(ctx context.Context, filter ...BundleFilter) ([]Bu
 	}
 
 	countQuery := `SELECT COUNT(*) FROM bundles WHERE 1=1`
-	dataQuery := `SELECT bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id, stock, stock_available, stock_blocked FROM bundles WHERE 1=1`
+	dataQuery := `SELECT bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked FROM bundles WHERE 1=1`
 	var args []interface{}
 	argIdx := 1
 
@@ -456,7 +477,7 @@ func (s *Service) ListBundles(ctx context.Context, filter ...BundleFilter) ([]Bu
 	for rows.Next() {
 		var b Bundle
 		if err := rows.Scan(&b.BundleID, &b.Code, &b.Name, &b.Status, &b.BranchID,
-			&b.TotalPrice, &b.TotalPriceCurrency, &b.PromotionalPrice, &b.PromotionalPriceCurrency, &b.Img, &b.CategoryID, &b.Stock, &b.StockAvailable, &b.StockBlocked); err != nil {
+			&b.Img, &b.CategoryID, &b.Stock, &b.StockAvailable, &b.StockBlocked); err != nil {
 			return nil, 0, fmt.Errorf("scan bundle: %w", err)
 		}
 		bundles = append(bundles, b)
@@ -475,10 +496,10 @@ func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBund
 	err = tx.QueryRow(ctx, `
 		UPDATE bundles SET code = $2, name = $3, branch_id = $4, img = $5, category_id = $6, stock = $7, stock_available = $8, stock_blocked = $9
 		WHERE bundle_id = $1
-		RETURNING bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, img, category_id, stock, stock_available, stock_blocked
+		RETURNING bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked
 	`, id, req.Code, req.Name, req.BranchID, req.Img, req.CategoryID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
 		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.BranchID,
-		&bundle.TotalPrice, &bundle.TotalPriceCurrency, &bundle.PromotionalPrice, &bundle.PromotionalPriceCurrency, &bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked,
+		&bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update bundle: %w", err)
@@ -501,6 +522,8 @@ func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBund
 		}
 		bundle.Items = append(bundle.Items, bi)
 	}
+
+	bundle.Prices = []BundlePrice{}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
@@ -542,10 +565,88 @@ func (s *Service) UpdateBundleImage(ctx context.Context, id uuid.UUID, img strin
 	return "", nil
 }
 
-func (s *Service) UpdateBundleStatus(ctx context.Context, id uuid.UUID, status string) error {
-	_, err := s.pool.Exec(ctx, `UPDATE bundles SET status = $2 WHERE bundle_id = $1`, id, status)
+func (s *Service) ToggleBundleActive(ctx context.Context, id uuid.UUID) (*Bundle, error) {
+	b := &Bundle{}
+	err := s.pool.QueryRow(ctx, `
+		UPDATE bundles SET status = CASE WHEN status = 'Active' THEN 'Inactive' ELSE 'Active' END
+		WHERE bundle_id = $1
+		RETURNING bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked
+	`, id).Scan(
+		&b.BundleID, &b.Code, &b.Name, &b.Status, &b.BranchID,
+		&b.Img, &b.CategoryID, &b.Stock, &b.StockAvailable, &b.StockBlocked,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("NOT_FOUND")
+	}
 	if err != nil {
-		return fmt.Errorf("update bundle status: %w", err)
+		return nil, fmt.Errorf("toggle bundle active: %w", err)
+	}
+	return b, nil
+}
+
+// Bundle Price
+
+type CreateBundlePriceRequest struct {
+	BundleID        uuid.UUID  `json:"bundle_id" validate:"required"`
+	PriceCategoryID *uuid.UUID `json:"price_category_id"`
+	Amount          float64    `json:"amount" validate:"required"`
+}
+
+func (s *Service) ListBundlePrices(ctx context.Context, bundleID uuid.UUID) ([]BundlePrice, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT id, bundle_id, price_category_id, amount
+		FROM bundle_prices WHERE bundle_id = $1
+	`, bundleID)
+	if err != nil {
+		return nil, fmt.Errorf("list bundle prices: %w", err)
+	}
+	defer rows.Close()
+
+	prices := make([]BundlePrice, 0)
+	for rows.Next() {
+		var bp BundlePrice
+		if err := rows.Scan(&bp.ID, &bp.BundleID, &bp.PriceCategoryID, &bp.Amount); err != nil {
+			return nil, fmt.Errorf("scan bundle price: %w", err)
+		}
+		prices = append(prices, bp)
+	}
+	return prices, nil
+}
+
+func (s *Service) CreateBundlePrice(ctx context.Context, req CreateBundlePriceRequest) (*BundlePrice, error) {
+	bp := &BundlePrice{}
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO bundle_prices (id, bundle_id, price_category_id, amount)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, bundle_id, price_category_id, amount
+	`, uuid.New(), req.BundleID, req.PriceCategoryID, req.Amount).Scan(
+		&bp.ID, &bp.BundleID, &bp.PriceCategoryID, &bp.Amount,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create bundle price: %w", err)
+	}
+	return bp, nil
+}
+
+func (s *Service) UpdateBundlePrice(ctx context.Context, id uuid.UUID, req CreateBundlePriceRequest) (*BundlePrice, error) {
+	bp := &BundlePrice{}
+	err := s.pool.QueryRow(ctx, `
+		UPDATE bundle_prices SET price_category_id = $2, amount = $3
+		WHERE id = $1
+		RETURNING id, bundle_id, price_category_id, amount
+	`, id, req.PriceCategoryID, req.Amount).Scan(
+		&bp.ID, &bp.BundleID, &bp.PriceCategoryID, &bp.Amount,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("update bundle price: %w", err)
+	}
+	return bp, nil
+}
+
+func (s *Service) DeleteBundlePrice(ctx context.Context, id uuid.UUID) error {
+	_, err := s.pool.Exec(ctx, `DELETE FROM bundle_prices WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete bundle price: %w", err)
 	}
 	return nil
 }

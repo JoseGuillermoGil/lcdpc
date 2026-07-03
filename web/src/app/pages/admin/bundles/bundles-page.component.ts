@@ -56,9 +56,8 @@ export class BundlesPageComponent implements OnInit {
   protected filterCategoryId: string | null = null;
 
   protected readonly statusOptions = [
-    { label: 'Draft', value: 'Draft' },
-    { label: 'Published', value: 'Published' },
-    { label: 'Paused', value: 'Paused' },
+    { label: 'Activo', value: 'Active' },
+    { label: 'Inactivo', value: 'Inactive' },
   ];
 
   protected readonly dialogVisible = signal(false);
@@ -110,9 +109,8 @@ export class BundlesPageComponent implements OnInit {
 
   statusSeverity(status: string): 'info' | 'success' | 'warn' | 'danger' {
     switch (status) {
-      case 'Draft': return 'info';
-      case 'Published': return 'success';
-      case 'Paused': return 'warn';
+      case 'Active': return 'success';
+      case 'Inactive': return 'warn';
       default: return 'info';
     }
   }
@@ -136,26 +134,15 @@ export class BundlesPageComponent implements OnInit {
     }
   }
 
-  publishBundle(bundle: Bundle): void {
-    this.bundleApi.publish(bundle.bundleId).subscribe({
+  toggleActive(bundle: Bundle): void {
+    this.bundleApi.toggleActive(bundle.bundleId).subscribe({
       next: () => {
-        this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Combo publicado' });
+        const msg = bundle.status === 'Active' ? 'Combo desactivado' : 'Combo activado';
+        this.messageService.add({ severity: 'success', summary: 'Exito', detail: msg });
         this.applyFilters();
       },
       error: () => {
-        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'No se pudo publicar el combo' });
-      },
-    });
-  }
-
-  pauseBundle(bundle: Bundle): void {
-    this.bundleApi.pause(bundle.bundleId).subscribe({
-      next: () => {
-        this.messageService.add({ severity: 'success', summary: 'Exito', detail: 'Combo pausado' });
-        this.applyFilters();
-      },
-      error: () => {
-        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'No se pudo pausar el combo' });
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'No se pudo cambiar el estado del combo' });
       },
     });
   }

@@ -29,19 +29,21 @@ type SyncProductRequest struct {
 }
 
 type SyncBundleRequest struct {
-	BundleID                 uuid.UUID        `json:"bundle_id"`
-	Code                     string           `json:"code"`
-	Name                     string           `json:"name"`
-	Status                   string           `json:"status"`
-	BranchID                 *uuid.UUID       `json:"branch_id"`
-	TotalPrice               float64          `json:"total_price"`
-	TotalPriceCurrency       string           `json:"total_price_currency"`
-	PromotionalPrice         *float64         `json:"promotional_price"`
-	PromotionalPriceCurrency *string          `json:"promotional_price_currency"`
-	Items                    []SyncBundleItem `json:"items"`
-	Stock                    *int             `json:"stock"`
-	StockAvailable           *int             `json:"stock_available"`
-	StockBlocked             *int             `json:"stock_blocked"`
+	BundleID       uuid.UUID          `json:"bundle_id"`
+	Code           string             `json:"code"`
+	Name           string             `json:"name"`
+	Status         string             `json:"status"`
+	BranchID       *uuid.UUID         `json:"branch_id"`
+	Items          []SyncBundleItem   `json:"items"`
+	Prices         []SyncBundlePrice  `json:"prices"`
+	Stock          *int               `json:"stock"`
+	StockAvailable *int               `json:"stock_available"`
+	StockBlocked   *int               `json:"stock_blocked"`
+}
+
+type SyncBundlePrice struct {
+	PriceCategoryID *uuid.UUID `json:"price_category_id"`
+	Amount          float64    `json:"amount"`
 }
 
 type SyncBundleItem struct {
@@ -98,21 +100,16 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 	result := &SyncResult{}
 	for _, b := range bundles {
 		_, err := tx.Exec(ctx, `
-			INSERT INTO bundles (bundle_id, code, name, status, branch_id, total_price, total_price_currency, promotional_price, promotional_price_currency, stock, stock_available, stock_blocked)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, 0), COALESCE($11, 0), COALESCE($12, 0))
+			INSERT INTO bundles (bundle_id, code, name, status, branch_id, stock, stock_available, stock_blocked)
+			VALUES ($1, $2, $3, $4, $5, COALESCE($6, 0), COALESCE($7, 0), COALESCE($8, 0))
 			ON CONFLICT (code) DO UPDATE SET
 				name = EXCLUDED.name,
 				status = EXCLUDED.status,
 				branch_id = EXCLUDED.branch_id,
-				total_price = EXCLUDED.total_price,
-				total_price_currency = EXCLUDED.total_price_currency,
-				promotional_price = EXCLUDED.promotional_price,
-				promotional_price_currency = EXCLUDED.promotional_price_currency,
 				stock = EXCLUDED.stock,
 				stock_available = EXCLUDED.stock_available,
 				stock_blocked = EXCLUDED.stock_blocked
-		`, b.BundleID, b.Code, b.Name, b.Status, b.BranchID,
-			b.TotalPrice, b.TotalPriceCurrency, b.PromotionalPrice, b.PromotionalPriceCurrency, b.Stock, b.StockAvailable, b.StockBlocked)
+		`, b.BundleID, b.Code, b.Name, b.Status, b.BranchID, b.Stock, b.StockAvailable, b.StockBlocked)
 		if err != nil {
 			result.Errors++
 			continue
@@ -125,6 +122,18 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 				INSERT INTO bundle_items (id, bundle_id, product_id, quantity)
 				VALUES ($1, $2, $3, $4)
 			`, uuid.New(), b.BundleID, item.ProductID, item.Quantity)
+			if err != nil {
+				result.Errors++
+			}
+		}
+
+		// Replace bundle prices
+		tx.Exec(ctx, `DELETE FROM bundle_prices WHERE bundle_id = $1`, b.BundleID)
+		for _, p := range b.Prices {
+			_, err := tx.Exec(ctx, `
+				INSERT INTO bundle_prices (id, bundle_id, price_category_id, amount)
+				VALUES ($1, $2, $3, $4)
+			`, uuid.New(), b.BundleID, p.PriceCategoryID, p.Amount)
 			if err != nil {
 				result.Errors++
 			}

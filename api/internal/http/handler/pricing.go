@@ -438,7 +438,7 @@ func (h *BundleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	response.Success(w, map[string]string{"status": "deleted"})
 }
 
-func (h *BundleHandler) Publish(w http.ResponseWriter, r *http.Request) {
+func (h *BundleHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -446,15 +446,20 @@ func (h *BundleHandler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.UpdateBundleStatus(r.Context(), id, "Published"); err != nil {
+	result, err := h.svc.ToggleBundleActive(r.Context(), id)
+	if err != nil {
+		if err.Error() == "NOT_FOUND" {
+			response.Error(w, http.StatusNotFound, "bundle not found")
+			return
+		}
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.Success(w, map[string]string{"status": "Published"})
+	response.Success(w, result)
 }
 
-func (h *BundleHandler) Pause(w http.ResponseWriter, r *http.Request) {
+func (h *BundleHandler) ListPrices(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -462,12 +467,82 @@ func (h *BundleHandler) Pause(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.UpdateBundleStatus(r.Context(), id, "Paused"); err != nil {
+	result, err := h.svc.ListBundlePrices(r.Context(), id)
+	if err != nil {
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	response.Success(w, map[string]string{"status": "Paused"})
+	response.Success(w, result)
+}
+
+func (h *BundleHandler) CreatePrice(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req pricing.CreateBundlePriceRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+	req.BundleID = id
+
+	result, err := h.svc.CreateBundlePrice(r.Context(), req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Created(w, result)
+}
+
+func (h *BundleHandler) UpdatePrice(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	priceIDStr := chiURLParam(r, "priceId")
+	priceID, err := uuid.Parse(priceIDStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid price id")
+		return
+	}
+	_, err = uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	var req pricing.CreateBundlePriceRequest
+	if err := response.Decode(r, &req); err != nil {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		return
+	}
+
+	result, err := h.svc.UpdateBundlePrice(r.Context(), priceID, req)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	response.Success(w, result)
+}
+
+func (h *BundleHandler) DeletePrice(w http.ResponseWriter, r *http.Request) {
+	priceIDStr := chiURLParam(r, "priceId")
+	priceID, err := uuid.Parse(priceIDStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid price id")
+		return
+	}
+
+	if err := h.svc.DeleteBundlePrice(r.Context(), priceID); err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	response.Success(w, map[string]string{"status": "deleted"})
 }
 
 func (h *BundleHandler) UpdateImage(w http.ResponseWriter, r *http.Request) {

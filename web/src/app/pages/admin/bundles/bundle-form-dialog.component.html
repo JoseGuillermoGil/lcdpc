@@ -1,18 +1,21 @@
 <p-dialog [header]="isEditMode ? 'Editar Combo' : 'Nuevo Combo'"
           [visible]="visible" (visibleChange)="visibleChange.emit($event)"
-          [modal]="true" [dismissableMask]="true" [style]="{width: '650px'}"
+          [modal]="true" [dismissableMask]="true" [draggable]="false"
+          [style]="{width: 'min(750px, 95vw)'}"
           (onHide)="close()">
-  <div class="bundle-form">
+  <div class="bundle-form" [style]="{paddingTop: '20px'}">
     <div class="field-row">
       <div class="field">
         <p-floatlabel>
-          <input pInputText id="name" [(ngModel)]="form.name" [class.ng-invalid]="submitted && !form.name" style="width: 100%" />
+          <input pInputText id="name" [(ngModel)]="form.name"
+                 [class.ng-invalid]="submitted && !form.name" style="width: 100%" placeholder=" " />
           <label for="name">Nombre *</label>
         </p-floatlabel>
       </div>
       <div class="field">
         <p-floatlabel>
-          <input pInputText id="code" [(ngModel)]="form.code" [class.ng-invalid]="submitted && !form.code" style="width: 100%" />
+          <input pInputText id="code" [(ngModel)]="form.code"
+                 [class.ng-invalid]="submitted && !form.code" style="width: 100%" placeholder=" " />
           <label for="code">Codigo *</label>
         </p-floatlabel>
       </div>
@@ -45,16 +48,30 @@
 
       @for (item of form.items; track $index; let i = $index) {
         <div class="item-row" [class.ng-invalid]="submitted && (!item.product_id || item.quantity <= 0)">
-          <p-select [options]="availableProducts" [(ngModel)]="item.product_id"
+          <p-select class="product-field" [options]="availableProducts" [(ngModel)]="item.product_id"
                     optionLabel="name" optionValue="productId"
-                    placeholder="Seleccionar producto" [style]="{'flex':'1'}" />
-          <p-inputNumber [(ngModel)]="item.quantity" [min]="1" [style]="{'width':'100px'}" />
-          <p-button icon="pi pi-times" [text]="true" severity="danger" [rounded]="true"
+                    placeholder="Producto" (onChange)="onProductSelect(i)" />
+          <p-inputNumber class="qty-field" [(ngModel)]="item.quantity" [min]="1" [maxFractionDigits]="2"
+                         placeholder="Cant." />
+          <p-select class="price-field" [options]="item.priceOptions"
+                    [(ngModel)]="item.selectedPriceId" optionLabel="label" optionValue="id"
+                    (onChange)="onPriceOptionSelect(i, $event.value)"
+                    [disabled]="item.priceOptions.length === 0"
+                    placeholder="Precio" appendTo="body" />
+          <span class="item-subtotal">{{ getItemSubtotal(i) | currency:'USD' }}</span>
+          <p-button class="remove-btn" icon="pi pi-times" [text]="true" severity="danger" [rounded]="true"
                     (onClick)="removeItem(i)"></p-button>
         </div>
       } @empty {
         <div class="empty-items">
           <p>No hay items agregados</p>
+        </div>
+      }
+
+      @if (form.items.length > 0) {
+        <div class="items-total">
+          <span>Total ({{ totalItems }} items):</span>
+          <strong>{{ total | currency:'USD' }}</strong>
         </div>
       }
     </div>

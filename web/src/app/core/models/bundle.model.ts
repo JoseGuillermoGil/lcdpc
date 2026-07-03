@@ -4,17 +4,13 @@ export interface Bundle {
   name: string;
   status: string;
   branchId: string | null;
-  totalPrice: number;
-  totalPriceCurrency: string;
-  promotionalPrice: number | null;
-  promotionalPriceCurrency: string | null;
   items: BundleItem[] | null;
+  prices: BundlePrice[];
   img: string | null;
   categoryId: string | null;
   stock: number;
   stockAvailable: number;
   stockBlocked: number;
-
 }
 
 export interface BundleItem {
@@ -22,6 +18,13 @@ export interface BundleItem {
   bundleId: string;
   productId: string;
   quantity: number;
+}
+
+export interface BundlePrice {
+  id: string;
+  bundleId: string;
+  priceCategoryId: string | null;
+  amount: number;
 }
 
 export interface BundleItemRequest {
@@ -37,7 +40,6 @@ export interface CreateBundleRequest {
   stock?: number;
   stock_available?: number;
   stock_blocked?: number;
-
   img?: string | null;
   category_id?: string | null;
 }
