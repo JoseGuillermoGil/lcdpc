@@ -203,8 +203,8 @@ func (s *Service) Summary(ctx context.Context, branchID string) (*SummaryData, e
 	}
 	query := fmt.Sprintf(`
 		SELECT
-			COALESCE((SELECT COUNT(*) FROM products WHERE deleted_at IS NULL%s), 0),
-			COALESCE((SELECT COUNT(*) FROM bundles WHERE deleted_at IS NULL%s), 0),
+			COALESCE((SELECT COUNT(*) FROM products WHERE 1=1%s), 0),
+			COALESCE((SELECT COUNT(*) FROM bundles WHERE 1=1%s), 0),
 			COALESCE((SELECT COUNT(*) FROM orders WHERE deleted_at IS NULL%s), 0),
 			COALESCE((SELECT COUNT(*) FROM orders WHERE deleted_at IS NULL AND status = 'PENDING_REVIEW'%s), 0)
 	`, branchFilter, branchFilter, branchFilter, branchFilter)

@@ -206,18 +206,21 @@ export class DashboardPageComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadBranches();
-    this.loadAll();
   }
 
   private loadBranches(): void {
     this.branchApi.listAdmin().subscribe({
       next: (branches) => {
         this.branchOptions.set(
-          branches.map((b: any) => ({
-            label: b.name ?? b.label ?? b.id,
+          branches.map((b) => ({
+            label: b.storeName,
             value: b.id,
           }))
         );
+        if (branches.length > 0 && !this.branchFilter()) {
+          this.branchFilter.set(branches[0].id);
+        }
+        this.loadAll();
       },
     });
   }

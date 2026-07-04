@@ -20,7 +20,15 @@ func NewHandler(svc *Service, rbacStore *rbac.Store) *Handler {
 
 func (h *Handler) branchID(r *http.Request) string {
 	branchID := middleware.GetBranchID(r.Context())
-	if !middleware.HasPermission(r.Context(), h.rbac, "view:branch:all") && branchID != "" {
+
+	if middleware.HasPermission(r.Context(), h.rbac, "view:branch:all") {
+		if q := r.URL.Query().Get("branch_id"); q != "" {
+			return q
+		}
+		return ""
+	}
+
+	if branchID != "" {
 		return branchID
 	}
 	return ""
