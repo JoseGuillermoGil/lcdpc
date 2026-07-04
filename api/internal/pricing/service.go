@@ -2,12 +2,16 @@ package pricing
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrNotFound = errors.New("NOT_FOUND")
 
 type Service struct {
 	pool *pgxpool.Pool
@@ -35,16 +39,16 @@ type Product struct {
 }
 
 type CreateProductRequest struct {
-	Name        string     `json:"name" validate:"required"`
-	Sku         string     `json:"sku" validate:"required"`
-	Img         *string    `json:"img"`
-	BrandID     uuid.UUID  `json:"brand_id" validate:"required"`
-	CategoryID  *uuid.UUID `json:"category_id"`
-	BranchID    *uuid.UUID `json:"branch_id"`
-	BaseUnitID  *uuid.UUID `json:"base_unit_id"`
-	Stock       *int       `json:"stock"`
-	StockAvailable *int    `json:"stock_available"`
-	StockBlocked   *int    `json:"stock_blocked"`
+	Name           string     `json:"name" validate:"required"`
+	Sku            string     `json:"sku" validate:"required"`
+	Img            *string    `json:"img"`
+	BrandID        uuid.UUID  `json:"brand_id" validate:"required"`
+	CategoryID     *uuid.UUID `json:"category_id"`
+	BranchID       *uuid.UUID `json:"branch_id"`
+	BaseUnitID     *uuid.UUID `json:"base_unit_id"`
+	Stock          *int       `json:"stock"`
+	StockAvailable *int       `json:"stock_available"`
+	StockBlocked   *int       `json:"stock_blocked"`
 }
 
 func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (*Product, error) {
@@ -69,7 +73,7 @@ func (s *Service) GetProductByID(ctx context.Context, id uuid.UUID) (*Product, e
 		FROM products WHERE product_id = $1
 	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get product: %w", err)
@@ -161,7 +165,7 @@ func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreatePro
 		&current.Stock, &current.StockAvailable, &current.StockBlocked,
 	)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get product for update: %w", err)
@@ -237,7 +241,7 @@ func (s *Service) ToggleProductActive(ctx context.Context, id uuid.UUID) (*Produ
 		RETURNING product_id, name, sku, is_active, img, brand_id, category_id, branch_id, base_unit_id, stock, stock_available, stock_blocked
 	`, id).Scan(&p.ProductID, &p.Name, &p.Sku, &p.IsActive, &p.Img, &p.BrandID, &p.CategoryID, &p.BranchID, &p.BaseUnitID, &p.Stock, &p.StockAvailable, &p.StockBlocked)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("toggle product active: %w", err)
@@ -249,7 +253,7 @@ func (s *Service) UpdateProductImage(ctx context.Context, id uuid.UUID, img stri
 	var oldImg *string
 	err := s.pool.QueryRow(ctx, `SELECT img FROM products WHERE product_id = $1`, id).Scan(&oldImg)
 	if err == pgx.ErrNoRows {
-		return "", fmt.Errorf("NOT_FOUND")
+		return "", ErrNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("get product: %w", err)
@@ -273,18 +277,19 @@ func (s *Service) UpdateProductImage(ctx context.Context, id uuid.UUID, img stri
 // Bundle
 
 type Bundle struct {
-	BundleID       uuid.UUID      `json:"bundle_id"`
-	Code           string         `json:"code"`
-	Name           string         `json:"name"`
-	Status         string         `json:"status"`
-	BranchID       *uuid.UUID     `json:"branch_id"`
-	Items          []BundleItem   `json:"items"`
-	Prices         []BundlePrice  `json:"prices"`
-	Img            *string        `json:"img"`
-	CategoryID     *uuid.UUID     `json:"category_id"`
-	Stock          int            `json:"stock"`
-	StockAvailable int            `json:"stock_available"`
-	StockBlocked   int            `json:"stock_blocked"`
+	BundleID           uuid.UUID     `json:"bundle_id"`
+	Code               string        `json:"code"`
+	Name               string        `json:"name"`
+	Status             string        `json:"status"`
+	BranchID           *uuid.UUID    `json:"branch_id"`
+	Items              []BundleItem  `json:"items"`
+	Prices             []BundlePrice `json:"prices"`
+	Img                *string       `json:"img"`
+	CategoryID         *uuid.UUID    `json:"category_id"`
+	Stock              int           `json:"stock"`
+	StockAvailable     int           `json:"stock_available"`
+	StockBlocked       int           `json:"stock_blocked"`
+	BlocksProductStock bool          `json:"blocks_product_stock"`
 }
 
 type BundlePrice struct {
@@ -302,15 +307,17 @@ type BundleItem struct {
 }
 
 type CreateBundleRequest struct {
-	Code             string          `json:"code" validate:"required"`
-	Name             string          `json:"name" validate:"required"`
-	Items            []BundleItemReq `json:"items" validate:"required"`
-	BranchID         *uuid.UUID      `json:"branch_id"`
-	Img              *string         `json:"img"`
-	CategoryID       *uuid.UUID      `json:"category_id"`
-	Stock            *int            `json:"stock"`
-	StockAvailable   *int            `json:"stock_available"`
-	StockBlocked     *int            `json:"stock_blocked"`
+	Code               string          `json:"code" validate:"required"`
+	Name               string          `json:"name" validate:"required"`
+	Items              []BundleItemReq `json:"items" validate:"required"`
+	Prices             []BundlePriceReq `json:"prices"`
+	BranchID           *uuid.UUID      `json:"branch_id"`
+	Img                *string         `json:"img"`
+	CategoryID         *uuid.UUID      `json:"category_id"`
+	Stock              *int            `json:"stock"`
+	StockAvailable     *int            `json:"stock_available"`
+	StockBlocked       *int            `json:"stock_blocked"`
+	BlocksProductStock *bool           `json:"blocks_product_stock"`
 }
 
 type BundleItemReq struct {
@@ -318,21 +325,73 @@ type BundleItemReq struct {
 	Quantity  float64   `json:"quantity" validate:"required,gt=0"`
 }
 
+type BundlePriceReq struct {
+	PriceCategoryID *uuid.UUID `json:"price_category_id"`
+	Amount          float64    `json:"amount" validate:"required"`
+}
+
+func (s *Service) validateProductsExist(ctx context.Context, items []BundleItemReq) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	seen := make(map[uuid.UUID]bool)
+	ids := make([]uuid.UUID, 0, len(items))
+	for _, item := range items {
+		if !seen[item.ProductID] {
+			seen[item.ProductID] = true
+			ids = append(ids, item.ProductID)
+		}
+	}
+
+	rows, err := s.pool.Query(ctx, `SELECT product_id FROM products WHERE product_id = ANY($1)`, ids)
+	if err != nil {
+		return fmt.Errorf("validate products: %w", err)
+	}
+	defer rows.Close()
+
+	existing := make(map[uuid.UUID]bool)
+	for rows.Next() {
+		var pid uuid.UUID
+		if err := rows.Scan(&pid); err != nil {
+			return fmt.Errorf("scan product id: %w", err)
+		}
+		existing[pid] = true
+	}
+
+	var missing []string
+	for _, id := range ids {
+		if !existing[id] {
+			missing = append(missing, id.String())
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("PRODUCT_NOT_FOUND: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
 func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*Bundle, error) {
+	if err := s.validateProductsExist(ctx, req.Items); err != nil {
+		return nil, err
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
+	blocksProductStock := req.BlocksProductStock != nil && *req.BlocksProductStock
+
 	bundle := &Bundle{}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO bundles (bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked)
-		VALUES ($1, $2, $3, 'Active', $4, $5, $6, COALESCE($7, 0), COALESCE($8, 0), COALESCE($9, 0))
-		RETURNING bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked
-	`, uuid.New(), req.Code, req.Name, req.BranchID, req.Img, req.CategoryID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
+		INSERT INTO bundles (bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked, blocks_product_stock)
+		VALUES ($1, $2, $3, 'Active', $4, $5, $6, COALESCE($7, 0), COALESCE($8, $7, 0), COALESCE($9, 0), $10)
+		RETURNING bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked, blocks_product_stock
+	`, uuid.New(), req.Code, req.Name, req.BranchID, req.Img, req.CategoryID, req.Stock, req.StockAvailable, req.StockBlocked, blocksProductStock).Scan(
 		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.BranchID,
-		&bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked,
+		&bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked, &bundle.BlocksProductStock,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create bundle: %w", err)
@@ -355,6 +414,37 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 
 	bundle.Prices = []BundlePrice{}
 
+	for _, p := range req.Prices {
+		if p.Amount <= 0 {
+			continue
+		}
+		var bp BundlePrice
+		err = tx.QueryRow(ctx, `
+			INSERT INTO bundle_prices (id, bundle_id, price_category_id, amount)
+			VALUES ($1, $2, $3, $4)
+			RETURNING id, bundle_id, price_category_id, amount
+		`, uuid.New(), bundle.BundleID, p.PriceCategoryID, p.Amount).Scan(
+			&bp.ID, &bp.BundleID, &bp.PriceCategoryID, &bp.Amount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create bundle price: %w", err)
+		}
+		bundle.Prices = append(bundle.Prices, bp)
+	}
+
+	if blocksProductStock && bundle.Stock > 0 {
+		maxStock, err := MaxBundleStock(ctx, tx, toChainItems(bundle.Items))
+		if err != nil {
+			return nil, err
+		}
+		if bundle.Stock > maxStock {
+			return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %d, requested %d", maxStock, bundle.Stock)
+		}
+		if err := BlockProductStock(ctx, tx, toChainItems(bundle.Items), bundle.Stock); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
 	}
@@ -365,14 +455,14 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 func (s *Service) GetBundleByID(ctx context.Context, id uuid.UUID) (*Bundle, error) {
 	bundle := &Bundle{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked
+		SELECT bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked, blocks_product_stock
 		FROM bundles WHERE bundle_id = $1
 	`, id).Scan(
 		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.BranchID,
-		&bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked,
+		&bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked, &bundle.BlocksProductStock,
 	)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get bundle: %w", err)
@@ -418,7 +508,7 @@ func (s *Service) ListBundles(ctx context.Context, filter ...BundleFilter) ([]Bu
 	}
 
 	countQuery := `SELECT COUNT(*) FROM bundles WHERE 1=1`
-	dataQuery := `SELECT bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked FROM bundles WHERE 1=1`
+	dataQuery := `SELECT bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked, blocks_product_stock FROM bundles WHERE 1=1`
 	var args []interface{}
 	argIdx := 1
 
@@ -477,35 +567,121 @@ func (s *Service) ListBundles(ctx context.Context, filter ...BundleFilter) ([]Bu
 	for rows.Next() {
 		var b Bundle
 		if err := rows.Scan(&b.BundleID, &b.Code, &b.Name, &b.Status, &b.BranchID,
-			&b.Img, &b.CategoryID, &b.Stock, &b.StockAvailable, &b.StockBlocked); err != nil {
+			&b.Img, &b.CategoryID, &b.Stock, &b.StockAvailable, &b.StockBlocked, &b.BlocksProductStock); err != nil {
 			return nil, 0, fmt.Errorf("scan bundle: %w", err)
 		}
 		bundles = append(bundles, b)
 	}
+
+	if len(bundles) > 0 {
+		ids := make([]uuid.UUID, len(bundles))
+		for i, b := range bundles {
+			ids[i] = b.BundleID
+		}
+
+		itemRows, err := s.pool.Query(ctx, `SELECT id, bundle_id, product_id, quantity FROM bundle_items WHERE bundle_id = ANY($1)`, ids)
+		if err != nil {
+			return nil, 0, fmt.Errorf("list bundle items: %w", err)
+		}
+		defer itemRows.Close()
+
+		itemMap := make(map[uuid.UUID][]BundleItem)
+		for itemRows.Next() {
+			var bi BundleItem
+			if err := itemRows.Scan(&bi.ID, &bi.BundleID, &bi.ProductID, &bi.Quantity); err != nil {
+				return nil, 0, fmt.Errorf("scan bundle item: %w", err)
+			}
+			itemMap[bi.BundleID] = append(itemMap[bi.BundleID], bi)
+		}
+
+		priceRows, err := s.pool.Query(ctx, `SELECT id, bundle_id, price_category_id, amount FROM bundle_prices WHERE bundle_id = ANY($1)`, ids)
+		if err != nil {
+			return nil, 0, fmt.Errorf("list bundle prices: %w", err)
+		}
+		defer priceRows.Close()
+
+		priceMap := make(map[uuid.UUID][]BundlePrice)
+		for priceRows.Next() {
+			var bp BundlePrice
+			if err := priceRows.Scan(&bp.ID, &bp.BundleID, &bp.PriceCategoryID, &bp.Amount); err != nil {
+				return nil, 0, fmt.Errorf("scan bundle price: %w", err)
+			}
+			priceMap[bp.BundleID] = append(priceMap[bp.BundleID], bp)
+		}
+
+		for i, b := range bundles {
+			bundles[i].Items = itemMap[b.BundleID]
+			bundles[i].Prices = priceMap[b.BundleID]
+		}
+	}
+
 	return bundles, totalCount, nil
 }
 
 func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBundleRequest) (*Bundle, error) {
+	if err := s.validateProductsExist(ctx, req.Items); err != nil {
+		return nil, err
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
+	// 1. Load current bundle + items FOR UPDATE
+	oldBundle := &Bundle{}
+	err = tx.QueryRow(ctx, `
+		SELECT bundle_id, stock, blocks_product_stock
+		FROM bundles WHERE bundle_id = $1 FOR UPDATE
+	`, id).Scan(&oldBundle.BundleID, &oldBundle.Stock, &oldBundle.BlocksProductStock)
+	if err == pgx.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get bundle for update: %w", err)
+	}
+
+	oldItems := make([]BundleItem, 0)
+	oldItemRows, err := tx.Query(ctx, `SELECT id, bundle_id, product_id, quantity FROM bundle_items WHERE bundle_id = $1`, id)
+	if err != nil {
+		return nil, fmt.Errorf("get old items: %w", err)
+	}
+	for oldItemRows.Next() {
+		var bi BundleItem
+		if err := oldItemRows.Scan(&bi.ID, &bi.BundleID, &bi.ProductID, &bi.Quantity); err != nil {
+			oldItemRows.Close()
+			return nil, fmt.Errorf("scan old item: %w", err)
+		}
+		oldItems = append(oldItems, bi)
+	}
+	oldItemRows.Close()
+
+	// 2. Release old blocked stock if old.blocks_product_stock was enabled
+	if oldBundle.BlocksProductStock && oldBundle.Stock > 0 {
+		if err := ReleaseProductStock(ctx, tx, toChainItems(oldItems), oldBundle.Stock); err != nil {
+			return nil, err
+		}
+	}
+
+	// 3. Update bundle row
+	blocksProductStock := req.BlocksProductStock != nil && *req.BlocksProductStock
 	bundle := &Bundle{}
 	err = tx.QueryRow(ctx, `
-		UPDATE bundles SET code = $2, name = $3, branch_id = $4, img = $5, category_id = $6, stock = $7, stock_available = $8, stock_blocked = $9
+		UPDATE bundles SET code = $2, name = $3, branch_id = $4, img = $5, category_id = $6,
+			stock = COALESCE($7, 0), stock_available = COALESCE($8, $7, 0), stock_blocked = COALESCE($9, 0), blocks_product_stock = $10
 		WHERE bundle_id = $1
-		RETURNING bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked
-	`, id, req.Code, req.Name, req.BranchID, req.Img, req.CategoryID, req.Stock, req.StockAvailable, req.StockBlocked).Scan(
+		RETURNING bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked, blocks_product_stock
+	`, id, req.Code, req.Name, req.BranchID, req.Img, req.CategoryID,
+		req.Stock, req.StockAvailable, req.StockBlocked, blocksProductStock).Scan(
 		&bundle.BundleID, &bundle.Code, &bundle.Name, &bundle.Status, &bundle.BranchID,
-		&bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked,
+		&bundle.Img, &bundle.CategoryID, &bundle.Stock, &bundle.StockAvailable, &bundle.StockBlocked, &bundle.BlocksProductStock,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("update bundle: %w", err)
 	}
 
-	// Replace items
+	// 4. Replace items
 	tx.Exec(ctx, `DELETE FROM bundle_items WHERE bundle_id = $1`, id)
 
 	for _, item := range req.Items {
@@ -523,7 +699,45 @@ func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBund
 		bundle.Items = append(bundle.Items, bi)
 	}
 
+	// 5. Block new stock if new.blocks_product_stock is enabled
+	if blocksProductStock && bundle.Stock > 0 {
+		maxStock, err := MaxBundleStock(ctx, tx, toChainItems(bundle.Items))
+		if err != nil {
+			return nil, err
+		}
+		if bundle.Stock > maxStock {
+			return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %d, requested %d", maxStock, bundle.Stock)
+		}
+		if err := BlockProductStock(ctx, tx, toChainItems(bundle.Items), bundle.Stock); err != nil {
+			return nil, err
+		}
+	}
+
 	bundle.Prices = []BundlePrice{}
+
+	// 6. Replace prices
+	_, err = tx.Exec(ctx, `DELETE FROM bundle_prices WHERE bundle_id = $1`, id)
+	if err != nil {
+		return nil, fmt.Errorf("delete old prices: %w", err)
+	}
+
+	for _, p := range req.Prices {
+		if p.Amount <= 0 {
+			continue
+		}
+		var bp BundlePrice
+		err = tx.QueryRow(ctx, `
+			INSERT INTO bundle_prices (id, bundle_id, price_category_id, amount)
+			VALUES ($1, $2, $3, $4)
+			RETURNING id, bundle_id, price_category_id, amount
+		`, uuid.New(), bundle.BundleID, p.PriceCategoryID, p.Amount).Scan(
+			&bp.ID, &bp.BundleID, &bp.PriceCategoryID, &bp.Amount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("create bundle price: %w", err)
+		}
+		bundle.Prices = append(bundle.Prices, bp)
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, fmt.Errorf("commit: %w", err)
@@ -533,18 +747,58 @@ func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBund
 }
 
 func (s *Service) DeleteBundle(ctx context.Context, id uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM bundles WHERE bundle_id = $1`, id)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var stock int
+	var blocksProductStock bool
+	err = tx.QueryRow(ctx, `
+		SELECT stock, blocks_product_stock FROM bundles WHERE bundle_id = $1 FOR UPDATE
+	`, id).Scan(&stock, &blocksProductStock)
+	if err == pgx.ErrNoRows {
+		return ErrNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("get bundle: %w", err)
+	}
+
+	if blocksProductStock && stock > 0 {
+		items := make([]BundleItem, 0)
+		rows, err := tx.Query(ctx, `SELECT id, bundle_id, product_id, quantity FROM bundle_items WHERE bundle_id = $1`, id)
+		if err != nil {
+			return fmt.Errorf("get items: %w", err)
+		}
+		for rows.Next() {
+			var bi BundleItem
+			if err := rows.Scan(&bi.ID, &bi.BundleID, &bi.ProductID, &bi.Quantity); err != nil {
+				rows.Close()
+				return fmt.Errorf("scan item: %w", err)
+			}
+			items = append(items, bi)
+		}
+		rows.Close()
+
+		if err := ReleaseProductStock(ctx, tx, toChainItems(items), stock); err != nil {
+			return err
+		}
+	}
+
+	_, err = tx.Exec(ctx, `DELETE FROM bundles WHERE bundle_id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("delete bundle: %w", err)
 	}
-	return nil
+
+	return tx.Commit(ctx)
 }
 
 func (s *Service) UpdateBundleImage(ctx context.Context, id uuid.UUID, img string) (string, error) {
 	var oldImg *string
 	err := s.pool.QueryRow(ctx, `SELECT img FROM bundles WHERE bundle_id = $1`, id).Scan(&oldImg)
 	if err == pgx.ErrNoRows {
-		return "", fmt.Errorf("NOT_FOUND")
+		return "", ErrNotFound
 	}
 	if err != nil {
 		return "", fmt.Errorf("get bundle: %w", err)
@@ -570,13 +824,13 @@ func (s *Service) ToggleBundleActive(ctx context.Context, id uuid.UUID) (*Bundle
 	err := s.pool.QueryRow(ctx, `
 		UPDATE bundles SET status = CASE WHEN status = 'Active' THEN 'Inactive' ELSE 'Active' END
 		WHERE bundle_id = $1
-		RETURNING bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked
+		RETURNING bundle_id, code, name, status, branch_id, img, category_id, stock, stock_available, stock_blocked, blocks_product_stock
 	`, id).Scan(
 		&b.BundleID, &b.Code, &b.Name, &b.Status, &b.BranchID,
-		&b.Img, &b.CategoryID, &b.Stock, &b.StockAvailable, &b.StockBlocked,
+		&b.Img, &b.CategoryID, &b.Stock, &b.StockAvailable, &b.StockBlocked, &b.BlocksProductStock,
 	)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("toggle bundle active: %w", err)
@@ -584,10 +838,12 @@ func (s *Service) ToggleBundleActive(ctx context.Context, id uuid.UUID) (*Bundle
 	return b, nil
 }
 
+// Bundle chain helpers — moved to chain.go
+// toChainItems converts []BundleItem to []ChainItem for use with the shared helpers.
 // Bundle Price
 
 type CreateBundlePriceRequest struct {
-	BundleID        uuid.UUID  `json:"bundle_id" validate:"required"`
+	BundleID        uuid.UUID  `json:"bundle_id"`
 	PriceCategoryID *uuid.UUID `json:"price_category_id"`
 	Amount          float64    `json:"amount" validate:"required"`
 }
@@ -628,13 +884,13 @@ func (s *Service) CreateBundlePrice(ctx context.Context, req CreateBundlePriceRe
 	return bp, nil
 }
 
-func (s *Service) UpdateBundlePrice(ctx context.Context, id uuid.UUID, req CreateBundlePriceRequest) (*BundlePrice, error) {
+func (s *Service) UpdateBundlePrice(ctx context.Context, priceID uuid.UUID, bundleID uuid.UUID, req CreateBundlePriceRequest) (*BundlePrice, error) {
 	bp := &BundlePrice{}
 	err := s.pool.QueryRow(ctx, `
 		UPDATE bundle_prices SET price_category_id = $2, amount = $3
-		WHERE id = $1
+		WHERE id = $1 AND bundle_id = $4
 		RETURNING id, bundle_id, price_category_id, amount
-	`, id, req.PriceCategoryID, req.Amount).Scan(
+	`, priceID, req.PriceCategoryID, req.Amount, bundleID).Scan(
 		&bp.ID, &bp.BundleID, &bp.PriceCategoryID, &bp.Amount,
 	)
 	if err != nil {
@@ -643,10 +899,13 @@ func (s *Service) UpdateBundlePrice(ctx context.Context, id uuid.UUID, req Creat
 	return bp, nil
 }
 
-func (s *Service) DeleteBundlePrice(ctx context.Context, id uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `DELETE FROM bundle_prices WHERE id = $1`, id)
+func (s *Service) DeleteBundlePrice(ctx context.Context, priceID uuid.UUID, bundleID uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM bundle_prices WHERE id = $1 AND bundle_id = $2`, priceID, bundleID)
 	if err != nil {
 		return fmt.Errorf("delete bundle price: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
 	}
 	return nil
 }
@@ -722,7 +981,7 @@ func (s *Service) GetConversionFactorByID(ctx context.Context, id uuid.UUID) (*C
 		FROM conversion_factors WHERE id = $1
 	`, id).Scan(&cf.ID, &cf.ProductID, &cf.FromUnitID, &cf.ToUnitID, &cf.Amount, &cf.Main)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get conversion factor: %w", err)
@@ -841,7 +1100,7 @@ func (s *Service) GetMeasurementUnitClassificationByID(ctx context.Context, id u
 		SELECT id, name, code FROM measurement_unit_classifications WHERE id = $1
 	`, id).Scan(&muc.ID, &muc.Name, &muc.Code)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get measurement unit classification: %w", err)
@@ -891,10 +1150,10 @@ func (s *Service) DeleteMeasurementUnitClassification(ctx context.Context, id uu
 // Measurement Unit
 
 type MeasurementUnit struct {
-	ID             uuid.UUID  `json:"id"`
-	Name           string     `json:"name"`
-	Code           string     `json:"code"`
-	Symbol         *string    `json:"symbol"`
+	ID               uuid.UUID  `json:"id"`
+	Name             string     `json:"name"`
+	Code             string     `json:"code"`
+	Symbol           *string    `json:"symbol"`
 	ClassificationID *uuid.UUID `json:"classification_id"`
 }
 
@@ -924,7 +1183,7 @@ func (s *Service) GetMeasurementUnitByID(ctx context.Context, id uuid.UUID) (*Me
 		SELECT id, name, code, symbol, classification_id FROM measurement_units WHERE id = $1
 	`, id).Scan(&mu.ID, &mu.Name, &mu.Code, &mu.Symbol, &mu.ClassificationID)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get measurement unit: %w", err)
@@ -1003,7 +1262,7 @@ func (s *Service) GetPriceCategoryByID(ctx context.Context, id uuid.UUID) (*Pric
 		SELECT id, name, code FROM price_categories WHERE id = $1
 	`, id).Scan(&pc.ID, &pc.Name, &pc.Code)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get price category: %w", err)
@@ -1046,7 +1305,7 @@ func (s *Service) DeletePriceCategory(ctx context.Context, id uuid.UUID) error {
 	var code string
 	err := s.pool.QueryRow(ctx, `SELECT code FROM price_categories WHERE id = $1`, id).Scan(&code)
 	if err == pgx.ErrNoRows {
-		return fmt.Errorf("NOT_FOUND")
+		return ErrNotFound
 	}
 	if err != nil {
 		return fmt.Errorf("get price category: %w", err)
@@ -1101,7 +1360,7 @@ func (s *Service) GetPriceByID(ctx context.Context, id uuid.UUID) (*ProductBranc
 		FROM product_branch_prices WHERE id = $1
 	`, id).Scan(&p.PriceID, &p.ProductID, &p.PriceCategoryID, &p.Amount, &p.Currency)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("NOT_FOUND")
+		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get price: %w", err)

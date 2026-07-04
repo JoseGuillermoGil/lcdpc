@@ -20,6 +20,7 @@ interface BundleGoData {
   stock: number;
   stock_available: number;
   stock_blocked: number;
+  blocks_product_stock: boolean;
   items: BundleItemGoData[] | null;
   prices: BundlePriceGoData[];
   img: string | null;
@@ -86,36 +87,26 @@ export class BundleApiService {
   }
 
   create(req: CreateBundleRequest, file?: File): Observable<Bundle> {
+    const formData = new FormData();
+    formData.append('data', JSON.stringify(req));
     if (file) {
-      const formData = new FormData();
-      formData.append('data', JSON.stringify(req));
       formData.append('file', file);
-      return this.http
-        .post<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/`, formData, {
-          withCredentials: true,
-        })
-        .pipe(map((res) => this.map(res.data)));
     }
     return this.http
-      .post<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/`, req, {
+      .post<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/`, formData, {
         withCredentials: true,
       })
       .pipe(map((res) => this.map(res.data)));
   }
 
   update(id: string, req: CreateBundleRequest, file?: File): Observable<Bundle> {
+    const formData = new FormData();
+    formData.append('data', JSON.stringify(req));
     if (file) {
-      const formData = new FormData();
-      formData.append('data', JSON.stringify(req));
       formData.append('file', file);
-      return this.http
-        .put<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/${id}`, formData, {
-          withCredentials: true,
-        })
-        .pipe(map((res) => this.map(res.data)));
     }
     return this.http
-      .put<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/${id}`, req, {
+      .put<JsendEnvelope<BundleGoData>>(`${this.baseUrl}/api/v1/bundles/${id}`, formData, {
         withCredentials: true,
       })
       .pipe(map((res) => this.map(res.data)));
@@ -214,6 +205,7 @@ export class BundleApiService {
       stock: raw.stock,
       stockAvailable: raw.stock_available,
       stockBlocked: raw.stock_blocked,
+      blocksProductStock: raw.blocks_product_stock,
       items: raw.items
         ? raw.items.map((i) => ({
             id: i.id,

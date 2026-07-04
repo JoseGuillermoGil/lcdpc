@@ -29,7 +29,19 @@
             (error)="onImageError($event)"
           />
           <div class="cart-item-info">
-            <span class="cart-item-name">{{ item.name }}</span>
+            <span class="cart-item-name">
+              {{ item.name }}
+              @if (item.itemType === 'bundle') {
+                <p-tag value="Combo" severity="warn" />
+              }
+            </span>
+            @if (item.itemType === 'bundle' && item.items && item.items.length > 0) {
+              <ul class="cart-item-bundle-items">
+                @for (bi of item.items; track $index) {
+                  <li>{{ bi.quantity }} {{ bi.name }}</li>
+                }
+              </ul>
+            }
             <span class="cart-item-stock" [class.stock-warning]="isOverStock(item)">
               Stock disponible: {{ item.stockAvailable }}
             </span>

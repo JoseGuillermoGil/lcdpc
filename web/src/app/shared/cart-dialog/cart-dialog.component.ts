@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, Input, Output, inject, computed, signal } from '@angular/core';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
+import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 import { CartStore, CartItem } from '../../core/stores/cart.store';
@@ -14,7 +15,7 @@ import { LoginDialogComponent } from '../login-dialog/login-dialog.component';
 @Component({
   selector: 'app-cart-dialog',
   standalone: true,
-  imports: [CommonModule, ButtonModule, DialogModule, ToastModule, LoginDialogComponent],
+  imports: [CommonModule, ButtonModule, DialogModule, TagModule, ToastModule, LoginDialogComponent],
   providers: [MessageService],
   templateUrl: './cart-dialog.component.html',
   styleUrl: './cart-dialog.component.scss',
@@ -118,8 +119,8 @@ export class CartDialogComponent {
       client_user_id: user.id,
       notes: '',
       items: this.items().map((item) => ({
-        item_type: 'product',
-        product_id: item.id,
+        item_type: item.itemType,
+        ...(item.itemType === 'bundle' ? { bundle_id: item.id } : { product_id: item.id }),
         quantity: item.quantity,
         unit_price: item.price,
       })),

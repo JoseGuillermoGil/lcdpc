@@ -21,6 +21,8 @@ type ProductCard = {
   featured?: boolean;
   quantity: number;
   stockAvailable: number;
+  itemType: 'product' | 'bundle';
+  items?: { name: string; quantity: number }[];
 };
 
 @Component({

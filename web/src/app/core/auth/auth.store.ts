@@ -123,7 +123,7 @@ export class AuthStore {
     this.expiresAt.set(null);
     localStorage.removeItem(EXPIRES_AT_KEY);
     this.clearExpirationTimer();
-    this.router.navigate(['/login']);
+    this.router.navigate(['/']);
   }
 
   hasPermission(resourceCode: string): boolean {

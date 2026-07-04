@@ -38,6 +38,8 @@ type ProductCard = {
   quantity: number;
   branchId: string | null;
   stockAvailable: number;
+  itemType: 'product' | 'bundle';
+  items?: { name: string; quantity: number }[];
 };
 
 type BranchCard = {
@@ -100,7 +102,7 @@ export class LandingPageComponent implements OnInit {
       const matchesCategory = category === 'all' || product.categoryId === category;
       const matchesTerm =
         term.length === 0 ||
-        [product.name, product.description, product.category, product.badge ?? '']
+        [product.name, product.description, product.category, product.badge ?? '', (product.items ?? []).map((i) => i.name).join(' ')]
           .join(' ')
           .toLowerCase()
           .includes(term);
@@ -144,26 +146,37 @@ export class LandingPageComponent implements OnInit {
       priceCategories: this.priceCategoryApi.list(),
     }).subscribe({
       next: ({ products, bundles, priceCategories }) => {
-        const retailCategory = priceCategories.find((c) => c.code === 'retail');
-        const retailCategoryId = retailCategory?.id ?? null;
+          const retailCategory = priceCategories.find((c) => c.code === 'retail');
+          const retailCategoryId = retailCategory?.id ?? null;
 
-        const bundleCards: ProductCard[] = bundles.items
-          .filter((b) => b.status === 'Published')
-          .map((b) => ({
-            id: b.bundleId,
-            name: b.name,
-            price: '$0.00',
-            priceNumeric: 0,
-            description: `Código: ${b.code}`,
-            imageUrl: this.bundleApi.resolveImageUrl(b.img) ?? NOT_FOUND_IMAGE,
-            alt: b.name,
-            categoryId: b.categoryId ?? '',
-            category: this.categoryStore.getCategoryName(b.categoryId),
-            featured: true,
-            quantity: 1,
-            branchId: b.branchId,
-            stockAvailable: 0,
-          }));
+          const productMap = new Map(products.items.map((p) => [p.productId, p.name]));
+
+          const bundleCards: ProductCard[] = bundles.items
+          .filter((b) => b.status === 'Active')
+          .map((b) => {
+            const retailPrice = b.prices.find((p) => p.priceCategoryId === retailCategoryId);
+            const items = (b.items ?? []).map((bi) => ({
+              name: productMap.get(bi.productId) ?? `Producto #${bi.productId}`,
+              quantity: bi.quantity,
+            }));
+            return {
+              id: b.bundleId,
+              name: b.name,
+              price: retailPrice ? `$${retailPrice.amount.toFixed(2)}` : '$0.00',
+              priceNumeric: retailPrice?.amount ?? 0,
+              description: `Código: ${b.code}`,
+              imageUrl: this.bundleApi.resolveImageUrl(b.img) ?? NOT_FOUND_IMAGE,
+              alt: b.name,
+              categoryId: b.categoryId ?? '',
+              category: this.categoryStore.getCategoryName(b.categoryId),
+              featured: true,
+              quantity: 1,
+              branchId: b.branchId,
+              stockAvailable: b.stockAvailable,
+              itemType: 'bundle' as const,
+              items,
+            };
+          });
 
         const productCards: ProductCard[] = products.items.map((p) => ({
           id: p.productId,
@@ -178,10 +191,13 @@ export class LandingPageComponent implements OnInit {
           quantity: 1,
           branchId: p.branchId,
           stockAvailable: p.stockAvailable,
+          itemType: 'product' as const,
         }));
 
         if (productCards.length === 0 || !retailCategoryId) {
-          this.products.set([...bundleCards, ...productCards]);
+          const all = [...bundleCards, ...productCards];
+          this.syncCartStock(all);
+          this.products.set(all);
           return;
         }
 
@@ -199,9 +215,11 @@ export class LandingPageComponent implements OnInit {
               }
             });
             this.products.set([...bundleCards, ...productCards]);
+            this.syncCartStock([...bundleCards, ...productCards]);
           },
           error: () => {
             this.products.set([...bundleCards, ...productCards]);
+            this.syncCartStock([...bundleCards, ...productCards]);
           },
         });
       },
@@ -209,6 +227,11 @@ export class LandingPageComponent implements OnInit {
         this.products.set([]);
       }
     });
+  }
+
+  private syncCartStock(cards: ProductCard[]): void {
+    const stockMap = new Map(cards.map((c) => [c.id, c.stockAvailable]));
+    this.cartStore.syncStock(stockMap);
   }
 
   protected selectCategory(categoryId: string): void {
@@ -219,7 +242,8 @@ export class LandingPageComponent implements OnInit {
     this.products.update((items) =>
       items.map((p) => {
         if (p.id !== productId) return p;
-        const max = p.stockAvailable > 0 ? p.stockAvailable : Infinity;
+        if (p.stockAvailable <= 0) return p;
+        const max = p.stockAvailable;
         const newQty = Math.min(p.quantity + 1, max);
         return { ...p, quantity: newQty };
       })
@@ -248,6 +272,8 @@ export class LandingPageComponent implements OnInit {
         price: product.priceNumeric,
         branchId: product.branchId,
         stockAvailable: product.stockAvailable,
+        itemType: product.itemType,
+        items: product.items,
       },
       product.quantity
     );

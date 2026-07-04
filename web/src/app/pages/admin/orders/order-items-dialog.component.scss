@@ -172,10 +172,20 @@
   padding-top: 0.75rem;
   margin-top: 0.5rem;
   border-top: 2px solid var(--border);
-  font-size: 1rem;
+  font-size: 0.9rem;
 
   strong {
-    font-size: 1.1rem;
+    font-size: 1rem;
+  }
+}
+
+.items-total-grand {
+  border-top: 3px solid var(--text-strong);
+  font-size: 1rem;
+  padding-top: 0.75rem;
+
+  strong {
+    font-size: 1.15rem;
   }
 }
 

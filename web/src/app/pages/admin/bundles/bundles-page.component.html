@@ -40,7 +40,12 @@
         </td>
         <td>{{ bundle.name }}</td>
         <td><code>{{ bundle.code }}</code></td>
-        <td><p-tag [value]="bundle.status === 'Active' ? 'Activo' : 'Inactivo'" [severity]="statusSeverity(bundle.status)" /></td>
+        <td>
+          <p-tag [value]="bundle.status === 'Active' ? 'Activo' : 'Inactivo'" [severity]="statusSeverity(bundle.status)" />
+          @if (bundle.blocksProductStock) {
+            <p-tag value="Cadena" severity="info" />
+          }
+        </td>
         <td>
           @if (canUpdate()) {
             <p-button icon="pi pi-pencil" [text]="true" [rounded]="true"

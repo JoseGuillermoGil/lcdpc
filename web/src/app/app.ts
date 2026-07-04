@@ -50,6 +50,6 @@ export class App implements OnInit {
   }
 
   private isAuthRoute(url: string): boolean {
-    return url.startsWith('/login') || url.startsWith('/register');
+    return url.startsWith('/register');
   }
 }

@@ -96,9 +96,15 @@
           [text]="true"
           severity="secondary"
           ariaLabel="Iniciar sesión"
-          routerLink="/login"
+          (onClick)="loginOverlay.toggle($event)"
         ></p-button>
       }
+
+      <p-popover #loginOverlay [style]="{ width: '360px', padding: '1.25rem' }" [dismissable]="true" appendTo="body">
+        <app-login-form (loginSuccess)="onLoginSuccess()" (loginError)="onLoginError($event)" />
+      </p-popover>
+
+      <p-toast position="top-right" />
     </div>
   </div>
 </header>

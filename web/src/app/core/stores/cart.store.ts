@@ -10,6 +10,8 @@ export interface CartItem {
   branchId: string | null;
   quantity: number;
   stockAvailable: number;
+  itemType: 'product' | 'bundle';
+  items?: { name: string; quantity: number }[];
 }
 
 function loadCart(): CartItem[] {
@@ -17,7 +19,12 @@ function loadCart(): CartItem[] {
     const raw = localStorage.getItem(CART_KEY);
     if (!raw) return [];
     const items = JSON.parse(raw) as CartItem[];
-    return items.filter((item) => item.stockAvailable != null && item.stockAvailable > 0);
+    return items
+      .filter((item) => item.stockAvailable != null && item.stockAvailable > 0)
+      .map((item) => ({
+        ...item,
+        itemType: item.itemType ?? 'product',
+      }));
   } catch {
     return [];
   }
@@ -137,5 +144,24 @@ export class CartStore {
 
   notifyOrderCreated(): void {
     this._lastOrderCreatedAt.update((v) => v + 1);
+  }
+
+  syncStock(stockMap: Map<string, number>): void {
+    this._items.update((items) => {
+      let changed = false;
+      const next = items
+        .map((item) => {
+          const freshStock = stockMap.get(item.id);
+          if (freshStock == null) return item;
+          if (freshStock === item.stockAvailable) return item;
+          changed = true;
+          if (freshStock <= 0) return null;
+          const capped = Math.min(item.quantity, freshStock);
+          return { ...item, stockAvailable: freshStock, quantity: capped };
+        })
+        .filter(Boolean) as CartItem[];
+      if (changed) saveCart(next);
+      return changed ? next : items;
+    });
   }
 }

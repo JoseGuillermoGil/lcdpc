@@ -13,9 +13,11 @@ import { TooltipModule } from 'primeng/tooltip';
 import { MessageService } from 'primeng/api';
 import { OrderApiService } from '../../../core/services/order-api.service';
 import { ProductApiService } from '../../../core/services/product-api.service';
+import { BundleApiService } from '../../../core/services/bundle-api.service';
 import { PriceApiService } from '../../../core/services/price-api.service';
 import { PriceCategoryApiService } from '../../../core/services/price-category-api.service';
 import { Product } from '../../../core/models/product.model';
+import { Bundle } from '../../../core/models/bundle.model';
 import { PriceCategory } from '../../../core/models/price-category.model';
 import { ProductBranchPrice } from '../../../core/models/price.model';
 import {
@@ -34,7 +36,9 @@ interface PriceOption {
 
 interface EditableOrderItem {
   id?: string;
-  productId: string;
+  itemType: 'product' | 'bundle';
+  productId: string | null;
+  bundleId: string | null;
   quantity: number;
   originalQuantity: number;
   unitPrice: number;
@@ -68,12 +72,14 @@ export class OrderItemsDialogComponent implements OnChanges {
 
   private readonly orderApi = inject(OrderApiService);
   private readonly productApi = inject(ProductApiService);
+  private readonly bundleApi = inject(BundleApiService);
   private readonly priceApi = inject(PriceApiService);
   private readonly priceCategoryApi = inject(PriceCategoryApiService);
   private readonly messageService = inject(MessageService);
 
   protected readonly saving = signal(false);
   protected readonly products = signal<Product[]>([]);
+  protected readonly bundles = signal<Bundle[]>([]);
   protected readonly priceCategories = signal<PriceCategory[]>([]);
   protected items: EditableOrderItem[] = [];
   protected notes = '';
@@ -87,6 +93,22 @@ export class OrderItemsDialogComponent implements OnChanges {
     return this.items.filter((i) => !i.isRemoved);
   }
 
+  protected get visibleProductItems(): EditableOrderItem[] {
+    return this.visibleItems.filter((i) => i.itemType === 'product');
+  }
+
+  protected get visibleBundleItems(): EditableOrderItem[] {
+    return this.visibleItems.filter((i) => i.itemType === 'bundle');
+  }
+
+  protected get publishedBundles(): Bundle[] {
+    const activeIds = new Set(this.visibleBundleItems.map((i) => i.bundleId).filter(Boolean));
+    const published = this.bundles().filter((b) => b.status === 'Published');
+    const existing = this.bundles().filter((b) => activeIds.has(b.bundleId));
+    const merged = new Map([...published, ...existing].map((b) => [b.bundleId, b]));
+    return [...merged.values()];
+  }
+
   protected get total(): number {
     return this.visibleItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
   }
@@ -95,32 +117,35 @@ export class OrderItemsDialogComponent implements OnChanges {
     return this.visibleItems.reduce((sum, item) => sum + item.quantity, 0);
   }
 
-  protected get duplicateProductIds(): Set<string> {
-    const seen = new Set<string>();
-    const dupes = new Set<string>();
-    for (const item of this.visibleItems) {
-      if (item.productId && seen.has(item.productId)) {
-        dupes.add(item.productId);
-      }
-      seen.add(item.productId);
-    }
-    return dupes;
+  protected get productTotal(): number {
+    return this.visibleProductItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
   }
 
-  protected get hasDuplicates(): boolean {
-    return this.duplicateProductIds.size > 0;
+  protected get productTotalItems(): number {
+    return this.visibleProductItems.reduce((sum, item) => sum + item.quantity, 0);
+  }
+
+  protected get bundleTotal(): number {
+    return this.visibleBundleItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+  }
+
+  protected get bundleTotalItems(): number {
+    return this.visibleBundleItems.reduce((sum, item) => sum + item.quantity, 0);
   }
 
   protected get hasStockIssues(): boolean {
-    return this.visibleItems.some((item) => {
-      if (!item.productId) return false;
-      const product = this.products().find((p) => p.productId === item.productId);
-      if (!product) return false;
-      const additional = item.quantity - item.originalQuantity;
-      const available = product.stock - product.stockBlocked;
-      const effectiveBlocked = product.stockBlocked - item.originalQuantity + item.quantity;
-      return effectiveBlocked > product.stock || additional > available;
-    });
+    return this.visibleItems.some((item) => this.checkStockIssue(item));
+  }
+
+  protected get hasDuplicates(): boolean {
+    const seen = new Set<string>();
+    for (const item of this.visibleItems) {
+      const key = item.itemType === 'bundle' ? `bundle:${item.bundleId}` : `product:${item.productId}`;
+      if (key === 'product:null' || key === 'bundle:null') continue;
+      if (seen.has(key)) return true;
+      seen.add(key);
+    }
+    return false;
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -133,16 +158,37 @@ export class OrderItemsDialogComponent implements OnChanges {
         next: (res) => this.products.set(res.items.filter((p) => p.isActive)),
       });
 
+      this.bundleApi.list({ limit: 100 }).subscribe({
+        next: (res) => {
+          const loaded = new Map(res.items.map((b) => [b.bundleId, b]));
+          this.bundles.set(res.items);
+
+          const bundleIds = (this.order?.items ?? [])
+            .filter((i) => i.itemType === 'bundle' && i.bundleId && !loaded.has(i.bundleId))
+            .map((i) => i.bundleId!);
+
+          for (const bundleId of bundleIds) {
+            this.bundleApi.getById(bundleId).subscribe({
+              next: (bundle) => {
+                this.bundles.update((list) => [...list, bundle]);
+              },
+            });
+          }
+        },
+      });
+
       this.priceCategoryApi.list().subscribe({
         next: (cats) => this.priceCategories.set(cats),
       });
 
       if (this.order.items && this.order.items.length > 0) {
         for (const item of this.order.items) {
-          const productId = item.productId ?? '';
+          const itemType = (item.itemType === 'bundle' ? 'bundle' : 'product') as 'product' | 'bundle';
           const editable: EditableOrderItem = {
             id: item.id,
-            productId,
+            itemType,
+            productId: item.productId ?? null,
+            bundleId: item.bundleId ?? null,
             quantity: item.quantity,
             originalQuantity: item.quantity,
             unitPrice: item.unitPrice,
@@ -151,8 +197,8 @@ export class OrderItemsDialogComponent implements OnChanges {
             selectedPriceId: null,
           };
           this.items.push(editable);
-          if (productId) {
-            this.loadPricesForItem(this.items.length - 1, productId);
+          if (itemType === 'product' && editable.productId) {
+            this.loadPricesForItem(this.items.length - 1, editable.productId);
           }
         }
       }
@@ -192,9 +238,11 @@ export class OrderItemsDialogComponent implements OnChanges {
     });
   }
 
-  protected addItem(): void {
+  protected addProductItem(): void {
     this.items.push({
-      productId: '',
+      itemType: 'product',
+      productId: null,
+      bundleId: null,
       quantity: 1,
       originalQuantity: 0,
       unitPrice: 0,
@@ -205,9 +253,24 @@ export class OrderItemsDialogComponent implements OnChanges {
     });
   }
 
-  protected removeItem(index: number): void {
-    const item = this.visibleItems[index];
+  protected addBundleItem(): void {
+    this.items.push({
+      itemType: 'bundle',
+      productId: null,
+      bundleId: null,
+      quantity: 1,
+      originalQuantity: 0,
+      unitPrice: 0,
+      subtotal: 0,
+      priceOptions: [],
+      selectedPriceId: null,
+      isNew: true,
+    });
+  }
+
+  protected removeItem(item: EditableOrderItem): void {
     const realIndex = this.items.indexOf(item);
+    if (realIndex === -1) return;
     if (item.id) {
       this.items[realIndex].isRemoved = true;
     } else {
@@ -215,35 +278,48 @@ export class OrderItemsDialogComponent implements OnChanges {
     }
   }
 
-  protected onProductSelect(index: number): void {
-    const item = this.visibleItems[index];
+  protected onProductSelect(item: EditableOrderItem): void {
     const realIndex = this.items.indexOf(item);
     if (!item.productId) return;
 
+    this.items[realIndex].itemType = 'product';
+    this.items[realIndex].bundleId = null;
     this.items[realIndex].unitPrice = 0;
     this.items[realIndex].priceOptions = [];
     this.items[realIndex].selectedPriceId = null;
     this.loadPricesForItem(realIndex, item.productId, true);
   }
 
-  protected isDuplicateItem(visibleIndex: number): boolean {
-    const item = this.visibleItems[visibleIndex];
-    return !!item.productId && this.duplicateProductIds.has(item.productId);
+  protected onBundleSelect(item: EditableOrderItem): void {
+    const realIndex = this.items.indexOf(item);
+    if (!item.bundleId) return;
+
+    this.items[realIndex].itemType = 'bundle';
+    this.items[realIndex].productId = null;
+    this.items[realIndex].priceOptions = [];
+    this.items[realIndex].selectedPriceId = null;
+    const bundle = this.bundles().find((b) => b.bundleId === item.bundleId);
+    if (bundle) {
+      this.items[realIndex].unitPrice = bundle.prices?.[0]?.amount ?? 0;
+    }
   }
 
-  protected isOverStock(visibleIndex: number): boolean {
-    const item = this.visibleItems[visibleIndex];
-    if (!item.productId) return false;
-    const product = this.products().find((p) => p.productId === item.productId);
-    if (!product) return false;
-    const additional = item.quantity - item.originalQuantity;
-    const available = product.stock - product.stockBlocked;
-    const effectiveBlocked = product.stockBlocked - item.originalQuantity + item.quantity;
-    return effectiveBlocked > product.stock || additional > available;
+  protected isDuplicateItem(item: EditableOrderItem): boolean {
+    const key = item.itemType === 'bundle' ? `bundle:${item.bundleId}` : `product:${item.productId}`;
+    if (key === 'product:null' || key === 'bundle:null') return false;
+    let count = 0;
+    for (const i of this.visibleItems) {
+      const k = i.itemType === 'bundle' ? `bundle:${i.bundleId}` : `product:${i.productId}`;
+      if (k === key) count++;
+    }
+    return count > 1;
   }
 
-  protected onPriceOptionSelect(visibleIndex: number, id: string): void {
-    const item = this.visibleItems[visibleIndex];
+  protected isOverStock(item: EditableOrderItem): boolean {
+    return this.checkStockIssue(item);
+  }
+
+  protected onPriceOptionSelect(item: EditableOrderItem, id: string): void {
     const realIndex = this.items.indexOf(item);
     if (realIndex >= 0) {
       this.items[realIndex].selectedPriceId = id;
@@ -254,8 +330,21 @@ export class OrderItemsDialogComponent implements OnChanges {
     }
   }
 
-  protected getItemStockInfo(visibleIndex: number): string {
-    const item = this.visibleItems[visibleIndex];
+  protected getItemStockInfo(item: EditableOrderItem): string {
+    if (item.itemType === 'bundle') {
+      if (!item.bundleId) return '';
+      const bundle = this.bundles().find((b) => b.bundleId === item.bundleId);
+      if (!bundle) return '';
+      const additional = item.quantity - item.originalQuantity;
+      const available = bundle.stock - bundle.stockBlocked;
+      if (additional > 0) {
+        return `Disponible: ${available} (se tomara ${additional} adicionales)`;
+      }
+      if (additional < 0) {
+        return `Disponible: ${available} (libera ${-additional})`;
+      }
+      return `Disponible: ${available}`;
+    }
     if (!item.productId) return '';
     const product = this.products().find((p) => p.productId === item.productId);
     if (!product) return '';
@@ -270,8 +359,12 @@ export class OrderItemsDialogComponent implements OnChanges {
     return `Disponible: ${available}`;
   }
 
-  protected getProductName(productId: string): string {
-    return this.products().find((p) => p.productId === productId)?.name ?? productId.slice(0, 8);
+  protected getItemName(item: EditableOrderItem): string {
+    if (item.itemType === 'bundle') {
+      const bundle = this.bundles().find((b) => b.bundleId === item.bundleId);
+      return bundle?.name ?? item.bundleId?.slice(0, 8) ?? '';
+    }
+    return this.products().find((p) => p.productId === item.productId)?.name ?? item.productId?.slice(0, 8) ?? '';
   }
 
   protected orderStatusLabel(status: string): string {
@@ -288,7 +381,7 @@ export class OrderItemsDialogComponent implements OnChanges {
 
     const activeItems = this.visibleItems;
     if (activeItems.length === 0) return;
-    if (activeItems.some((i) => !i.productId || i.quantity <= 0)) return;
+    if (activeItems.some((i) => (i.itemType === 'bundle' ? !i.bundleId : !i.productId) || i.quantity <= 0)) return;
     if (this.hasDuplicates) return;
     if (this.hasStockIssues) return;
 
@@ -297,8 +390,9 @@ export class OrderItemsDialogComponent implements OnChanges {
     const req: UpdateOrderRequest = {
       notes: this.notes,
       items: activeItems.map((i) => ({
-        item_type: 'product',
-        product_id: i.productId,
+        item_type: i.itemType,
+        product_id: i.productId ?? undefined,
+        bundle_id: i.bundleId ?? undefined,
         quantity: i.quantity,
         unit_price: i.unitPrice,
       })),
@@ -325,5 +419,24 @@ export class OrderItemsDialogComponent implements OnChanges {
 
   protected close(): void {
     this.visibleChange.emit(false);
+  }
+
+  private checkStockIssue(item: EditableOrderItem): boolean {
+    if (item.itemType === 'bundle') {
+      if (!item.bundleId) return false;
+      const bundle = this.bundles().find((b) => b.bundleId === item.bundleId);
+      if (!bundle) return false;
+      const additional = item.quantity - item.originalQuantity;
+      const available = bundle.stock - bundle.stockBlocked;
+      const effectiveBlocked = bundle.stockBlocked - item.originalQuantity + item.quantity;
+      return effectiveBlocked > bundle.stock || additional > available;
+    }
+    if (!item.productId) return false;
+    const product = this.products().find((p) => p.productId === item.productId);
+    if (!product) return false;
+    const additional = item.quantity - item.originalQuantity;
+    const available = product.stock - product.stockBlocked;
+    const effectiveBlocked = product.stockBlocked - item.originalQuantity + item.quantity;
+    return effectiveBlocked > product.stock || additional > available;
   }
 }

@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/gif"
@@ -31,12 +32,12 @@ const (
 )
 
 var allowedMimeTypes = map[string]string{
-	"image/jpeg":                ".jpg",
-	"image/png":                 ".png",
-	"image/webp":                ".webp",
-	"image/gif":                 ".gif",
-	"image/x-icon":              ".ico",
-	"image/vnd.microsoft.icon":  ".ico",
+	"image/jpeg":               ".jpg",
+	"image/png":                ".png",
+	"image/webp":               ".webp",
+	"image/gif":                ".gif",
+	"image/x-icon":             ".ico",
+	"image/vnd.microsoft.icon": ".ico",
 }
 
 // Product Handler
@@ -212,7 +213,7 @@ func (h *ProductHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.ToggleProductActive(r.Context(), id)
 	if err != nil {
-		if err.Error() == "NOT_FOUND" {
+		if errors.Is(err, pricing.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "product not found")
 			return
 		}
@@ -448,7 +449,7 @@ func (h *BundleHandler) ToggleActive(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.ToggleBundleActive(r.Context(), id)
 	if err != nil {
-		if err.Error() == "NOT_FOUND" {
+		if errors.Is(err, pricing.ErrNotFound) {
 			response.Error(w, http.StatusNotFound, "bundle not found")
 			return
 		}
@@ -502,15 +503,15 @@ func (h *BundleHandler) CreatePrice(w http.ResponseWriter, r *http.Request) {
 
 func (h *BundleHandler) UpdatePrice(w http.ResponseWriter, r *http.Request) {
 	idStr := chiURLParam(r, "id")
+	bundleID, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
 	priceIDStr := chiURLParam(r, "priceId")
 	priceID, err := uuid.Parse(priceIDStr)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, "invalid price id")
-		return
-	}
-	_, err = uuid.Parse(idStr)
-	if err != nil {
-		response.Error(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 
@@ -520,7 +521,7 @@ func (h *BundleHandler) UpdatePrice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.UpdateBundlePrice(r.Context(), priceID, req)
+	result, err := h.svc.UpdateBundlePrice(r.Context(), priceID, bundleID, req)
 	if err != nil {
 		response.Error(w, http.StatusBadRequest, err.Error())
 		return
@@ -530,6 +531,12 @@ func (h *BundleHandler) UpdatePrice(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BundleHandler) DeletePrice(w http.ResponseWriter, r *http.Request) {
+	idStr := chiURLParam(r, "id")
+	bundleID, err := uuid.Parse(idStr)
+	if err != nil {
+		response.Error(w, http.StatusBadRequest, "invalid id")
+		return
+	}
 	priceIDStr := chiURLParam(r, "priceId")
 	priceID, err := uuid.Parse(priceIDStr)
 	if err != nil {
@@ -537,7 +544,11 @@ func (h *BundleHandler) DeletePrice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.DeleteBundlePrice(r.Context(), priceID); err != nil {
+	if err := h.svc.DeleteBundlePrice(r.Context(), priceID, bundleID); err != nil {
+		if errors.Is(err, pricing.ErrNotFound) {
+			response.Error(w, http.StatusNotFound, "price not found")
+			return
+		}
 		response.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}

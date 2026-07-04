@@ -53,6 +53,7 @@ type Config struct {
 
 	// CORS
 	CORSAllowedOrigins []string
+
 }
 
 func Load() *Config {
@@ -110,6 +111,7 @@ func Load() *Config {
 			"http://localhost:3000",
 			"http://localhost:5173",
 		}),
+
 	}
 }
 

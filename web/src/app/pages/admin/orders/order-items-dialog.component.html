@@ -1,7 +1,7 @@
-<p-dialog [header]="isEditable ? 'Editar Orden' : 'Productos de la Orden'"
+<p-dialog [header]="isEditable ? 'Editar Orden' : 'Detalles de la Orden'"
           [visible]="visible" (visibleChange)="visibleChange.emit($event)"
           [modal]="true" [dismissableMask]="true" [draggable]="false"
-          [style]="{width: 'min(750px, 95vw)'}"
+          [style]="{width: 'min(800px, 95vw)'}"
           [contentStyle]="{'max-height': '70vh', 'overflow': 'auto'}"
           (onHide)="close()">
   @if (order) {
@@ -28,46 +28,43 @@
         </div>
       }
 
+      <!-- ==================== PRODUCTOS ==================== -->
       <div class="items-section">
         <div class="items-header">
           <h3>Productos</h3>
           @if (isEditable) {
             <p-button label="Agregar" icon="pi pi-plus" [text]="true" size="small"
-                      (onClick)="addItem()" />
+                      (onClick)="addProductItem()" />
           }
         </div>
 
-        @if (submitted && visibleItems.length === 0) {
-          <small class="p-error">Debe haber al menos un producto</small>
-        }
-
-        @for (item of visibleItems; track $index; let i = $index) {
-          <div class="item-row" [class.item-duplicate]="isDuplicateItem(i)"
-               [class.item-over-stock]="isOverStock(i)">
+        @for (item of visibleProductItems; track $index) {
+          <div class="item-row" [class.item-duplicate]="isDuplicateItem(item)"
+               [class.item-over-stock]="isOverStock(item)">
             @if (isEditable) {
               <p-select class="product-field" [options]="products()" [(ngModel)]="item.productId"
                         optionLabel="name" optionValue="productId"
-                        placeholder="Producto" (onChange)="onProductSelect(i)" />
+                        placeholder="Producto" (onChange)="onProductSelect(item)" />
               <p-inputNumber class="qty-field" [(ngModel)]="item.quantity" [min]="1"
                              [maxFractionDigits]="2" placeholder="Cant." />
               <p-select class="price-field" [options]="item.priceOptions"
                         [(ngModel)]="item.selectedPriceId" optionLabel="label" optionValue="id"
-                        (onChange)="onPriceOptionSelect(i, $event.value)"
+                        (onChange)="onPriceOptionSelect(item, $event.value)"
                         [disabled]="item.priceOptions.length === 0"
                         placeholder="Precio" appendTo="body" />
               <span class="item-subtotal">{{ (item.quantity * item.unitPrice) | currency:order.currency }}</span>
               <p-button class="remove-btn" icon="pi pi-times" [text]="true" severity="danger"
-                        [rounded]="true" (onClick)="removeItem(i)" />
+                        [rounded]="true" (onClick)="removeItem(item)" />
             } @else {
-              <span class="item-name">{{ getProductName(item.productId) }}</span>
+              <span class="item-name">{{ getItemName(item) }}</span>
               <span class="item-qty">{{ item.quantity }}</span>
               <span class="item-price">{{ item.unitPrice | currency:order.currency }}</span>
               <span class="item-subtotal">{{ item.subtotal | currency:order.currency }}</span>
             }
           </div>
-          @if (isEditable && item.productId && getItemStockInfo(i)) {
-            <div class="item-stock-info" [class.stock-error]="isOverStock(i)">
-              <small>{{ getItemStockInfo(i) }}</small>
+          @if (isEditable && item.productId && getItemStockInfo(item)) {
+            <div class="item-stock-info" [class.stock-error]="isOverStock(item)">
+              <small>{{ getItemStockInfo(item) }}</small>
             </div>
           }
         } @empty {
@@ -80,19 +77,83 @@
           </div>
         }
 
-        @if (visibleItems.length > 0) {
+        @if (visibleProductItems.length > 0) {
           <div class="items-total">
-            <span>Total ({{ totalItems }} items):</span>
-            <strong>{{ total | currency:order.currency }}</strong>
+            <span>Total productos ({{ productTotalItems }}):</span>
+            <strong>{{ productTotal | currency:order.currency }}</strong>
           </div>
         }
       </div>
 
+      <!-- ==================== COMBOS ==================== -->
+      <div class="items-section">
+        <div class="items-header">
+          <h3>Combos</h3>
+          @if (isEditable) {
+            <p-button label="Agregar" icon="pi pi-plus" [text]="true" size="small"
+                      (onClick)="addBundleItem()" />
+          }
+        </div>
+
+        @for (item of visibleBundleItems; track $index) {
+          <div class="item-row" [class.item-duplicate]="isDuplicateItem(item)"
+               [class.item-over-stock]="isOverStock(item)">
+            @if (isEditable) {
+              <p-select class="product-field" [options]="publishedBundles" [(ngModel)]="item.bundleId"
+                        optionLabel="name" optionValue="bundleId"
+                        placeholder="Combo" (onChange)="onBundleSelect(item)" />
+              <p-inputNumber class="qty-field" [(ngModel)]="item.quantity" [min]="1"
+                             [maxFractionDigits]="2" placeholder="Cant." />
+              <span class="price-field item-price">{{ item.unitPrice | currency:order.currency }}</span>
+              <span class="item-subtotal">{{ (item.quantity * item.unitPrice) | currency:order.currency }}</span>
+              <p-button class="remove-btn" icon="pi pi-times" [text]="true" severity="danger"
+                        [rounded]="true" (onClick)="removeItem(item)" />
+            } @else {
+              <span class="item-name">{{ getItemName(item) }}</span>
+              <span class="item-qty">{{ item.quantity }}</span>
+              <span class="item-price">{{ item.unitPrice | currency:order.currency }}</span>
+              <span class="item-subtotal">{{ item.subtotal | currency:order.currency }}</span>
+            }
+          </div>
+          @if (isEditable && item.bundleId && getItemStockInfo(item)) {
+            <div class="item-stock-info" [class.stock-error]="isOverStock(item)">
+              <small>{{ getItemStockInfo(item) }}</small>
+            </div>
+          }
+        } @empty {
+          <div class="empty-items">
+            @if (isEditable) {
+              <p>No hay combos. Agregue items.</p>
+            } @else {
+              <p>La orden no tiene combos.</p>
+            }
+          </div>
+        }
+
+        @if (visibleBundleItems.length > 0) {
+          <div class="items-total">
+            <span>Total combos ({{ bundleTotalItems }}):</span>
+            <strong>{{ bundleTotal | currency:order.currency }}</strong>
+          </div>
+        }
+      </div>
+
+      <!-- ==================== TOTAL GENERAL ==================== -->
+      @if (visibleItems.length > 0) {
+        <div class="items-total items-total-grand">
+          <span>Total general ({{ totalItems }} items):</span>
+          <strong>{{ total | currency:order.currency }}</strong>
+        </div>
+      }
+
+      @if (submitted && visibleItems.length === 0) {
+        <small class="p-error">Debe haber al menos un item</small>
+      }
       @if (submitted && hasDuplicates) {
-        <small class="p-error">Hay productos duplicados</small>
+        <small class="p-error">Hay items duplicados</small>
       }
       @if (submitted && hasStockIssues) {
-        <small class="p-error">Hay productos con stock insuficiente</small>
+        <small class="p-error">Hay items con stock insuficiente</small>
       }
     </div>
   }

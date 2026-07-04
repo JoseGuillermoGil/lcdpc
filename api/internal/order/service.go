@@ -37,6 +37,11 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 				return nil, err
 			}
 		}
+		if item.ItemType == "bundle" {
+			if err := s.validateBundlePrice(ctx, item.BundleID, item.UnitPrice); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	tx, err := s.pool.Begin(ctx)
@@ -100,6 +105,32 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 			}
 		} else {
 			bundleID = &item.BundleID
+			var bundleStock, bundleAvailable, bundleBlocked int
+			var blocksProductStock bool
+			err = tx.QueryRow(ctx, `
+				SELECT stock, stock_available, stock_blocked, blocks_product_stock
+				FROM bundles WHERE bundle_id = $1 FOR UPDATE
+			`, item.BundleID).Scan(&bundleStock, &bundleAvailable, &bundleBlocked, &blocksProductStock)
+			if err != nil {
+				return nil, fmt.Errorf("get bundle stock: %w", err)
+			}
+			if blocksProductStock {
+				qty := int(item.Quantity)
+				if bundleAvailable < qty {
+					return nil, fmt.Errorf("INSUFFICIENT_BUNDLE_STOCK: bundle %s has %d available, requested %d", item.BundleID, bundleAvailable, qty)
+				}
+				if bundleBlocked+qty > bundleStock {
+					return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDED: bundle %s stock=%d blocked=%d requested=%d", item.BundleID, bundleStock, bundleBlocked, qty)
+				}
+				_, err = tx.Exec(ctx, `
+					UPDATE bundles
+					SET stock_available = stock_available - $1, stock_blocked = stock_blocked + $1
+					WHERE bundle_id = $2
+				`, qty, item.BundleID)
+				if err != nil {
+					return nil, fmt.Errorf("update bundle stock: %w", err)
+				}
+			}
 		}
 
 		_, err = tx.Exec(ctx, `
@@ -248,6 +279,11 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 					return nil, err
 				}
 			}
+			if item.ItemType == "bundle" {
+				if err := s.validateBundlePrice(ctx, item.BundleID, item.UnitPrice); err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 
@@ -313,6 +349,32 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 				}
 			} else {
 				bundleID = &item.BundleID
+				var bundleStock, bundleAvailable, bundleBlocked int
+				var blocksProductStock bool
+				err = tx.QueryRow(ctx, `
+					SELECT stock, stock_available, stock_blocked, blocks_product_stock
+					FROM bundles WHERE bundle_id = $1 FOR UPDATE
+				`, item.BundleID).Scan(&bundleStock, &bundleAvailable, &bundleBlocked, &blocksProductStock)
+				if err != nil {
+					return nil, fmt.Errorf("get bundle stock: %w", err)
+				}
+				if blocksProductStock {
+					qty := int(item.Quantity)
+					if bundleAvailable < qty {
+						return nil, fmt.Errorf("INSUFFICIENT_BUNDLE_STOCK: bundle %s has %d available, requested %d", item.BundleID, bundleAvailable, qty)
+					}
+					if bundleBlocked+qty > bundleStock {
+						return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDED: bundle %s stock=%d blocked=%d requested=%d", item.BundleID, bundleStock, bundleBlocked, qty)
+					}
+					_, err = tx.Exec(ctx, `
+						UPDATE bundles
+						SET stock_available = stock_available - $1, stock_blocked = stock_blocked + $1
+						WHERE bundle_id = $2
+					`, qty, item.BundleID)
+					if err != nil {
+						return nil, fmt.Errorf("update bundle stock: %w", err)
+					}
+				}
 			}
 
 			_, err = tx.Exec(ctx, `
@@ -383,6 +445,12 @@ func (s *Service) ChangeStatus(ctx context.Context, id uuid.UUID, req StatusChan
 
 	if isStockReleaseStatus(req.ToStatus) {
 		if err := releaseBlockedStock(ctx, tx, o.Items); err != nil {
+			return nil, err
+		}
+	}
+
+	if req.ToStatus == StatusCompleted {
+		if err := completeOrderStock(ctx, tx, o.Items); err != nil {
 			return nil, err
 		}
 	}
@@ -481,23 +549,176 @@ func (s *Service) validateItemPrice(ctx context.Context, productID uuid.UUID, un
 	return nil
 }
 
+func (s *Service) validateBundlePrice(ctx context.Context, bundleID uuid.UUID, unitPrice float64) error {
+	var count int
+	err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM bundle_prices WHERE bundle_id = $1
+	`, bundleID).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check bundle prices: %w", err)
+	}
+	if count == 0 {
+		return nil
+	}
+
+	var exists bool
+	err = s.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM bundle_prices WHERE bundle_id = $1 AND amount = $2)
+	`, bundleID, unitPrice).Scan(&exists)
+	if err != nil {
+		return fmt.Errorf("validate bundle price: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("PRICE_MISMATCH: bundle %s unit_price %.2f does not match any registered price", bundleID, unitPrice)
+	}
+	return nil
+}
+
 func isStockReleaseStatus(status string) bool {
 	return status == StatusCancelledByCustomer || status == StatusRejectedByValidation
 }
 
 func releaseBlockedStock(ctx context.Context, tx pgx.Tx, items []OrderItem) error {
 	for _, item := range items {
-		if item.ItemType != "product" || item.ProductID == nil {
-			continue
+		switch item.ItemType {
+		case "product":
+			if item.ProductID == nil {
+				continue
+			}
+			qty := int(item.Quantity)
+			_, err := tx.Exec(ctx, `
+				UPDATE products
+				SET stock_available = stock_available + $1, stock_blocked = stock_blocked - $1
+				WHERE product_id = $2
+			`, qty, *item.ProductID)
+			if err != nil {
+				return fmt.Errorf("release stock for product %s: %w", *item.ProductID, err)
+			}
+		case "bundle":
+			if item.BundleID == nil {
+				continue
+			}
+			qty := int(item.Quantity)
+			var blocksProductStock bool
+			err := tx.QueryRow(ctx, `
+				SELECT blocks_product_stock FROM bundles WHERE bundle_id = $1 FOR UPDATE
+			`, *item.BundleID).Scan(&blocksProductStock)
+			if err != nil {
+				continue
+			}
+			if blocksProductStock {
+				_, err = tx.Exec(ctx, `
+					UPDATE bundles
+					SET stock_available = stock_available + $1, stock_blocked = stock_blocked - $1
+					WHERE bundle_id = $2
+				`, qty, *item.BundleID)
+				if err != nil {
+					return fmt.Errorf("release stock for bundle %s: %w", *item.BundleID, err)
+				}
+
+				bundleItems, qErr := tx.Query(ctx, `
+					SELECT product_id, quantity FROM bundle_items WHERE bundle_id = $1
+				`, *item.BundleID)
+				if qErr != nil {
+					return fmt.Errorf("get bundle items for release: %w", qErr)
+				}
+				for bundleItems.Next() {
+					var productID uuid.UUID
+					var itemQty float64
+					if scanErr := bundleItems.Scan(&productID, &itemQty); scanErr != nil {
+						bundleItems.Close()
+						return fmt.Errorf("scan bundle item for release: %w", scanErr)
+					}
+					productQty := int(itemQty) * qty
+					if productQty > 0 {
+						_, updateErr := tx.Exec(ctx, `
+							UPDATE products
+							SET stock_available = stock_available + $1, stock_blocked = stock_blocked - $1
+							WHERE product_id = $2
+						`, productQty, productID)
+						if updateErr != nil {
+							bundleItems.Close()
+							return fmt.Errorf("release product stock for %s: %w", productID, updateErr)
+						}
+					}
+				}
+				bundleItems.Close()
+			}
 		}
-		qty := int(item.Quantity)
-		_, err := tx.Exec(ctx, `
-			UPDATE products
-			SET stock_available = stock_available + $1, stock_blocked = stock_blocked - $1
-			WHERE product_id = $2
-		`, qty, *item.ProductID)
-		if err != nil {
-			return fmt.Errorf("release stock for product %s: %w", *item.ProductID, err)
+	}
+	return nil
+}
+
+func completeOrderStock(ctx context.Context, tx pgx.Tx, items []OrderItem) error {
+	for _, item := range items {
+		switch item.ItemType {
+		case "product":
+			if item.ProductID == nil {
+				continue
+			}
+			qty := int(item.Quantity)
+			// Permanently reduce stock + release blocked
+			_, err := tx.Exec(ctx, `
+				UPDATE products
+				SET stock = stock - $1, stock_blocked = stock_blocked - $1
+				WHERE product_id = $2
+			`, qty, *item.ProductID)
+			if err != nil {
+				return fmt.Errorf("complete stock for product %s: %w", *item.ProductID, err)
+			}
+		case "bundle":
+			if item.BundleID == nil {
+				continue
+			}
+			qty := int(item.Quantity)
+			var blocksProductStock bool
+			var bundleStock int
+			err := tx.QueryRow(ctx, `
+				SELECT blocks_product_stock, stock FROM bundles WHERE bundle_id = $1 FOR UPDATE
+			`, *item.BundleID).Scan(&blocksProductStock, &bundleStock)
+			if err != nil {
+				continue
+			}
+			if blocksProductStock {
+				// Permanently reduce bundle stock + release blocked
+				_, err = tx.Exec(ctx, `
+					UPDATE bundles
+					SET stock = stock - $1, stock_blocked = stock_blocked - $1
+					WHERE bundle_id = $2
+				`, qty, *item.BundleID)
+				if err != nil {
+					return fmt.Errorf("complete stock for bundle %s: %w", *item.BundleID, err)
+				}
+
+				// Reduce product stock proportionally
+				bundleItems, qErr := tx.Query(ctx, `
+					SELECT product_id, quantity FROM bundle_items WHERE bundle_id = $1
+				`, *item.BundleID)
+				if qErr != nil {
+					return fmt.Errorf("get bundle items: %w", qErr)
+				}
+				for bundleItems.Next() {
+					var productID uuid.UUID
+					var itemQty float64
+					if scanErr := bundleItems.Scan(&productID, &itemQty); scanErr != nil {
+						bundleItems.Close()
+						return fmt.Errorf("scan bundle item: %w", scanErr)
+					}
+					productQty := int(itemQty) * qty
+					if productQty > 0 {
+						_, updateErr := tx.Exec(ctx, `
+							UPDATE products
+							SET stock = stock - $1, stock_blocked = stock_blocked - $1
+							WHERE product_id = $2
+						`, productQty, productID)
+						if updateErr != nil {
+							bundleItems.Close()
+							return fmt.Errorf("reduce product stock for %s: %w", productID, updateErr)
+						}
+					}
+				}
+				bundleItems.Close()
+			}
 		}
 	}
 	return nil

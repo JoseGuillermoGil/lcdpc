@@ -1,4 +1,3 @@
-import { CommonModule } from '@angular/common';
 import { Component, EventEmitter, inject, Input, OnChanges, Output, signal, SimpleChanges, computed } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
@@ -7,25 +6,23 @@ import { InputTextModule } from 'primeng/inputtext';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { FloatLabelModule } from 'primeng/floatlabel';
+import { CheckboxModule } from 'primeng/checkbox';
+import { ToastModule } from 'primeng/toast';
+import { MessageService } from 'primeng/api';
 import { AuthStore } from '../../../core/auth/auth.store';
-import { Bundle, CreateBundleRequest, BundleItemRequest, BundlePrice } from '../../../core/models/bundle.model';
+import { Bundle, BundleItemRequest } from '../../../core/models/bundle.model';
 import { Product } from '../../../core/models/product.model';
 import { BundleApiService } from '../../../core/services/bundle-api.service';
 import { ProductApiService } from '../../../core/services/product-api.service';
 import { BranchApiService } from '../../../core/services/branch-api.service';
 import { PriceCategoryApiService } from '../../../core/services/price-category-api.service';
 import { CategoryStore } from '../../../core/stores/category.store';
-import { forkJoin } from 'rxjs';
 
 interface BundleItemForm extends BundleItemRequest {
-  priceOptions: { label: string; id: string; amount: number }[];
-  selectedPriceId: string | null;
-  unitPrice: number;
 }
 
-interface PriceOption {
-  label: string;
-  id: string;
+interface BundlePriceForm {
+  priceCategoryId: string | null;
   amount: number;
 }
 
@@ -33,9 +30,10 @@ interface PriceOption {
   selector: 'app-bundle-form-dialog',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, ButtonModule, DialogModule,
-    InputTextModule, InputNumberModule, SelectModule, FloatLabelModule
+    FormsModule, ButtonModule, DialogModule, ToastModule,
+    InputTextModule, InputNumberModule, SelectModule, FloatLabelModule, CheckboxModule
   ],
+  providers: [MessageService],
   templateUrl: './bundle-form-dialog.component.html',
   styleUrl: './bundle-form-dialog.component.scss'
 })
@@ -52,6 +50,7 @@ export class BundleFormDialogComponent implements OnChanges {
   private readonly productApi = inject(ProductApiService);
   private readonly branchApi = inject(BranchApiService);
   private readonly priceCategoryApi = inject(PriceCategoryApiService);
+  private readonly messageService = inject(MessageService);
   readonly categoryStore = inject(CategoryStore);
 
   protected readonly saving = signal(false);
@@ -60,13 +59,19 @@ export class BundleFormDialogComponent implements OnChanges {
   protected readonly products = signal<Product[]>([]);
   protected readonly branches = signal<{ label: string; value: string }[]>([]);
   protected readonly priceCategories = signal<{ id: string; name: string }[]>([]);
-  protected readonly bundlePrices = signal<BundlePrice[]>([]);
-  protected readonly loadingPrices = signal(false);
+  protected readonly bundlePricesForm = signal<BundlePriceForm[]>([]);
   protected submitted = false;
   protected imageFile: File | null = null;
   protected imagePreview: string | null = null;
+  protected priceError: string | null = null;
+  private retailCategoryId: string | null = null;
 
   protected form = this.emptyForm();
+
+  protected readonly combosCategoryId = computed(() => {
+    const cat = this.categoryStore.categories().find((c) => c.slug === 'combos');
+    return cat?.categoryId ?? null;
+  });
 
   protected get isEditMode(): boolean {
     return this.bundle !== null;
@@ -85,14 +90,13 @@ export class BundleFormDialogComponent implements OnChanges {
         this.form = {
           code: this.bundle.code,
           name: this.bundle.name,
-          category_id: this.bundle.categoryId,
+          category_id: this.combosCategoryId(),
           branch_id: this.bundle.branchId,
+          stock: this.bundle.stock,
+          blocks_product_stock: this.bundle.blocksProductStock,
           items: (this.bundle.items ?? []).map((i) => ({
             product_id: i.productId,
             quantity: i.quantity,
-            priceOptions: [],
-            selectedPriceId: null,
-            unitPrice: 0,
           })),
         };
         this.imagePreview = this.bundleApi.resolveImageUrl(this.bundle.img);
@@ -102,11 +106,13 @@ export class BundleFormDialogComponent implements OnChanges {
         if (!this.canViewAllBranches() && this.userBranchId()) {
           this.form.branch_id = this.userBranchId();
         }
+        this.form.category_id = this.combosCategoryId();
         this.imagePreview = null;
-        this.bundlePrices.set([]);
+        this.bundlePricesForm.set([]);
       }
       this.submitted = false;
       this.imageFile = null;
+      this.retailCategoryId = null;
     }
   }
 
@@ -124,19 +130,29 @@ export class BundleFormDialogComponent implements OnChanges {
 
   private loadPriceCategories(): void {
     this.priceCategoryApi.list().subscribe({
-      next: (categories) => this.priceCategories.set(categories.map((c) => ({ id: c.id, name: c.name }))),
+      next: (categories) => {
+        this.priceCategories.set(categories.map((c) => ({ id: c.id, name: c.name })));
+        const retail = categories.find((c) => c.code === 'retail');
+        this.retailCategoryId = retail?.id ?? null;
+
+        if (!this.isEditMode) {
+          if (retail && this.bundlePricesForm().length === 0) {
+            this.bundlePricesForm.set([{ priceCategoryId: retail.id, amount: 0 }]);
+          }
+        }
+      },
     });
   }
 
   private loadBundlePrices(): void {
     if (!this.bundle) return;
-    this.loadingPrices.set(true);
     this.bundleApi.listPrices(this.bundle.bundleId).subscribe({
       next: (prices) => {
-        this.bundlePrices.set(prices);
-        this.loadingPrices.set(false);
+        this.bundlePricesForm.set(prices.map((p) => ({
+          priceCategoryId: p.priceCategoryId,
+          amount: p.amount,
+        })));
       },
-      error: () => this.loadingPrices.set(false),
     });
   }
 
@@ -144,9 +160,6 @@ export class BundleFormDialogComponent implements OnChanges {
     this.form.items.push({
       product_id: '',
       quantity: 1,
-      priceOptions: [],
-      selectedPriceId: null,
-      unitPrice: 0,
     });
   }
 
@@ -154,40 +167,12 @@ export class BundleFormDialogComponent implements OnChanges {
     this.form.items.splice(index, 1);
   }
 
-  onProductSelect(index: number): void {
-    const item = this.form.items[index];
-    item.unitPrice = 0;
-    item.priceOptions = [];
-    item.selectedPriceId = null;
-
-    const productId = item.product_id;
-    if (!productId) return;
-
-    const prices = this.bundlePrices().filter((p) => p.bundleId === this.bundle?.bundleId);
-    const options = this.formatPriceOptions(prices);
-    item.priceOptions = options;
-
-    if (options.length > 0) {
-      item.unitPrice = options[0].amount;
-      item.selectedPriceId = options[0].id;
-    }
+  addPrice(): void {
+    this.bundlePricesForm.update((prices) => [...prices, { priceCategoryId: null, amount: 0 }]);
   }
 
-  onPriceOptionSelect(index: number, id: string): void {
-    const item = this.form.items[index];
-    const option = item.priceOptions.find((o) => o.id === id);
-    if (option) {
-      item.selectedPriceId = id;
-      item.unitPrice = option.amount;
-    }
-  }
-
-  private formatPriceOptions(prices: BundlePrice[]): PriceOption[] {
-    return prices.map((p) => {
-      const cat = this.priceCategories().find((c) => c.id === p.priceCategoryId);
-      const name = cat?.name ?? 'Precio base';
-      return { label: `${name} — $${p.amount.toFixed(2)}`, id: p.id, amount: p.amount };
-    });
+  removePrice(index: number): void {
+    this.bundlePricesForm.update((prices) => prices.filter((_, i) => i !== index));
   }
 
   onFileSelect(event: Event): void {
@@ -207,19 +192,6 @@ export class BundleFormDialogComponent implements OnChanges {
     this.imagePreview = null;
   }
 
-  getItemSubtotal(index: number): number {
-    const item = this.form.items[index];
-    return item.quantity * item.unitPrice;
-  }
-
-  get total(): number {
-    return this.form.items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  }
-
-  get totalItems(): number {
-    return this.form.items.length;
-  }
-
   save(): void {
     this.submitted = true;
     if (!this.form.name || !this.form.code || this.form.items.length === 0) {
@@ -229,17 +201,30 @@ export class BundleFormDialogComponent implements OnChanges {
       return;
     }
 
+    this.priceError = this.validatePrices();
+    if (this.priceError) {
+      return;
+    }
+
     this.saving.set(true);
 
-    const req: CreateBundleRequest = {
+    const req = {
       code: this.form.code,
       name: this.form.name,
       items: this.form.items.map((i) => ({
         product_id: i.product_id,
         quantity: i.quantity,
       })),
+      prices: this.bundlePricesForm()
+        .filter((p) => p.amount > 0)
+        .map((p) => ({
+          price_category_id: p.priceCategoryId,
+          amount: p.amount,
+        })),
       category_id: this.form.category_id ?? undefined,
       branch_id: this.form.branch_id ?? undefined,
+      stock: this.form.stock ?? undefined,
+      blocks_product_stock: this.form.blocks_product_stock,
     };
 
     const operation = this.isEditMode
@@ -251,8 +236,10 @@ export class BundleFormDialogComponent implements OnChanges {
         this.saving.set(false);
         this.saved.emit();
       },
-      error: () => {
+      error: (err) => {
         this.saving.set(false);
+        const msg = err?.error?.message ?? 'No se pudo guardar el combo';
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: this.mapBackendError(msg) });
       },
     });
   }
@@ -267,7 +254,48 @@ export class BundleFormDialogComponent implements OnChanges {
       name: '',
       category_id: null as string | null,
       branch_id: null as string | null,
+      stock: undefined as number | undefined,
+      blocks_product_stock: false,
       items: [] as BundleItemForm[],
     };
+  }
+
+  private validatePrices(): string | null {
+    const prices = this.bundlePricesForm().filter((p) => p.amount > 0);
+
+    if (this.retailCategoryId) {
+      const hasRetail = prices.some((p) => p.priceCategoryId === this.retailCategoryId);
+      if (!hasRetail) {
+        return 'El precio Minorista (retail) es obligatorio';
+      }
+    }
+
+    const seen = new Set<string>();
+    for (const p of prices) {
+      const key = p.priceCategoryId ?? '__none__';
+      if (seen.has(key)) {
+        return 'No puede haber dos precios con la misma categoria';
+      }
+      seen.add(key);
+    }
+    return null;
+  }
+
+  private mapBackendError(msg: string): string {
+    if (msg.startsWith('PRODUCT_NOT_FOUND:')) {
+      const ids = msg.replace('PRODUCT_NOT_FOUND: ', '');
+      return `Producto(s) no encontrado(s): ${ids}`;
+    }
+    if (msg.startsWith('BUNDLE_STOCK_EXCEEDS_CHAIN:')) {
+      const match = msg.match(/max (\d+), requested (\d+)/);
+      if (match) {
+        return `El stock del combo (${match[2]}) supera el stock disponible de los productos (maximo ${match[1]})`;
+      }
+      return 'El stock del combo supera el stock disponible de los productos';
+    }
+    if (msg.includes('duplicate key') && msg.includes('code')) {
+      return 'Ya existe un combo con ese codigo';
+    }
+    return msg;
   }
 }

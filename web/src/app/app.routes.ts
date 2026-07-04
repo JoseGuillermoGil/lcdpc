@@ -2,7 +2,6 @@ import { Routes } from '@angular/router';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthStore } from './core/auth/auth.store';
-import { AuthPageComponent } from './pages/auth-page/auth-page.component';
 import { LandingPageComponent } from './pages/landing-page/landing-page.component';
 import { RegisterPageComponent } from './pages/register-page/register-page.component';
 import { SearchPageComponent } from './pages/search-page/search-page.component';
@@ -19,7 +18,6 @@ import { permissionGuard } from './core/auth/permission.guard';
 export const routes: Routes = [
 	{ path: '', component: LandingPageComponent },
 	{ path: 'search', component: SearchPageComponent },
-	{ path: 'login', component: AuthPageComponent },
 	{ path: 'register', component: RegisterPageComponent },
 	{
 		path: 'admin',

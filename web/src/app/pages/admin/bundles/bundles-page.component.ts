@@ -121,8 +121,15 @@ export class BundlesPageComponent implements OnInit {
   }
 
   openEditDialog(bundle: Bundle): void {
-    this.selectedBundle.set(bundle);
-    this.dialogVisible.set(true);
+    this.bundleApi.getById(bundle.bundleId).subscribe({
+      next: (fresh) => {
+        this.selectedBundle.set(fresh);
+        this.dialogVisible.set(true);
+      },
+      error: () => {
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: 'No se pudo cargar el combo' });
+      },
+    });
   }
 
   onDialogClose(saved: boolean): void {

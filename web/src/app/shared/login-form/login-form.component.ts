@@ -4,7 +4,6 @@ import { Component, EventEmitter, Output, computed, inject, signal } from '@angu
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { ButtonModule } from 'primeng/button';
-import { CheckboxModule } from 'primeng/checkbox';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
 import { AuthStore } from '../../core/auth/auth.store';
@@ -12,7 +11,7 @@ import { AuthStore } from '../../core/auth/auth.store';
 @Component({
   selector: 'app-login-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, ButtonModule, CheckboxModule, InputTextModule, PasswordModule],
+  imports: [CommonModule, FormsModule, ButtonModule, InputTextModule, PasswordModule],
   template: `
     <form class="login-form" (ngSubmit)="submit()">
       <div class="login-field">
@@ -51,10 +50,6 @@ import { AuthStore } from '../../core/auth/auth.store';
         [loading]="isSubmitting()"
         [disabled]="!canSubmit() || isSubmitting()"
       ></p-button>
-
-      @if (submitError()) {
-        <p class="login-error" role="alert">{{ submitError() }}</p>
-      }
     </form>
   `,
   styles: [`
@@ -117,28 +112,20 @@ import { AuthStore } from '../../core/auth/auth.store';
       background: #f27405;
       border-color: #f27405;
     }
-
-    .login-error {
-      margin: 0;
-      color: #b42318;
-      font-size: 0.88rem;
-      font-weight: 600;
-    }
   `],
 })
 export class LoginFormComponent {
   private readonly authStore = inject(AuthStore);
 
   @Output() loginSuccess = new EventEmitter<void>();
+  @Output() loginError = new EventEmitter<string>();
 
   protected readonly username = signal('');
   protected readonly password = signal('');
   protected readonly isSubmitting = signal(false);
-  protected readonly submitError = signal('');
   protected readonly canSubmit = computed(() => this.username().trim().length > 0 && this.password().trim().length > 0);
 
   protected async submit(): Promise<void> {
-    this.submitError.set('');
     if (!this.canSubmit() || this.isSubmitting()) return;
 
     this.isSubmitting.set(true);
@@ -147,7 +134,7 @@ export class LoginFormComponent {
       await firstValueFrom(this.authStore.login(this.username().trim(), this.password()));
       this.loginSuccess.emit();
     } catch (error) {
-      this.submitError.set(this.resolveSubmitError(error));
+      this.loginError.emit(this.resolveSubmitError(error));
     } finally {
       this.isSubmitting.set(false);
     }

@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/lcdpc/lcdpc-go/internal/pricing"
 )
 
 type Service struct {
@@ -18,27 +19,28 @@ func NewService(pool *pgxpool.Pool) *Service {
 }
 
 type SyncProductRequest struct {
-	ProductID    uuid.UUID  `json:"product_id"`
-	Name         string     `json:"name"`
-	Sku          string     `json:"sku"`
-	IsActive     bool       `json:"is_active"`
-	BaseUnitID   *uuid.UUID `json:"base_unit_id"`
-	Stock        *int       `json:"stock"`
-	StockAvailable *int     `json:"stock_available"`
-	StockBlocked   *int     `json:"stock_blocked"`
+	ProductID      uuid.UUID  `json:"product_id"`
+	Name           string     `json:"name"`
+	Sku            string     `json:"sku"`
+	IsActive       bool       `json:"is_active"`
+	BaseUnitID     *uuid.UUID `json:"base_unit_id"`
+	Stock          *int       `json:"stock"`
+	StockAvailable *int       `json:"stock_available"`
+	StockBlocked   *int       `json:"stock_blocked"`
 }
 
 type SyncBundleRequest struct {
-	BundleID       uuid.UUID          `json:"bundle_id"`
-	Code           string             `json:"code"`
-	Name           string             `json:"name"`
-	Status         string             `json:"status"`
-	BranchID       *uuid.UUID         `json:"branch_id"`
-	Items          []SyncBundleItem   `json:"items"`
-	Prices         []SyncBundlePrice  `json:"prices"`
-	Stock          *int               `json:"stock"`
-	StockAvailable *int               `json:"stock_available"`
-	StockBlocked   *int               `json:"stock_blocked"`
+	BundleID           uuid.UUID         `json:"bundle_id"`
+	Code               string            `json:"code"`
+	Name               string            `json:"name"`
+	Status             string            `json:"status"`
+	BranchID           *uuid.UUID        `json:"branch_id"`
+	Items              []SyncBundleItem  `json:"items"`
+	Prices             []SyncBundlePrice `json:"prices"`
+	Stock              *int              `json:"stock"`
+	StockAvailable     *int              `json:"stock_available"`
+	StockBlocked       *int              `json:"stock_blocked"`
+	BlocksProductStock bool              `json:"blocks_product_stock"`
 }
 
 type SyncBundlePrice struct {
@@ -99,24 +101,54 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 
 	result := &SyncResult{}
 	for _, b := range bundles {
-		_, err := tx.Exec(ctx, `
-			INSERT INTO bundles (bundle_id, code, name, status, branch_id, stock, stock_available, stock_blocked)
-			VALUES ($1, $2, $3, $4, $5, COALESCE($6, 0), COALESCE($7, 0), COALESCE($8, 0))
+		// 1. Check existing bundle state for chain recalculation
+		var oldStock int
+		var oldBlocksProductStock bool
+		err := tx.QueryRow(ctx, `
+			SELECT stock, blocks_product_stock FROM bundles WHERE bundle_id = $1 FOR UPDATE
+		`, b.BundleID).Scan(&oldStock, &oldBlocksProductStock)
+		bundleExists := err != pgx.ErrNoRows
+
+		if bundleExists && oldBlocksProductStock && oldStock > 0 {
+			oldItems := make([]pricing.ChainItem, 0)
+			rows, qErr := tx.Query(ctx, `SELECT id, bundle_id, product_id, quantity FROM bundle_items WHERE bundle_id = $1`, b.BundleID)
+			if qErr == nil {
+				for rows.Next() {
+					var ci pricing.ChainItem
+					var id, bundleID uuid.UUID
+					if scanErr := rows.Scan(&id, &bundleID, &ci.ProductID, &ci.Quantity); scanErr == nil {
+						oldItems = append(oldItems, ci)
+					}
+				}
+				rows.Close()
+			}
+			if err := pricing.ReleaseProductStock(ctx, tx, oldItems, oldStock); err != nil {
+				result.Errors++
+				continue
+			}
+		}
+
+		// 2. Upsert bundle
+		_, err = tx.Exec(ctx, `
+			INSERT INTO bundles (bundle_id, code, name, status, branch_id, stock, stock_available, stock_blocked, blocks_product_stock)
+			VALUES ($1, $2, $3, $4, $5, COALESCE($6, 0), COALESCE($7, 0), COALESCE($8, 0), $9)
 			ON CONFLICT (code) DO UPDATE SET
 				name = EXCLUDED.name,
 				status = EXCLUDED.status,
 				branch_id = EXCLUDED.branch_id,
 				stock = EXCLUDED.stock,
 				stock_available = EXCLUDED.stock_available,
-				stock_blocked = EXCLUDED.stock_blocked
-		`, b.BundleID, b.Code, b.Name, b.Status, b.BranchID, b.Stock, b.StockAvailable, b.StockBlocked)
+				stock_blocked = EXCLUDED.stock_blocked,
+				blocks_product_stock = EXCLUDED.blocks_product_stock
+		`, b.BundleID, b.Code, b.Name, b.Status, b.BranchID, b.Stock, b.StockAvailable, b.StockBlocked, b.BlocksProductStock)
 		if err != nil {
 			result.Errors++
 			continue
 		}
 
-		// Replace bundle items
+		// 3. Replace bundle items
 		tx.Exec(ctx, `DELETE FROM bundle_items WHERE bundle_id = $1`, b.BundleID)
+		newItems := make([]pricing.ChainItem, 0)
 		for _, item := range b.Items {
 			_, err := tx.Exec(ctx, `
 				INSERT INTO bundle_items (id, bundle_id, product_id, quantity)
@@ -125,9 +157,10 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 			if err != nil {
 				result.Errors++
 			}
+			newItems = append(newItems, pricing.ChainItem{ProductID: item.ProductID, Quantity: item.Quantity})
 		}
 
-		// Replace bundle prices
+		// 4. Replace bundle prices
 		tx.Exec(ctx, `DELETE FROM bundle_prices WHERE bundle_id = $1`, b.BundleID)
 		for _, p := range b.Prices {
 			_, err := tx.Exec(ctx, `
@@ -136,6 +169,27 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 			`, uuid.New(), b.BundleID, p.PriceCategoryID, p.Amount)
 			if err != nil {
 				result.Errors++
+			}
+		}
+
+		// 5. Block new stock if chain enabled
+		newStock := 0
+		if b.Stock != nil {
+			newStock = *b.Stock
+		}
+		if b.BlocksProductStock && newStock > 0 {
+			maxStock, chainErr := pricing.MaxBundleStock(ctx, tx, newItems)
+			if chainErr != nil {
+				result.Errors++
+				continue
+			}
+			if newStock > maxStock {
+				result.Errors++
+				continue
+			}
+			if blockErr := pricing.BlockProductStock(ctx, tx, newItems, newStock); blockErr != nil {
+				result.Errors++
+				continue
 			}
 		}
 
