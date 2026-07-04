@@ -622,6 +622,11 @@ func releaseBlockedStock(ctx context.Context, tx pgx.Tx, items []OrderItem) erro
 				if qErr != nil {
 					return fmt.Errorf("get bundle items for release: %w", qErr)
 				}
+				type bundleItem struct {
+					productID uuid.UUID
+					qty       int
+				}
+				var bItems []bundleItem
 				for bundleItems.Next() {
 					var productID uuid.UUID
 					var itemQty float64
@@ -629,20 +634,21 @@ func releaseBlockedStock(ctx context.Context, tx pgx.Tx, items []OrderItem) erro
 						bundleItems.Close()
 						return fmt.Errorf("scan bundle item for release: %w", scanErr)
 					}
-					productQty := int(itemQty) * qty
-					if productQty > 0 {
+					bItems = append(bItems, bundleItem{productID: productID, qty: int(itemQty) * qty})
+				}
+				bundleItems.Close()
+				for _, bi := range bItems {
+					if bi.qty > 0 {
 						_, updateErr := tx.Exec(ctx, `
 							UPDATE products
 							SET stock_available = stock_available + $1, stock_blocked = stock_blocked - $1
 							WHERE product_id = $2
-						`, productQty, productID)
+						`, bi.qty, bi.productID)
 						if updateErr != nil {
-							bundleItems.Close()
-							return fmt.Errorf("release product stock for %s: %w", productID, updateErr)
+							return fmt.Errorf("release product stock for %s: %w", bi.productID, updateErr)
 						}
 					}
 				}
-				bundleItems.Close()
 			}
 		}
 	}
@@ -697,6 +703,11 @@ func completeOrderStock(ctx context.Context, tx pgx.Tx, items []OrderItem) error
 				if qErr != nil {
 					return fmt.Errorf("get bundle items: %w", qErr)
 				}
+				type bundleItem struct {
+					productID uuid.UUID
+					qty       int
+				}
+				var bItems []bundleItem
 				for bundleItems.Next() {
 					var productID uuid.UUID
 					var itemQty float64
@@ -704,20 +715,21 @@ func completeOrderStock(ctx context.Context, tx pgx.Tx, items []OrderItem) error
 						bundleItems.Close()
 						return fmt.Errorf("scan bundle item: %w", scanErr)
 					}
-					productQty := int(itemQty) * qty
-					if productQty > 0 {
+					bItems = append(bItems, bundleItem{productID: productID, qty: int(itemQty) * qty})
+				}
+				bundleItems.Close()
+				for _, bi := range bItems {
+					if bi.qty > 0 {
 						_, updateErr := tx.Exec(ctx, `
 							UPDATE products
 							SET stock = stock - $1, stock_blocked = stock_blocked - $1
 							WHERE product_id = $2
-						`, productQty, productID)
+						`, bi.qty, bi.productID)
 						if updateErr != nil {
-							bundleItems.Close()
-							return fmt.Errorf("reduce product stock for %s: %w", productID, updateErr)
+							return fmt.Errorf("reduce product stock for %s: %w", bi.productID, updateErr)
 						}
 					}
 				}
-				bundleItems.Close()
 			}
 		}
 	}

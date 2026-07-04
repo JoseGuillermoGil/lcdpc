@@ -13,6 +13,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/branch"
 	"github.com/lcdpc/lcdpc-go/internal/brand"
 	"github.com/lcdpc/lcdpc-go/internal/category"
+	"github.com/lcdpc/lcdpc-go/internal/dashboard"
 	"github.com/lcdpc/lcdpc-go/internal/http/handler"
 	"github.com/lcdpc/lcdpc-go/internal/http/middleware"
 	"github.com/lcdpc/lcdpc-go/internal/order"
@@ -41,6 +42,7 @@ func NewServer(
 	orderSvc *order.Service,
 	systemConfigSvc *systemconfig.Service,
 	userSvc *user.Service,
+	dashboardSvc *dashboard.Service,
 ) *chi.Mux {
 	r := chi.NewRouter()
 
@@ -73,6 +75,7 @@ func NewServer(
 	orderH := order.NewHandler(orderSvc, rbacStore)
 	systemConfigH := handler.NewSystemConfigHandler(systemConfigSvc)
 	userH := handler.NewUserHandler(userSvc)
+	dashboardH := dashboard.NewHandler(dashboardSvc, rbacStore)
 
 	// Public
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -560,6 +563,19 @@ func NewServer(
 			r.Post("/", systemConfigH.Create)
 			r.Put("/{id}", systemConfigH.Update)
 		})
+	})
+
+	// Dashboard
+	r.Route("/api/v1/dashboard", func(r chi.Router) {
+		r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+		r.Use(middleware.RequireAuth())
+
+		r.Get("/summary", dashboardH.Summary)
+		r.Get("/orders-by-status", dashboardH.OrdersByStatus)
+		r.Get("/sales-trend", dashboardH.SalesTrend)
+		r.Get("/top-products", dashboardH.TopProducts)
+		r.Get("/top-bundles", dashboardH.TopBundles)
+		r.Get("/stock-health", dashboardH.StockHealth)
 	})
 
 	return r
