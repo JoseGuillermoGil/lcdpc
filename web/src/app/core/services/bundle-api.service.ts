@@ -67,6 +67,7 @@ export class BundleApiService {
     if (filter?.name) params['name'] = filter.name;
     if (filter?.code) params['code'] = filter.code;
     if (filter?.status) params['status'] = filter.status;
+    if (filter?.branch_id) params['branch_id'] = filter.branch_id;
 
     return this.http
       .get<JsendEnvelope<PaginatedGoData<BundleGoData>>>(`${this.baseUrl}/api/v1/bundles/`, { params })

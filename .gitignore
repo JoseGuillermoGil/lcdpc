@@ -28,3 +28,6 @@ __pycache__/
 *.pyc
 # Local AI runtime state
 .atl/
+
+api/static/*
+.opencode/*
