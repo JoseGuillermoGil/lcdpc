@@ -84,7 +84,7 @@
         <div class="price-card">
           <div class="price-card-header">
             <span class="price-index">{{ i + 1 }}</span>
-            @if (prices.length > 1) {
+            @if (i > 0) {
               <p-button icon="pi pi-times" [text]="true" [rounded]="true" severity="danger" size="small"
                         (onClick)="removePrice(i)"></p-button>
             }
@@ -92,7 +92,7 @@
           <div class="field">
             <p-select [options]="priceCategories()" [(ngModel)]="price.price_category_id"
                       optionLabel="label" optionValue="value" placeholder="Categoria de precio"
-                      [showClear]="true" [style]="{'width':'100%'}" appendTo="body" />
+                      [showClear]="i > 0" [disabled]="i === 0" [style]="{'width':'100%'}" appendTo="body" />
           </div>
           <div class="field">
             <p-inputNumber [(ngModel)]="price.amount" [min]="0" [minFractionDigits]="2" [maxFractionDigits]="4"

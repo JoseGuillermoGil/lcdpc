@@ -9,8 +9,9 @@ import { FloatLabelModule } from 'primeng/floatlabel';
 import { CheckboxModule } from 'primeng/checkbox';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
+import { forkJoin, of, switchMap } from 'rxjs';
 import { AuthStore } from '../../../core/auth/auth.store';
-import { Bundle, BundleItemRequest } from '../../../core/models/bundle.model';
+import { Bundle, BundleItemRequest, CreateBundleRequest } from '../../../core/models/bundle.model';
 import { Product } from '../../../core/models/product.model';
 import { BundleApiService } from '../../../core/services/bundle-api.service';
 import { ProductApiService } from '../../../core/services/product-api.service';
@@ -23,7 +24,7 @@ interface BundleItemForm extends BundleItemRequest {
 
 interface BundlePriceForm {
   priceCategoryId: string | null;
-  amount: number;
+  amount: number | null;
 }
 
 @Component({
@@ -118,7 +119,10 @@ export class BundleFormDialogComponent implements OnChanges {
 
   private loadBranches(): void {
     this.branchApi.listAdmin().subscribe({
-      next: (branches) => this.branches.set(branches.map((b) => ({ label: b.storeName, value: b.id }))),
+      next: (branches) => this.branches.set([
+        { label: 'Todas', value: 'all' },
+        ...branches.map((b) => ({ label: b.storeName, value: b.id })),
+      ]),
     });
   }
 
@@ -137,7 +141,7 @@ export class BundleFormDialogComponent implements OnChanges {
 
         if (!this.isEditMode) {
           if (retail && this.bundlePricesForm().length === 0) {
-            this.bundlePricesForm.set([{ priceCategoryId: retail.id, amount: 0 }]);
+            this.bundlePricesForm.set([{ priceCategoryId: retail.id, amount: null }]);
           }
         }
       },
@@ -168,10 +172,11 @@ export class BundleFormDialogComponent implements OnChanges {
   }
 
   addPrice(): void {
-    this.bundlePricesForm.update((prices) => [...prices, { priceCategoryId: null, amount: 0 }]);
+    this.bundlePricesForm.update((prices) => [...prices, { priceCategoryId: null, amount: null }]);
   }
 
   removePrice(index: number): void {
+    if (index === 0) return;
     this.bundlePricesForm.update((prices) => prices.filter((_, i) => i !== index));
   }
 
@@ -216,7 +221,7 @@ export class BundleFormDialogComponent implements OnChanges {
         quantity: i.quantity,
       })),
       prices: this.bundlePricesForm()
-        .filter((p) => p.amount > 0)
+        .filter((p): p is BundlePriceForm & { amount: number } => p.amount != null && p.amount > 0)
         .map((p) => ({
           price_category_id: p.priceCategoryId,
           amount: p.amount,
@@ -226,6 +231,11 @@ export class BundleFormDialogComponent implements OnChanges {
       stock: this.form.stock ?? undefined,
       blocks_product_stock: this.form.blocks_product_stock,
     };
+
+    if (!this.isEditMode && this.form.branch_id === 'all') {
+      this.createForAllBranches(req);
+      return;
+    }
 
     const operation = this.isEditMode
       ? this.bundleApi.update(this.bundle!.bundleId, req, this.imageFile ?? undefined)
@@ -242,6 +252,37 @@ export class BundleFormDialogComponent implements OnChanges {
         this.messageService.add({ severity: 'error', summary: 'Error', detail: this.mapBackendError(msg) });
       },
     });
+  }
+
+  private createForAllBranches(baseReq: CreateBundleRequest): void {
+    const realBranches = this.branches().filter((b) => b.value !== 'all');
+    let completed = 0;
+    const total = realBranches.length;
+
+    const finish = () => {
+      this.saving.set(false);
+      this.saved.emit();
+    };
+
+    if (total === 0) {
+      finish();
+      return;
+    }
+
+    for (const branch of realBranches) {
+      const branchReq = { ...baseReq, branch_id: branch.value };
+
+      this.bundleApi.create(branchReq, this.imageFile ?? undefined).subscribe({
+        next: () => {
+          completed++;
+          if (completed === total) finish();
+        },
+        error: () => {
+          completed++;
+          if (completed === total) finish();
+        },
+      });
+    }
   }
 
   close(): void {
@@ -261,7 +302,7 @@ export class BundleFormDialogComponent implements OnChanges {
   }
 
   private validatePrices(): string | null {
-    const prices = this.bundlePricesForm().filter((p) => p.amount > 0);
+    const prices = this.bundlePricesForm().filter((p) => p.amount != null && p.amount > 0);
 
     if (this.retailCategoryId) {
       const hasRetail = prices.some((p) => p.priceCategoryId === this.retailCategoryId);

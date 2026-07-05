@@ -8,7 +8,7 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { SelectModule } from 'primeng/select';
 import { CheckboxModule } from 'primeng/checkbox';
 import { FloatLabelModule } from 'primeng/floatlabel';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of, switchMap, concatMap } from 'rxjs';
 import { AuthStore } from '../../../core/auth/auth.store';
 import { Product, CreateProductRequest } from '../../../core/models/product.model';
 import { CreatePriceRequest } from '../../../core/models/price.model';
@@ -159,7 +159,10 @@ export class ProductFormDialogComponent implements OnChanges {
       categories: this.priceCategoryApi.list(),
     }).subscribe({
       next: ({ branches, brands, units, categories }) => {
-        this.branches.set(branches.map((b) => ({ label: b.storeName, value: b.id })));
+        this.branches.set([
+          { label: 'Todas', value: 'all' },
+          ...branches.map((b) => ({ label: b.storeName, value: b.id })),
+        ]);
         this.brands.set(brands.map((b) => ({ label: b.name, value: b.id })));
         this.allUnits.set(units);
         this.measurementUnits.set(units.map((u) => ({
@@ -222,6 +225,7 @@ export class ProductFormDialogComponent implements OnChanges {
   }
 
   removePrice(index: number): void {
+    if (index === 0) return;
     this.prices.splice(index, 1);
   }
 
@@ -319,6 +323,11 @@ export class ProductFormDialogComponent implements OnChanges {
       is_active: this.isEditMode ? this.product!.isActive : true,
     };
 
+    if (!this.isEditMode && this.form.branch_id === 'all') {
+      this.createForAllBranches(req, validPrices, validConversions);
+      return;
+    }
+
     const operation = this.isEditMode
       ? this.productApi.update(this.product!.productId, req, this.imageFile ?? undefined)
       : this.productApi.create(req, this.imageFile ?? undefined);
@@ -398,6 +407,76 @@ export class ProductFormDialogComponent implements OnChanges {
         this.saving.set(false);
       },
     });
+  }
+
+  private createForAllBranches(
+    req: CreateProductRequest,
+    validPrices: PriceRow[],
+    validConversions: ConversionRow[]
+  ): void {
+    const realBranches = this.branches().filter((b) => b.value !== 'all');
+    let completed = 0;
+    const total = realBranches.length;
+
+    const finish = () => {
+      this.saving.set(false);
+      this.saved.emit();
+    };
+
+    if (total === 0) {
+      finish();
+      return;
+    }
+
+    for (const branch of realBranches) {
+      const branchReq: CreateProductRequest = { ...req, branch_id: branch.value };
+
+      this.productApi.create(branchReq, this.imageFile ?? undefined).pipe(
+        switchMap((product) =>
+          this.createProductRelations(product, validPrices, validConversions)
+        ),
+      ).subscribe({
+        next: () => {
+          completed++;
+          if (completed === total) finish();
+        },
+        error: () => {
+          completed++;
+          if (completed === total) finish();
+        },
+      });
+    }
+  }
+
+  private createProductRelations(
+    product: Product,
+    validPrices: PriceRow[],
+    validConversions: ConversionRow[]
+  ): import('rxjs').Observable<void> {
+    const calls = [
+      ...validPrices.map((p) => {
+        const priceReq: CreatePriceRequest = {
+          product_id: product.productId,
+          price_category_id: p.price_category_id,
+          amount: p.amount!,
+        };
+        return this.priceApi.create(priceReq);
+      }),
+      ...validConversions.map((c) => {
+        const convReq: CreateConversionFactorRequest = {
+          product_id: product.productId,
+          from_unit_id: c.from_unit_id!,
+          to_unit_id: c.to_unit_id!,
+          amount: c.amount!,
+          main: c.main,
+        };
+        return this.conversionApi.create(convReq);
+      }),
+    ];
+
+    if (calls.length === 0) return of(undefined);
+
+    return forkJoin(calls).pipe(switchMap(() => of(undefined)));
   }
 
   close(): void {
