@@ -3,6 +3,7 @@
     <p-tab value="profiles">Perfiles</p-tab>
     <p-tab value="roles">Roles</p-tab>
     <p-tab value="resources">Recursos</p-tab>
+    <p-tab value="api-tokens">API Tokens</p-tab>
   </p-tablist>
   <p-tabpanels>
     <p-tabpanel value="profiles">
@@ -127,6 +128,57 @@
         </ng-template>
       </p-table>
     </p-tabpanel>
+
+    <p-tabpanel value="api-tokens">
+      <div class="tab-toolbar">
+        @if (canCreateToken()) {
+          <p-button label="Nuevo Token" icon="pi pi-plus" size="small" (onClick)="openApiTokenCreate()"></p-button>
+        }
+      </div>
+      <p-table [value]="apiTokens()" [loading]="loading()" styleClass="admin-table">
+        <ng-template pTemplate="header">
+          <tr>
+            <th>Nombre</th>
+            <th>Estado</th>
+            <th>Fecha Creacion</th>
+            <th style="width: 140px">Acciones</th>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="body" let-token>
+          <tr>
+            <td>{{ token.name }}</td>
+            <td>
+              @if (token.isActive) {
+                <p-tag value="Activo" severity="success" />
+              } @else {
+                <p-tag value="Inactivo" severity="danger" />
+              }
+            </td>
+            <td>{{ token.createdAtUtc | date:'dd/MM/yyyy HH:mm' }}</td>
+            <td>
+              @if (canUpdateToken()) {
+                <p-button icon="pi pi-pencil" [text]="true" [rounded]="true"
+                          (onClick)="openApiTokenEdit(token)" pTooltip="Editar"></p-button>
+                @if (token.isActive) {
+                  <p-button icon="pi pi-ban" [text]="true" [rounded]="true" severity="warn"
+                            (onClick)="toggleApiTokenActive(token)" pTooltip="Desactivar"></p-button>
+                } @else {
+                  <p-button icon="pi pi-check-circle" [text]="true" [rounded]="true" severity="success"
+                            (onClick)="toggleApiTokenActive(token)" pTooltip="Activar"></p-button>
+                }
+              }
+              @if (canDeleteToken()) {
+                <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger"
+                          (onClick)="confirmDeleteApiToken(token)" pTooltip="Eliminar"></p-button>
+              }
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template pTemplate="emptymessage">
+          <tr><td colspan="4" class="empty-state">No hay tokens de API registrados</td></tr>
+        </ng-template>
+      </p-table>
+    </p-tabpanel>
   </p-tabpanels>
 </p-tabs>
 
@@ -240,6 +292,54 @@
       }
     </div>
   </div>
+</p-dialog>
+
+<!-- API Token Dialog -->
+<p-dialog [header]="selectedApiToken() ? 'Editar Token' : 'Nuevo Token de API'"
+          [visible]="apiTokenDialogVisible()" (visibleChange)="apiTokenDialogVisible.set($event)"
+          [modal]="true" [dismissableMask]="true" [draggable]="false" [style]="{width: 'min(450px, 95vw)', paddingTop: '20px'}"
+          (onHide)="apiTokenSubmitted = false">
+  <div class="form-fields">
+    <div class="field">
+      <p-floatlabel>
+        <input pInputText id="tokenName" [(ngModel)]="apiTokenForm.name"
+               [class.ng-invalid]="apiTokenSubmitted && !apiTokenForm.name" style="width: 100%" placeholder=" " />
+        <label for="tokenName">Nombre *</label>
+      </p-floatlabel>
+    </div>
+    @if (selectedApiToken()) {
+      <div class="field">
+        <label class="field-label">Estado</label>
+        <p-select [options]="[{label: 'Activo', value: true}, {label: 'Inactivo', value: false}]"
+                  [(ngModel)]="selectedApiToken()!.isActive" optionLabel="label" optionValue="value"
+                  [style]="{'width':'100%'}" appendTo="body" />
+      </div>
+    }
+  </div>
+  <ng-template pTemplate="footer">
+    <p-button label="Cancelar" severity="secondary" (onClick)="apiTokenDialogVisible.set(false)"></p-button>
+    <p-button [label]="selectedApiToken() ? 'Guardar Cambios' : 'Crear Token'"
+              icon="pi pi-check" [loading]="saving()" (onClick)="saveApiToken()"></p-button>
+  </ng-template>
+</p-dialog>
+
+<!-- Created Token Dialog -->
+<p-dialog header="Token Creado"
+          [visible]="createdTokenVisible()" (visibleChange)="createdTokenVisible.set($event)"
+          [modal]="true" [dismissableMask]="true" [draggable]="false" [style]="{width: 'min(550px, 95vw)'}">
+  <div class="created-token-content">
+    <p class="warning-text">
+      <i class="pi pi-exclamation-triangle"></i>
+      Guarda este token ahora. No podras verlo de nuevo.
+    </p>
+    <div class="token-display">
+      <code>{{ createdTokenRaw }}</code>
+      <p-button icon="pi pi-copy" [text]="true" [rounded]="true" (onClick)="copyToken()" pTooltip="Copiar"></p-button>
+    </div>
+  </div>
+  <ng-template pTemplate="footer">
+    <p-button label="Cerrar" severity="secondary" (onClick)="createdTokenVisible.set(false)"></p-button>
+  </ng-template>
 </p-dialog>
 
 <p-confirmDialog />

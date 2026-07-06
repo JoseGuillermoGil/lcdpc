@@ -70,7 +70,7 @@ export class BundleFormDialogComponent implements OnChanges {
   protected form = this.emptyForm();
 
   protected readonly combosCategoryId = computed(() => {
-    const cat = this.categoryStore.categories().find((c) => c.slug === 'combos');
+    const cat = this.categoryStore.categories().find((c) => c.code === 'combos');
     return cat?.categoryId ?? null;
   });
 

@@ -15,10 +15,12 @@ import { TabsModule } from 'primeng/tabs';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AuthStore } from '../../../../core/auth/auth.store';
 import { RbacApiService } from '../../../../core/services/rbac-api.service';
+import { ApiTokenApiService } from '../../../../core/services/api-token-api.service';
 import {
   Resource, Role, Profile,
   CreateResourceRequest, CreateRoleRequest, CreateProfileRequest,
 } from '../../../../core/models/rbac.model';
+import { ApiToken, CreateApiTokenRequest } from '../../../../core/models/api-token.model';
 
 @Component({
   selector: 'app-rbac-section',
@@ -36,12 +38,17 @@ import {
 export class RbacSectionComponent implements OnInit {
   private readonly authStore = inject(AuthStore);
   private readonly rbacApi = inject(RbacApiService);
+  private readonly apiTokenApi = inject(ApiTokenApiService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
 
   protected readonly canCreate = computed(() => this.authStore.hasPermission('rbac:resource:create'));
   protected readonly canUpdate = computed(() => this.authStore.hasPermission('rbac:resource:update'));
   protected readonly canDelete = computed(() => this.authStore.hasPermission('rbac:resource:delete'));
+
+  protected readonly canCreateToken = computed(() => this.authStore.hasPermission('api_token:create'));
+  protected readonly canUpdateToken = computed(() => this.authStore.hasPermission('api_token:update'));
+  protected readonly canDeleteToken = computed(() => this.authStore.hasPermission('api_token:delete'));
 
   // Resources
   protected readonly resources = signal<Resource[]>([]);
@@ -74,6 +81,15 @@ export class RbacSectionComponent implements OnInit {
   protected readonly profileRolesTarget = signal<Profile | null>(null);
   protected selectedRoleId: string | null = null;
 
+  // API Tokens
+  protected readonly apiTokens = signal<ApiToken[]>([]);
+  protected readonly apiTokenDialogVisible = signal(false);
+  protected readonly selectedApiToken = signal<ApiToken | null>(null);
+  protected apiTokenForm: CreateApiTokenRequest = { name: '' };
+  protected apiTokenSubmitted = false;
+  protected readonly createdTokenVisible = signal(false);
+  protected createdTokenRaw = '';
+
   protected readonly saving = signal(false);
   protected readonly loading = signal(false);
 
@@ -103,6 +119,7 @@ export class RbacSectionComponent implements OnInit {
       next: (d) => { this.profiles.set(d); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
+    this.apiTokenApi.list().subscribe({ next: (d) => this.apiTokens.set(d) });
   }
 
   // ── Resources ──
@@ -299,5 +316,79 @@ export class RbacSectionComponent implements OnInit {
         this.loadAll();
       },
     });
+  }
+
+  // ── API Tokens ──
+
+  openApiTokenCreate(): void {
+    this.selectedApiToken.set(null);
+    this.apiTokenForm = { name: '' };
+    this.apiTokenSubmitted = false;
+    this.apiTokenDialogVisible.set(true);
+  }
+
+  openApiTokenEdit(token: ApiToken): void {
+    this.selectedApiToken.set(token);
+    this.apiTokenForm = { name: token.name };
+    this.apiTokenSubmitted = false;
+    this.apiTokenDialogVisible.set(true);
+  }
+
+  saveApiToken(): void {
+    this.apiTokenSubmitted = true;
+    if (!this.apiTokenForm.name) return;
+    this.saving.set(true);
+    if (this.selectedApiToken()) {
+      this.apiTokenApi.update(this.selectedApiToken()!.id, {
+        name: this.apiTokenForm.name,
+        is_active: this.selectedApiToken()!.isActive,
+      }).subscribe({
+        next: () => { this.saving.set(false); this.apiTokenDialogVisible.set(false); this.loadAll(); },
+        error: () => this.saving.set(false),
+      });
+    } else {
+      this.apiTokenApi.create(this.apiTokenForm).subscribe({
+        next: (result) => {
+          this.saving.set(false);
+          this.apiTokenDialogVisible.set(false);
+          this.createdTokenRaw = result.rawToken;
+          this.createdTokenVisible.set(true);
+          this.loadAll();
+        },
+        error: () => this.saving.set(false),
+      });
+    }
+  }
+
+  toggleApiTokenActive(token: ApiToken): void {
+    this.apiTokenApi.update(token.id, { name: token.name, is_active: !token.isActive }).subscribe({
+      next: () => {
+        this.messageService.add({ severity: 'success', summary: 'Exito' });
+        this.loadAll();
+      },
+      error: () => this.messageService.add({ severity: 'error', summary: 'Error' }),
+    });
+  }
+
+  confirmDeleteApiToken(token: ApiToken): void {
+    this.confirmationService.confirm({
+      message: `Eliminar el token "${token.name}"? Las sincronizaciones que lo usen dejaran de funcionar.`,
+      header: 'Confirmar',
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: 'Eliminar',
+      rejectLabel: 'Cancelar',
+      acceptButtonStyleClass: 'p-button-danger',
+      accept: () => {
+        this.apiTokenApi.delete(token.id).subscribe({
+          next: () => { this.messageService.add({ severity: 'success', summary: 'Exito' }); this.loadAll(); },
+          error: () => this.messageService.add({ severity: 'error', summary: 'Error' }),
+        });
+      },
+    });
+  }
+
+  copyToken(): void {
+    navigator.clipboard.writeText(this.createdTokenRaw);
+    this.messageService.add({ severity: 'success', summary: 'Copiado' });
   }
 }

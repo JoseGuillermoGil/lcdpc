@@ -6,7 +6,6 @@ sql:
       - "internal/auth/queries.sql"
       - "internal/pricing/queries.sql"
       - "internal/sede/queries.sql"
-      - "internal/sync/queries.sql"
       - "internal/admin/queries.sql"
     schema: "migrations/"
     gen:

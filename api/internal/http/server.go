@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/lcdpc/lcdpc-go/configs"
+	"github.com/lcdpc/lcdpc-go/internal/apitoken"
 	"github.com/lcdpc/lcdpc-go/internal/auth"
 	"github.com/lcdpc/lcdpc-go/internal/branch"
 	"github.com/lcdpc/lcdpc-go/internal/brand"
@@ -43,6 +44,7 @@ func NewServer(
 	systemConfigSvc *systemconfig.Service,
 	userSvc *user.Service,
 	dashboardSvc *dashboard.Service,
+	apiTokenSvc *apitoken.Service,
 ) *chi.Mux {
 	r := chi.NewRouter()
 
@@ -76,6 +78,7 @@ func NewServer(
 	systemConfigH := handler.NewSystemConfigHandler(systemConfigSvc)
 	userH := handler.NewUserHandler(userSvc)
 	dashboardH := dashboard.NewHandler(dashboardSvc, rbacStore)
+	apiTokenH := apitoken.NewHandler(apiTokenSvc)
 
 	// Public
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
@@ -484,6 +487,30 @@ func NewServer(
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequirePermission(rbacStore, "rbac:profile:delete"))
 			r.Delete("/profiles/{id}", rbacH.DeleteProfile)
+		})
+	})
+
+	// API Tokens
+	r.Route("/api/v1/api-tokens", func(r chi.Router) {
+		r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+		r.Use(middleware.RequireAuth())
+
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "api_token:view"))
+			r.Get("/", apiTokenH.List)
+			r.Get("/{id}", apiTokenH.GetByID)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "api_token:create"))
+			r.Post("/", apiTokenH.Create)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "api_token:update"))
+			r.Put("/{id}", apiTokenH.Update)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequirePermission(rbacStore, "api_token:delete"))
+			r.Delete("/{id}", apiTokenH.Delete)
 		})
 	})
 

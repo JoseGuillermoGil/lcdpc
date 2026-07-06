@@ -13,7 +13,7 @@ interface JsendEnvelope<T> {
 interface CategoryGoData {
   category_id: string;
   name: string;
-  slug: string;
+  code: string;
   created_at_utc: string;
   updated_at_utc: string;
 }
@@ -69,7 +69,7 @@ export class CategoryApiService {
     return {
       categoryId: raw.category_id,
       name: raw.name,
-      slug: raw.slug,
+      code: raw.code,
       createdAtUtc: raw.created_at_utc,
       updatedAtUtc: raw.updated_at_utc,
     };

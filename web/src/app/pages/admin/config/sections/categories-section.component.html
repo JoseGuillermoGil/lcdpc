@@ -9,7 +9,7 @@
   <ng-template pTemplate="header">
     <tr>
       <th>Nombre</th>
-      <th>Slug</th>
+      <th>Código</th>
       @if (canModify()) {
         <th style="width: 120px">Acciones</th>
       }
@@ -18,7 +18,7 @@
   <ng-template pTemplate="body" let-cat>
     <tr>
       <td>{{ cat.name }}</td>
-      <td><code>{{ cat.slug }}</code></td>
+      <td><code>{{ cat.code }}</code></td>
       @if (canModify()) {
       <td>
         @if (canUpdate()) {

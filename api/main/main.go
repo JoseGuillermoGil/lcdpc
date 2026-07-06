@@ -12,6 +12,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/lcdpc/lcdpc-go/configs"
+	"github.com/lcdpc/lcdpc-go/internal/apitoken"
 	"github.com/lcdpc/lcdpc-go/internal/auth"
 	"github.com/lcdpc/lcdpc-go/internal/branch"
 	"github.com/lcdpc/lcdpc-go/internal/brand"
@@ -136,8 +137,9 @@ func main() {
 	systemConfigSvc := systemconfig.NewService(pool)
 	userSvc := user.NewService(pool)
 	dashboardSvc := dashboard.NewService(pool)
+	apiTokenSvc := apitoken.NewService(pool)
 
-	router := httpserver.NewServer(cfg, pool, authSvc, oauth2Svc, keySvc, pricingSvc, branchSvc, brandSvc, categorySvc, staffSvc, syncSvc, rbacStore, rbacSvc, orderSvc, systemConfigSvc, userSvc, dashboardSvc)
+	router := httpserver.NewServer(cfg, pool, authSvc, oauth2Svc, keySvc, pricingSvc, branchSvc, brandSvc, categorySvc, staffSvc, syncSvc, rbacStore, rbacSvc, orderSvc, systemConfigSvc, userSvc, dashboardSvc, apiTokenSvc)
 
 	addr := ":" + cfg.Port
 	srv := &http.Server{

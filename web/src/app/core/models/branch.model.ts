@@ -16,6 +16,7 @@ export interface CreateScheduleRequest {
 
 export interface Branch {
   id: string;
+  code: string;
   storeName: string;
   taxId: string;
   address: string;
@@ -27,6 +28,7 @@ export interface Branch {
 }
 
 export interface CreateBranchRequest {
+  code: string;
   store_name: string;
   tax_id: string;
   address: string;

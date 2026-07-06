@@ -21,24 +21,24 @@ func NewService(pool *pgxpool.Pool) *Service {
 type Category struct {
 	CategoryID   uuid.UUID `json:"category_id"`
 	Name         string    `json:"name"`
-	Slug         string    `json:"slug"`
+	Code         string    `json:"code"`
 	CreatedAtUtc time.Time `json:"created_at_utc"`
 	UpdatedAtUtc time.Time `json:"updated_at_utc"`
 }
 
 type CreateCategoryRequest struct {
 	Name string `json:"name" validate:"required"`
-	Slug string `json:"slug" validate:"required"`
+	Code string `json:"code" validate:"required"`
 }
 
 func (s *Service) Create(ctx context.Context, req CreateCategoryRequest) (*Category, error) {
 	c := &Category{}
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO categories (category_id, name, slug, created_at_utc, updated_at_utc)
+		INSERT INTO categories (category_id, name, code, created_at_utc, updated_at_utc)
 		VALUES ($1, $2, $3, now(), now())
-		RETURNING category_id, name, slug, created_at_utc, updated_at_utc
-	`, uuid.New(), req.Name, req.Slug).Scan(
-		&c.CategoryID, &c.Name, &c.Slug, &c.CreatedAtUtc, &c.UpdatedAtUtc,
+		RETURNING category_id, name, code, created_at_utc, updated_at_utc
+	`, uuid.New(), req.Name, req.Code).Scan(
+		&c.CategoryID, &c.Name, &c.Code, &c.CreatedAtUtc, &c.UpdatedAtUtc,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create category: %w", err)
@@ -49,10 +49,10 @@ func (s *Service) Create(ctx context.Context, req CreateCategoryRequest) (*Categ
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Category, error) {
 	c := &Category{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT category_id, name, slug, created_at_utc, updated_at_utc
+		SELECT category_id, name, code, created_at_utc, updated_at_utc
 		FROM categories WHERE category_id = $1
 	`, id).Scan(
-		&c.CategoryID, &c.Name, &c.Slug, &c.CreatedAtUtc, &c.UpdatedAtUtc,
+		&c.CategoryID, &c.Name, &c.Code, &c.CreatedAtUtc, &c.UpdatedAtUtc,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
@@ -65,7 +65,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Category, error) 
 
 func (s *Service) List(ctx context.Context) ([]Category, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT category_id, name, slug, created_at_utc, updated_at_utc
+		SELECT category_id, name, code, created_at_utc, updated_at_utc
 		FROM categories ORDER BY name
 	`)
 	if err != nil {
@@ -76,7 +76,7 @@ func (s *Service) List(ctx context.Context) ([]Category, error) {
 	categories := make([]Category, 0)
 	for rows.Next() {
 		var c Category
-		if err := rows.Scan(&c.CategoryID, &c.Name, &c.Slug, &c.CreatedAtUtc, &c.UpdatedAtUtc); err != nil {
+		if err := rows.Scan(&c.CategoryID, &c.Name, &c.Code, &c.CreatedAtUtc, &c.UpdatedAtUtc); err != nil {
 			return nil, fmt.Errorf("scan category: %w", err)
 		}
 		categories = append(categories, c)
@@ -87,11 +87,11 @@ func (s *Service) List(ctx context.Context) ([]Category, error) {
 func (s *Service) Update(ctx context.Context, id uuid.UUID, req CreateCategoryRequest) (*Category, error) {
 	c := &Category{}
 	err := s.pool.QueryRow(ctx, `
-		UPDATE categories SET name = $2, slug = $3, updated_at_utc = now()
+		UPDATE categories SET name = $2, code = $3, updated_at_utc = now()
 		WHERE category_id = $1
-		RETURNING category_id, name, slug, created_at_utc, updated_at_utc
-	`, id, req.Name, req.Slug).Scan(
-		&c.CategoryID, &c.Name, &c.Slug, &c.CreatedAtUtc, &c.UpdatedAtUtc,
+		RETURNING category_id, name, code, created_at_utc, updated_at_utc
+	`, id, req.Name, req.Code).Scan(
+		&c.CategoryID, &c.Name, &c.Code, &c.CreatedAtUtc, &c.UpdatedAtUtc,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")

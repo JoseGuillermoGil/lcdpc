@@ -38,6 +38,13 @@ const DAY_LABELS = ['Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado
       <div class="form-fields" [style]="{paddingTop: '20px'}">
         <div class="field">
           <p-floatlabel>
+            <input pInputText id="code" [(ngModel)]="form.code"
+                   [class.ng-invalid]="submitted && !form.code" style="width: 100%" placeholder=" " />
+            <label for="code">Código *</label>
+          </p-floatlabel>
+        </div>
+        <div class="field">
+          <p-floatlabel>
             <input pInputText id="storeName" [(ngModel)]="form.store_name"
                    [class.ng-invalid]="submitted && !form.store_name" style="width: 100%" placeholder=" " />
             <label for="storeName">Nombre de la sede *</label>
@@ -175,7 +182,7 @@ export class BranchFormDialogComponent implements OnChanges {
 
   save(): void {
     this.submitted = true;
-    if (!this.form.store_name || !this.form.tax_id || !this.form.address || !this.form.contact_phone) return;
+    if (!this.form.code || !this.form.store_name || !this.form.tax_id || !this.form.address || !this.form.contact_phone) return;
     if (!this.hasAnySchedule()) return;
 
     const schedules: CreateScheduleRequest[] = [];
@@ -195,6 +202,7 @@ export class BranchFormDialogComponent implements OnChanges {
 
     this.saving.set(true);
     const req: CreateBranchRequest = {
+      code: this.form.code,
       store_name: this.form.store_name,
       tax_id: this.form.tax_id,
       address: this.form.address,
@@ -223,6 +231,7 @@ export class BranchFormDialogComponent implements OnChanges {
 
   private emptyForm() {
     return {
+      code: '',
       store_name: '',
       tax_id: '',
       address: '',

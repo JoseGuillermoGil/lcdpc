@@ -1272,7 +1272,7 @@ Get order status change history.
 ## 12. Sync (`/api/v1/sync`)
 
 ### `POST /api/v1/sync/products`
-Bulk upsert products (ON CONFLICT sku).
+Bulk upsert products by `(sku, branch_id)`.
 
 **Auth:** API Key in `X-API-Key` header
 
@@ -1280,27 +1280,33 @@ Bulk upsert products (ON CONFLICT sku).
 ```json
 [
   {
-    "product_id": "uuid",
     "name": "Coca-Cola 2L",
-    "sku": "CC-2L",
-    "base_measure_type": "unit",
-    "wholesale_type": "case",
-    "units_per_case": 6,
-    "units_per_bundle": 24,
-    "is_active": true
+    "code": "CC-2L",
+    "is_active": true,
+    "brand_code": "COCA-COLA",
+    "category_code": "bebidas",
+    "branch_code": "CAR-001",
+    "base_unit_code": "unit",
+    "stock": 100,
+    "prices": [
+      { "code": "retail", "amount": 2.50 },
+      { "code": "wholesale", "amount": 2.00 }
+    ]
   }
 ]
 ```
 
 **Response:**
 ```json
-{"status": "success", "data": {"processed": 10, "errors": 0}}
+{"status": "success", "data": {"processed": 10, "errors": 0, "details": []}}
 ```
+
+All `_code` fields are resolved to UUIDs. If a code is not found, the item is recorded in `details` as an error.
 
 ---
 
 ### `POST /api/v1/sync/bundles`
-Bulk upsert bundles (ON CONFLICT code) + replace items.
+Bulk upsert bundles by `(code, branch_id)` with items, prices, and chain stock.
 
 **Auth:** API Key in `X-API-Key` header
 
@@ -1308,21 +1314,30 @@ Bulk upsert bundles (ON CONFLICT code) + replace items.
 ```json
 [
   {
-    "bundle_id": "uuid",
     "code": "COMBO-001",
     "name": "Family Combo",
-    "status": "Published",
-    "branch_ids_enabled": ["uuid1"],
-    "total_price": 25.99,
-    "total_price_currency": "USD",
-    "promotional_price": 19.99,
-    "promotional_price_currency": "USD",
+    "is_active": true,
+    "branch_code": "CAR-001",
+    "category_code": "combos",
     "items": [
-      {"product_id": "uuid", "quantity": 2}
-    ]
+      { "product_code": "CC-2L", "quantity": 2 },
+      { "product_code": "PAN-001", "quantity": 4 }
+    ],
+    "prices": [
+      { "code": "retail", "amount": 25.99 }
+    ],
+    "stock": 50,
+    "blocks_product_stock": true
   }
 ]
 ```
+
+**Response:**
+```json
+{"status": "success", "data": {"processed": 5, "errors": 0, "details": []}}
+```
+
+Items resolve `product_code` to `product_id` via product lookup by sku + branch. Prices resolve `code` to `price_category_id`.
 
 ---
 

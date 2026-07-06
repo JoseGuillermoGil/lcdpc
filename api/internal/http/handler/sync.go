@@ -19,13 +19,18 @@ func NewSyncHandler(svc *sync.Service) *SyncHandler {
 func (h *SyncHandler) SyncProducts(w http.ResponseWriter, r *http.Request) {
 	var req []sync.SyncProductRequest
 	if err := response.Decode(r, &req); err != nil {
-		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid json"})
+		return
+	}
+
+	if len(req) == 0 {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "empty request"})
 		return
 	}
 
 	result, err := h.svc.SyncProducts(r.Context(), req)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": err.Error()})
 		return
 	}
 
@@ -35,13 +40,18 @@ func (h *SyncHandler) SyncProducts(w http.ResponseWriter, r *http.Request) {
 func (h *SyncHandler) SyncBundles(w http.ResponseWriter, r *http.Request) {
 	var req []sync.SyncBundleRequest
 	if err := response.Decode(r, &req); err != nil {
-		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid"})
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid json"})
+		return
+	}
+
+	if len(req) == 0 {
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "empty request"})
 		return
 	}
 
 	result, err := h.svc.SyncBundles(r.Context(), req)
 	if err != nil {
-		response.Error(w, http.StatusInternalServerError, err.Error())
+		response.Fail(w, http.StatusBadRequest, map[string]string{"body": err.Error()})
 		return
 	}
 
@@ -75,23 +85,19 @@ func (h *SyncHandler) SyncProductImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save new file first
 	newPath, err := saveUploadedFile(file, ext, "products")
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "failed to save image")
 		return
 	}
 
-	// Update DB — returns old image path
 	oldImg, err := h.svc.UpdateProductImageBySKU(r.Context(), sku, newPath)
 	if err != nil {
-		// Rollback: delete the new file
 		deleteOldFile(newPath)
-		response.Error(w, http.StatusNotFound, err.Error())
+		response.Error(w, http.StatusNotFound, "product not found")
 		return
 	}
 
-	// Delete old file if existed
 	if oldImg != "" {
 		deleteOldFile(oldImg)
 	}
@@ -126,23 +132,19 @@ func (h *SyncHandler) SyncBundleImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save new file first
 	newPath, err := saveUploadedFile(file, ext, "bundles")
 	if err != nil {
 		response.Error(w, http.StatusInternalServerError, "failed to save image")
 		return
 	}
 
-	// Update DB — returns old image path
 	oldImg, err := h.svc.UpdateBundleImageByCode(r.Context(), code, newPath)
 	if err != nil {
-		// Rollback: delete the new file
 		deleteOldFile(newPath)
-		response.Error(w, http.StatusNotFound, err.Error())
+		response.Error(w, http.StatusNotFound, "bundle not found")
 		return
 	}
 
-	// Delete old file if existed
 	if oldImg != "" {
 		deleteOldFile(oldImg)
 	}

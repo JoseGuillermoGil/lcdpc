@@ -30,6 +30,7 @@ type Schedule struct {
 
 type Branch struct {
 	ID                    uuid.UUID  `json:"id"`
+	Code                  string     `json:"code"`
 	StoreName             string     `json:"store_name"`
 	TaxID                 string     `json:"tax_id"`
 	Address               string     `json:"address"`
@@ -47,6 +48,7 @@ type CreateScheduleRequest struct {
 }
 
 type CreateBranchRequest struct {
+	Code                  string                 `json:"code" validate:"required"`
 	StoreName             string                 `json:"store_name" validate:"required"`
 	TaxID                 string                 `json:"tax_id" validate:"required"`
 	Address               string                 `json:"address" validate:"required"`
@@ -69,11 +71,11 @@ func (s *Service) Create(ctx context.Context, req CreateBranchRequest) (*Branch,
 
 	branch := &Branch{}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO branches (id, store_name, tax_id, address, contact_phone, secondary_contact_phone, created_at_utc, updated_at_utc)
-		VALUES ($1, $2, $3, $4, $5, $6, now(), now())
-		RETURNING id, store_name, tax_id, address, contact_phone, secondary_contact_phone, created_at_utc, updated_at_utc
-	`, uuid.New(), req.StoreName, req.TaxID, req.Address, req.ContactPhone, secPhone).Scan(
-		&branch.ID, &branch.StoreName, &branch.TaxID, &branch.Address, &branch.ContactPhone,
+		INSERT INTO branches (id, code, store_name, tax_id, address, contact_phone, secondary_contact_phone, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())
+		RETURNING id, code, store_name, tax_id, address, contact_phone, secondary_contact_phone, created_at_utc, updated_at_utc
+	`, uuid.New(), req.Code, req.StoreName, req.TaxID, req.Address, req.ContactPhone, secPhone).Scan(
+		&branch.ID, &branch.Code, &branch.StoreName, &branch.TaxID, &branch.Address, &branch.ContactPhone,
 		&branch.SecondaryContactPhone, &branch.CreatedAtUtc, &branch.UpdatedAtUtc,
 	)
 	if err != nil {
@@ -104,7 +106,7 @@ func (s *Service) Create(ctx context.Context, req CreateBranchRequest) (*Branch,
 
 func (s *Service) List(ctx context.Context) ([]Branch, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, store_name, tax_id, address, contact_phone, secondary_contact_phone, created_at_utc, updated_at_utc
+		SELECT id, code, store_name, tax_id, address, contact_phone, secondary_contact_phone, created_at_utc, updated_at_utc
 		FROM branches ORDER BY store_name
 	`)
 	if err != nil {
@@ -116,7 +118,7 @@ func (s *Service) List(ctx context.Context) ([]Branch, error) {
 	branchIDs := make([]uuid.UUID, 0)
 	for rows.Next() {
 		var b Branch
-		if err := rows.Scan(&b.ID, &b.StoreName, &b.TaxID, &b.Address, &b.ContactPhone,
+		if err := rows.Scan(&b.ID, &b.Code, &b.StoreName, &b.TaxID, &b.Address, &b.ContactPhone,
 			&b.SecondaryContactPhone, &b.CreatedAtUtc, &b.UpdatedAtUtc); err != nil {
 			return nil, fmt.Errorf("scan branch: %w", err)
 		}
@@ -161,10 +163,10 @@ func (s *Service) List(ctx context.Context) ([]Branch, error) {
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Branch, error) {
 	branch := &Branch{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, store_name, tax_id, address, contact_phone, secondary_contact_phone, created_at_utc, updated_at_utc
+		SELECT id, code, store_name, tax_id, address, contact_phone, secondary_contact_phone, created_at_utc, updated_at_utc
 		FROM branches WHERE id = $1
 	`, id).Scan(
-		&branch.ID, &branch.StoreName, &branch.TaxID, &branch.Address, &branch.ContactPhone,
+		&branch.ID, &branch.Code, &branch.StoreName, &branch.TaxID, &branch.Address, &branch.ContactPhone,
 		&branch.SecondaryContactPhone, &branch.CreatedAtUtc, &branch.UpdatedAtUtc,
 	)
 	if err == pgx.ErrNoRows {

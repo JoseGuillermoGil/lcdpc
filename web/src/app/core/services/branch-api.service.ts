@@ -22,6 +22,7 @@ interface ScheduleGoData {
 
 interface BranchGoData {
   id: string;
+  code: string;
   store_name: string;
   tax_id: string;
   address: string;
@@ -68,6 +69,7 @@ export class BranchApiService {
   private mapBranch(raw: BranchGoData): Branch {
     return {
       id: raw.id,
+      code: raw.code,
       storeName: raw.store_name,
       taxId: raw.tax_id,
       address: raw.address,

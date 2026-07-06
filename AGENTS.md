@@ -15,6 +15,7 @@ Before working on any code, also load the domain-specific guidance:
 
 - **`backend.md`** — all backend rules (Go, auth, RBAC, handlers, data access, migrations, branch scoping).
 - **`frontend.md`** — all frontend rules (Angular, PrimeNG, components, stores, dialogs, look & feel).
+- **`sync.md`** — sync endpoints (API Key auth, products/bundles batch upsert, chain stock, image upload).
 
 ## Fast commands
 

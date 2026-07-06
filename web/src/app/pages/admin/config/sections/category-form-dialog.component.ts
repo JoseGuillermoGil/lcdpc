@@ -29,8 +29,8 @@ import { CategoryApiService } from '../../../../core/services/category-api.servi
         </div>
         <div class="field">
           <p-floatlabel>
-            <input pInputText id="slug" [(ngModel)]="form.slug" [class.ng-invalid]="submitted && !form.slug" style="width: 100%" placeholder=" " />
-            <label for="slug">Slug *</label>
+            <input pInputText id="code" [(ngModel)]="form.code" [class.ng-invalid]="submitted && !form.code" style="width: 100%" placeholder=" " />
+            <label for="code">Código *</label>
           </p-floatlabel>
         </div>
       </div>
@@ -66,7 +66,7 @@ export class CategoryFormDialogComponent implements OnChanges {
       if (this.category) {
         this.form = {
           name: this.category.name,
-          slug: this.category.slug,
+          code: this.category.code,
         };
       } else {
         this.form = this.emptyForm();
@@ -77,7 +77,7 @@ export class CategoryFormDialogComponent implements OnChanges {
 
   save(): void {
     this.submitted = true;
-    if (!this.form.name || !this.form.slug) return;
+    if (!this.form.name || !this.form.code) return;
 
     this.saving.set(true);
     const operation = this.isEditMode
@@ -95,6 +95,6 @@ export class CategoryFormDialogComponent implements OnChanges {
   }
 
   private emptyForm() {
-    return { name: '', slug: '' };
+    return { name: '', code: '' };
   }
 }
