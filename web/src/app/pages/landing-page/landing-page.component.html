@@ -11,6 +11,7 @@
   [categories]="categoryStore.filterOptions()"
   [selectedCategoryId]="selectedCategoryId()"
   [products]="filteredProducts()"
+  [negativeStock]="systemConfigStore.negativeStock()"
   (categorySelect)="selectCategory($event)"
   (increment)="incrementQuantity($event)"
   (decrement)="decrementQuantity($event)"

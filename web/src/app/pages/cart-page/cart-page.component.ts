@@ -10,6 +10,8 @@ import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
 import { AuthStore } from '../../core/auth/auth.store';
 import { CartItem, CartStore } from '../../core/stores/cart.store';
+import { BranchStore } from '../../core/stores/branch.store';
+import { SystemConfigStore } from '../../core/stores/system-config.store';
 import { OrderApiService } from '../../core/services/order-api.service';
 import { LoginDialogComponent } from '../../shared/login-dialog/login-dialog.component';
 
@@ -33,6 +35,8 @@ import { LoginDialogComponent } from '../../shared/login-dialog/login-dialog.com
 export class CartPageComponent {
   private readonly cartStore = inject(CartStore);
   private readonly authStore = inject(AuthStore);
+  private readonly branchStore = inject(BranchStore);
+  protected readonly systemConfigStore = inject(SystemConfigStore);
   private readonly orderApi = inject(OrderApiService);
   private readonly router = inject(Router);
   private readonly messageService = inject(MessageService);
@@ -52,7 +56,7 @@ export class CartPageComponent {
 
   protected readonly isEmpty = computed(() => this.items().length === 0);
   protected readonly hasStockIssues = computed(() =>
-    this.items().some((item) => item.quantity > item.stockAvailable)
+    !this.systemConfigStore.negativeStock() && this.items().some((item) => item.quantity > item.stockAvailable)
   );
 
   protected readonly branchId = computed(() => {
@@ -86,7 +90,7 @@ export class CartPageComponent {
 
   protected increment(id: string): void {
     const item = this.items().find((i) => i.id === id);
-    if (item && item.quantity < item.stockAvailable) {
+    if (item && (this.systemConfigStore.negativeStock() || item.quantity < item.stockAvailable)) {
       this.cartStore.increment(id);
     }
   }
@@ -95,8 +99,8 @@ export class CartPageComponent {
     this.cartStore.decrement(id);
   }
 
-  protected isOverStock(item: CartItem): boolean {
-    return item.quantity > item.stockAvailable;
+  isOverStock(item: CartItem): boolean {
+    return !this.systemConfigStore.negativeStock() && item.quantity > item.stockAvailable;
   }
 
   protected openLogin(): void {

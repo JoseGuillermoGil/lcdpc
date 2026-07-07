@@ -9,12 +9,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Service struct {
-	pool *pgxpool.Pool
+type SystemConfigReader interface {
+	GetNegativeStock(ctx context.Context) (bool, error)
 }
 
-func NewService(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool}
+type Service struct {
+	pool   *pgxpool.Pool
+	sysCfg SystemConfigReader
+}
+
+func NewService(pool *pgxpool.Pool, sysCfg SystemConfigReader) *Service {
+	return &Service{pool: pool, sysCfg: sysCfg}
 }
 
 func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByUserID uuid.UUID) (*Order, error) {
@@ -69,6 +74,8 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 	var priceTotal float64
 	var totalItems int
 
+	negativeStock, _ := s.sysCfg.GetNegativeStock(ctx)
+
 	for _, item := range req.Items {
 		subtotal := item.Quantity * item.UnitPrice
 		priceTotal += subtotal
@@ -78,7 +85,7 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 		if item.ItemType == "product" {
 			productID = &item.ProductID
 
-			var stock, stockAvailable, stockBlocked int
+			var stock, stockAvailable, stockBlocked float64
 			err = tx.QueryRow(ctx, `
 				SELECT stock, stock_available, stock_blocked
 				FROM products WHERE product_id = $1 FOR UPDATE
@@ -87,12 +94,12 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 				return nil, fmt.Errorf("get product stock: %w", err)
 			}
 
-			qty := int(item.Quantity)
-			if stockAvailable < qty {
-				return nil, fmt.Errorf("INSUFFICIENT_STOCK: product %s has %d available, requested %d", item.ProductID, stockAvailable, qty)
+			qty := item.Quantity
+			if stockAvailable < qty && !negativeStock {
+				return nil, fmt.Errorf("INSUFFICIENT_STOCK: product %s has %.4f available, requested %.4f", item.ProductID, stockAvailable, qty)
 			}
 			if stockBlocked+qty > stock {
-				return nil, fmt.Errorf("STOCK_EXCEEDED: product %s stock=%d blocked=%d requested=%d", item.ProductID, stock, stockBlocked, qty)
+				return nil, fmt.Errorf("STOCK_EXCEEDED: product %s stock=%.4f blocked=%.4f requested=%.4f", item.ProductID, stock, stockBlocked, qty)
 			}
 
 			_, err = tx.Exec(ctx, `
@@ -105,7 +112,7 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 			}
 		} else {
 			bundleID = &item.BundleID
-			var bundleStock, bundleAvailable, bundleBlocked int
+			var bundleStock, bundleAvailable, bundleBlocked float64
 			var blocksProductStock bool
 			err = tx.QueryRow(ctx, `
 				SELECT stock, stock_available, stock_blocked, blocks_product_stock
@@ -115,12 +122,12 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 				return nil, fmt.Errorf("get bundle stock: %w", err)
 			}
 			if blocksProductStock {
-				qty := int(item.Quantity)
-				if bundleAvailable < qty {
-					return nil, fmt.Errorf("INSUFFICIENT_BUNDLE_STOCK: bundle %s has %d available, requested %d", item.BundleID, bundleAvailable, qty)
+				qty := item.Quantity
+				if bundleAvailable < qty && !negativeStock {
+					return nil, fmt.Errorf("INSUFFICIENT_BUNDLE_STOCK: bundle %s has %.4f available, requested %.4f", item.BundleID, bundleAvailable, qty)
 				}
 				if bundleBlocked+qty > bundleStock {
-					return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDED: bundle %s stock=%d blocked=%d requested=%d", item.BundleID, bundleStock, bundleBlocked, qty)
+					return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDED: bundle %s stock=%.4f blocked=%.4f requested=%.4f", item.BundleID, bundleStock, bundleBlocked, qty)
 				}
 				_, err = tx.Exec(ctx, `
 					UPDATE bundles
@@ -131,7 +138,7 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 					return nil, fmt.Errorf("update bundle stock: %w", err)
 				}
 
-				if err := blockBundleProductStock(ctx, tx, item.BundleID, qty); err != nil {
+				if err := blockBundleProductStock(ctx, tx, item.BundleID, qty, negativeStock); err != nil {
 					return nil, err
 				}
 			}
@@ -317,6 +324,8 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 		var priceTotal float64
 		var totalItems int
 
+		negativeStock, _ := s.sysCfg.GetNegativeStock(ctx)
+
 		for _, item := range req.Items {
 			subtotal := item.Quantity * item.UnitPrice
 			priceTotal += subtotal
@@ -326,7 +335,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 			if item.ItemType == "product" {
 				productID = &item.ProductID
 
-				var stock, stockAvailable, stockBlocked int
+				var stock, stockAvailable, stockBlocked float64
 				err = tx.QueryRow(ctx, `
 					SELECT stock, stock_available, stock_blocked
 					FROM products WHERE product_id = $1 FOR UPDATE
@@ -335,12 +344,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 					return nil, fmt.Errorf("get product stock: %w", err)
 				}
 
-				qty := int(item.Quantity)
-				if stockAvailable < qty {
-					return nil, fmt.Errorf("INSUFFICIENT_STOCK: product %s has %d available, requested %d", item.ProductID, stockAvailable, qty)
+				qty := item.Quantity
+				if stockAvailable < qty && !negativeStock {
+					return nil, fmt.Errorf("INSUFFICIENT_STOCK: product %s has %.4f available, requested %.4f", item.ProductID, stockAvailable, qty)
 				}
 				if stockBlocked+qty > stock {
-					return nil, fmt.Errorf("STOCK_EXCEEDED: product %s stock=%d blocked=%d requested=%d", item.ProductID, stock, stockBlocked, qty)
+					return nil, fmt.Errorf("STOCK_EXCEEDED: product %s stock=%.4f blocked=%.4f requested=%.4f", item.ProductID, stock, stockBlocked, qty)
 				}
 
 				_, err = tx.Exec(ctx, `
@@ -353,7 +362,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 				}
 			} else {
 				bundleID = &item.BundleID
-				var bundleStock, bundleAvailable, bundleBlocked int
+				var bundleStock, bundleAvailable, bundleBlocked float64
 				var blocksProductStock bool
 				err = tx.QueryRow(ctx, `
 					SELECT stock, stock_available, stock_blocked, blocks_product_stock
@@ -363,12 +372,12 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 					return nil, fmt.Errorf("get bundle stock: %w", err)
 				}
 				if blocksProductStock {
-					qty := int(item.Quantity)
-					if bundleAvailable < qty {
-						return nil, fmt.Errorf("INSUFFICIENT_BUNDLE_STOCK: bundle %s has %d available, requested %d", item.BundleID, bundleAvailable, qty)
+					qty := item.Quantity
+					if bundleAvailable < qty && !negativeStock {
+						return nil, fmt.Errorf("INSUFFICIENT_BUNDLE_STOCK: bundle %s has %.4f available, requested %.4f", item.BundleID, bundleAvailable, qty)
 					}
 					if bundleBlocked+qty > bundleStock {
-						return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDED: bundle %s stock=%d blocked=%d requested=%d", item.BundleID, bundleStock, bundleBlocked, qty)
+						return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDED: bundle %s stock=%.4f blocked=%.4f requested=%.4f", item.BundleID, bundleStock, bundleBlocked, qty)
 					}
 					_, err = tx.Exec(ctx, `
 						UPDATE bundles
@@ -379,7 +388,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 						return nil, fmt.Errorf("update bundle stock: %w", err)
 					}
 
-					if err := blockBundleProductStock(ctx, tx, item.BundleID, qty); err != nil {
+					if err := blockBundleProductStock(ctx, tx, item.BundleID, qty, negativeStock); err != nil {
 						return nil, err
 					}
 				}
@@ -586,7 +595,7 @@ func isStockReleaseStatus(status string) bool {
 	return status == StatusCancelledByCustomer || status == StatusRejectedByValidation
 }
 
-func blockBundleProductStock(ctx context.Context, tx pgx.Tx, bundleID uuid.UUID, bundleQty int) error {
+func blockBundleProductStock(ctx context.Context, tx pgx.Tx, bundleID uuid.UUID, bundleQty float64, negativeStock bool) error {
 	rows, err := tx.Query(ctx, `
 		SELECT product_id, quantity FROM bundle_items WHERE bundle_id = $1
 	`, bundleID)
@@ -595,7 +604,7 @@ func blockBundleProductStock(ctx context.Context, tx pgx.Tx, bundleID uuid.UUID,
 	}
 	type bundleItem struct {
 		productID uuid.UUID
-		qty       int
+		qty       float64
 	}
 	var items []bundleItem
 	for rows.Next() {
@@ -605,13 +614,13 @@ func blockBundleProductStock(ctx context.Context, tx pgx.Tx, bundleID uuid.UUID,
 			rows.Close()
 			return fmt.Errorf("scan bundle item for stock block: %w", scanErr)
 		}
-		items = append(items, bundleItem{productID: productID, qty: int(itemQty) * bundleQty})
+		items = append(items, bundleItem{productID: productID, qty: itemQty * bundleQty})
 	}
 	rows.Close()
 
 	for _, bi := range items {
 		if bi.qty > 0 {
-			var stock, stockAvailable, stockBlocked int
+			var stock, stockAvailable, stockBlocked float64
 			err := tx.QueryRow(ctx, `
 				SELECT stock, stock_available, stock_blocked
 				FROM products WHERE product_id = $1 FOR UPDATE
@@ -619,11 +628,11 @@ func blockBundleProductStock(ctx context.Context, tx pgx.Tx, bundleID uuid.UUID,
 			if err != nil {
 				return fmt.Errorf("get product stock for bundle block: %w", err)
 			}
-			if stockAvailable < bi.qty {
-				return fmt.Errorf("INSUFFICIENT_STOCK: product %s has %d available, bundle needs %d", bi.productID, stockAvailable, bi.qty)
+			if stockAvailable < bi.qty && !negativeStock {
+				return fmt.Errorf("INSUFFICIENT_STOCK: product %s has %.4f available, bundle needs %.4f", bi.productID, stockAvailable, bi.qty)
 			}
 			if stockBlocked+bi.qty > stock {
-				return fmt.Errorf("STOCK_EXCEEDED: product %s stock=%d blocked=%d bundle needs %d", bi.productID, stock, stockBlocked, bi.qty)
+				return fmt.Errorf("STOCK_EXCEEDED: product %s stock=%.4f blocked=%.4f bundle needs %.4f", bi.productID, stock, stockBlocked, bi.qty)
 			}
 			_, err = tx.Exec(ctx, `
 				UPDATE products
@@ -645,7 +654,7 @@ func releaseBlockedStock(ctx context.Context, tx pgx.Tx, items []OrderItem) erro
 			if item.ProductID == nil {
 				continue
 			}
-			qty := int(item.Quantity)
+			qty := item.Quantity
 			_, err := tx.Exec(ctx, `
 				UPDATE products
 				SET stock_available = stock_available + $1, stock_blocked = stock_blocked - $1
@@ -658,7 +667,7 @@ func releaseBlockedStock(ctx context.Context, tx pgx.Tx, items []OrderItem) erro
 			if item.BundleID == nil {
 				continue
 			}
-			qty := int(item.Quantity)
+			qty := item.Quantity
 			var blocksProductStock bool
 			err := tx.QueryRow(ctx, `
 				SELECT blocks_product_stock FROM bundles WHERE bundle_id = $1 FOR UPDATE
@@ -684,7 +693,7 @@ func releaseBlockedStock(ctx context.Context, tx pgx.Tx, items []OrderItem) erro
 				}
 				type bundleItem struct {
 					productID uuid.UUID
-					qty       int
+					qty       float64
 				}
 				var bItems []bundleItem
 				for bundleItems.Next() {
@@ -694,7 +703,7 @@ func releaseBlockedStock(ctx context.Context, tx pgx.Tx, items []OrderItem) erro
 						bundleItems.Close()
 						return fmt.Errorf("scan bundle item for release: %w", scanErr)
 					}
-					bItems = append(bItems, bundleItem{productID: productID, qty: int(itemQty) * qty})
+					bItems = append(bItems, bundleItem{productID: productID, qty: itemQty * qty})
 				}
 				bundleItems.Close()
 				for _, bi := range bItems {
@@ -722,7 +731,7 @@ func completeOrderStock(ctx context.Context, tx pgx.Tx, items []OrderItem) error
 			if item.ProductID == nil {
 				continue
 			}
-			qty := int(item.Quantity)
+			qty := item.Quantity
 			// Permanently reduce stock + release blocked
 			_, err := tx.Exec(ctx, `
 				UPDATE products
@@ -736,9 +745,9 @@ func completeOrderStock(ctx context.Context, tx pgx.Tx, items []OrderItem) error
 			if item.BundleID == nil {
 				continue
 			}
-			qty := int(item.Quantity)
+			qty := item.Quantity
 			var blocksProductStock bool
-			var bundleStock int
+			var bundleStock float64
 			err := tx.QueryRow(ctx, `
 				SELECT blocks_product_stock, stock FROM bundles WHERE bundle_id = $1 FOR UPDATE
 			`, *item.BundleID).Scan(&blocksProductStock, &bundleStock)
@@ -765,7 +774,7 @@ func completeOrderStock(ctx context.Context, tx pgx.Tx, items []OrderItem) error
 				}
 				type bundleItem struct {
 					productID uuid.UUID
-					qty       int
+					qty       float64
 				}
 				var bItems []bundleItem
 				for bundleItems.Next() {
@@ -775,7 +784,7 @@ func completeOrderStock(ctx context.Context, tx pgx.Tx, items []OrderItem) error
 						bundleItems.Close()
 						return fmt.Errorf("scan bundle item: %w", scanErr)
 					}
-					bItems = append(bItems, bundleItem{productID: productID, qty: int(itemQty) * qty})
+					bItems = append(bItems, bundleItem{productID: productID, qty: itemQty * qty})
 				}
 				bundleItems.Close()
 				for _, bi := range bItems {

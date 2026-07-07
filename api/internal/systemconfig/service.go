@@ -25,6 +25,7 @@ type SystemConfig struct {
 	PageName           string  `json:"page_name"`
 	Title              string  `json:"title"`
 	ShowPriceInCatalog bool    `json:"show_price_in_catalog"`
+	NegativeStock      bool    `json:"negative_stock"`
 	Active             bool    `json:"active"`
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
@@ -36,6 +37,7 @@ type CreateSystemConfigRequest struct {
 	PageName           string  `json:"page_name" validate:"required"`
 	Title              string  `json:"title" validate:"required"`
 	ShowPriceInCatalog bool    `json:"show_price_in_catalog"`
+	NegativeStock      bool    `json:"negative_stock"`
 	Active             bool    `json:"active"`
 }
 
@@ -45,6 +47,7 @@ type UpdateSystemConfigRequest struct {
 	PageName           *string `json:"page_name"`
 	Title              *string `json:"title"`
 	ShowPriceInCatalog *bool   `json:"show_price_in_catalog"`
+	NegativeStock      *bool   `json:"negative_stock"`
 	Active             *bool   `json:"active"`
 }
 
@@ -63,11 +66,11 @@ func (s *Service) Create(ctx context.Context, req CreateSystemConfigRequest) (*S
 
 	c := &SystemConfig{}
 	err = tx.QueryRow(ctx, `
-		INSERT INTO system_config (logo_path, icon_path, page_name, title, show_price_in_catalog, active)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, logo_path, icon_path, page_name, title, show_price_in_catalog, active, created_at, updated_at
-	`, req.LogoPath, req.IconPath, req.PageName, req.Title, req.ShowPriceInCatalog, req.Active).Scan(
-		&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.Active, &c.CreatedAt, &c.UpdatedAt,
+		INSERT INTO system_config (logo_path, icon_path, page_name, title, show_price_in_catalog, negative_stock, active)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, logo_path, icon_path, page_name, title, show_price_in_catalog, negative_stock, active, created_at, updated_at
+	`, req.LogoPath, req.IconPath, req.PageName, req.Title, req.ShowPriceInCatalog, req.NegativeStock, req.Active).Scan(
+		&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.NegativeStock, &c.Active, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create system config: %w", err)
@@ -82,16 +85,17 @@ func (s *Service) Create(ctx context.Context, req CreateSystemConfigRequest) (*S
 func (s *Service) GetActive(ctx context.Context) (*SystemConfig, error) {
 	c := &SystemConfig{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, logo_path, icon_path, page_name, title, show_price_in_catalog, active, created_at, updated_at
+		SELECT id, logo_path, icon_path, page_name, title, show_price_in_catalog, negative_stock, active, created_at, updated_at
 		FROM system_config WHERE active = true LIMIT 1
 	`).Scan(
-		&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.Active, &c.CreatedAt, &c.UpdatedAt,
+		&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.NegativeStock, &c.Active, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return &SystemConfig{
 			PageName:           "LCDPC",
 			Title:              "LCDPC",
 			ShowPriceInCatalog: true,
+			NegativeStock:      false,
 			Active:             false,
 		}, nil
 	}
@@ -101,13 +105,27 @@ func (s *Service) GetActive(ctx context.Context) (*SystemConfig, error) {
 	return c, nil
 }
 
+func (s *Service) GetNegativeStock(ctx context.Context) (bool, error) {
+	var negativeStock bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT negative_stock FROM system_config WHERE active = true LIMIT 1
+	`).Scan(&negativeStock)
+	if err == pgx.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("get negative_stock: %w", err)
+	}
+	return negativeStock, nil
+}
+
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*SystemConfig, error) {
 	c := &SystemConfig{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, logo_path, icon_path, page_name, title, show_price_in_catalog, active, created_at, updated_at
+		SELECT id, logo_path, icon_path, page_name, title, show_price_in_catalog, negative_stock, active, created_at, updated_at
 		FROM system_config WHERE id = $1
 	`, id).Scan(
-		&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.Active, &c.CreatedAt, &c.UpdatedAt,
+		&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.NegativeStock, &c.Active, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")
@@ -120,7 +138,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*SystemConfig, err
 
 func (s *Service) List(ctx context.Context) ([]SystemConfig, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, logo_path, icon_path, page_name, title, show_price_in_catalog, active, created_at, updated_at
+		SELECT id, logo_path, icon_path, page_name, title, show_price_in_catalog, negative_stock, active, created_at, updated_at
 		FROM system_config ORDER BY created_at DESC
 	`)
 	if err != nil {
@@ -131,7 +149,7 @@ func (s *Service) List(ctx context.Context) ([]SystemConfig, error) {
 	configs := make([]SystemConfig, 0)
 	for rows.Next() {
 		var c SystemConfig
-		if err := rows.Scan(&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.Active, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.NegativeStock, &c.Active, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan system config: %w", err)
 		}
 		configs = append(configs, c)
@@ -160,12 +178,13 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateSystemConf
 			page_name = COALESCE($4, page_name),
 			title = COALESCE($5, title),
 			show_price_in_catalog = COALESCE($6, show_price_in_catalog),
-			active = COALESCE($7, active),
+			negative_stock = COALESCE($7, negative_stock),
+			active = COALESCE($8, active),
 			updated_at = now()
 		WHERE id = $1
-		RETURNING id, logo_path, icon_path, page_name, title, show_price_in_catalog, active, created_at, updated_at
-	`, id, req.LogoPath, req.IconPath, req.PageName, req.Title, req.ShowPriceInCatalog, req.Active).Scan(
-		&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.Active, &c.CreatedAt, &c.UpdatedAt,
+		RETURNING id, logo_path, icon_path, page_name, title, show_price_in_catalog, negative_stock, active, created_at, updated_at
+	`, id, req.LogoPath, req.IconPath, req.PageName, req.Title, req.ShowPriceInCatalog, req.NegativeStock, req.Active).Scan(
+		&c.ID, &c.LogoPath, &c.IconPath, &c.PageName, &c.Title, &c.ShowPriceInCatalog, &c.NegativeStock, &c.Active, &c.CreatedAt, &c.UpdatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("NOT_FOUND")

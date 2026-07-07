@@ -36,6 +36,7 @@ export class CatalogComponent {
   @Input() categories: Category[] = [];
   @Input() selectedCategoryId = '';
   @Input() products: ProductCard[] = [];
+  @Input() negativeStock = false;
 
   @Output() categorySelect = new EventEmitter<string>();
   @Output() increment = new EventEmitter<string>();

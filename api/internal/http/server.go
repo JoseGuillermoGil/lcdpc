@@ -575,6 +575,7 @@ func NewServer(
 	r.Get("/api/v1/system/page-name", systemConfigH.GetPageName)
 	r.Get("/api/v1/system/title", systemConfigH.GetTitle)
 	r.Get("/api/v1/system/show-price", systemConfigH.GetShowPrice)
+	r.Get("/api/v1/system/negative-stock", systemConfigH.GetNegativeStock)
 
 	// System Config (protected CRUD)
 	r.Route("/api/v1/system-config", func(r chi.Router) {

@@ -10,6 +10,7 @@ export class SystemConfigStore {
   private readonly _pageName = signal<string>('LCDPC');
   private readonly _title = signal<string>('LCDPC');
   private readonly _showPrice = signal(true);
+  private readonly _negativeStock = signal(false);
   private loaded = false;
 
   readonly logoUrl = this._logoUrl.asReadonly();
@@ -17,6 +18,7 @@ export class SystemConfigStore {
   readonly pageName = this._pageName.asReadonly();
   readonly title = this._title.asReadonly();
   readonly showPrice = this._showPrice.asReadonly();
+  readonly negativeStock = this._negativeStock.asReadonly();
 
   load(): void {
     if (this.loaded) return;
@@ -61,6 +63,10 @@ export class SystemConfigStore {
 
     this.systemConfigApi.getShowPrice().subscribe({
       next: (show) => this._showPrice.set(show),
+    });
+
+    this.systemConfigApi.getNegativeStock().subscribe({
+      next: (negative) => this._negativeStock.set(negative),
     });
   }
 

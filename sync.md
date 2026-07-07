@@ -6,8 +6,8 @@ One-way inbound data push from an external system (legacy C# POS/inventory) into
 
 ## Auth
 
-- Header: `X-API-Key` (raw token)
-- Mechanism: SHA-256 hash of the key → compared against `api_tokens.token_hash` where `is_active = true`
+- Header: `X-API-Token` (raw token)
+- Mechanism: SHA-256 hash of the token → compared against `api_tokens.token_hash` where `is_active = true`
 - Middleware: `middleware.APIKeyAuth(pool)` in `api/internal/http/middleware/apikey.go`
 - No RBAC permission checks — any valid active API token grants full sync access
 - Seeder: runs on startup if `api_tokens` is empty; generates 32-byte random token (hex 64 chars), stores SHA-256 hash, logs raw token to stdout once (never retrievable again)
@@ -31,12 +31,14 @@ Batch upsert products by `(sku, branch_id)`.
   "name": "string (required)",
   "code": "string (required, maps to products.sku)",
   "is_active": true,
-  "brand_code": "string (required, resolves to brands.id)",
+  "brand_code": "string (required, resolves to brands.id, auto-creates if not found)",
   "category_code": "string | null (resolves to categories.category_id)",
+  "category_name": "string | null (display name for auto-create)",
   "branch_code": "string | null (resolves to branches.id)",
   "base_unit_code": "string | null (resolves to measurement_units.id, e.g. 'kg', 'unit')",
+  "base_unit_name": "string | null (display name for auto-create)",
   "stock": 0,
-  "prices": [{"code": "string | null (resolves to price_categories.id)", "amount": 0.0}]
+  "prices": [{"code": "string | null (resolves to price_categories.id, auto-creates if not found)", "amount": 0.0}]
 }]
 ```
 
@@ -50,7 +52,7 @@ Batch upsert products by `(sku, branch_id)`.
 
 **New products:** `stockAvailable = stock`, `stockBlocked = 0`
 
-**Code resolution:** All `_code` fields are resolved to their corresponding UUID primary keys. If a code is not found, the item is recorded in `SyncResult.Details` as an error.
+**Code resolution:** All `_code` fields are resolved to their corresponding UUID primary keys. `brand_code`, `category_code`, `base_unit_code`, and `prices[].code` support auto-creation — if the code is not found, the system creates the record automatically. Other codes (`branch_code`) still fail if not found.
 
 ### POST /api/v1/sync/bundles
 
@@ -69,8 +71,9 @@ Batch upsert bundles with items and prices, including chain stock management.
   "is_active": true,
   "branch_code": "string | null (resolves to branches.id)",
   "category_code": "string | null (resolves to categories.category_id)",
+  "category_name": "string | null (display name for auto-create)",
   "items": [{"product_code": "string (product code/sku, resolves to product_id)", "quantity": 1.0}],
-  "prices": [{"code": "string | null (resolves to price_categories.id)", "amount": 0.0}],
+  "prices": [{"code": "string | null (resolves to price_categories.id, auto-creates if not found)", "amount": 0.0}],
   "stock": 0,
   "blocks_product_stock": false
 }]
@@ -111,6 +114,19 @@ Upload bundle image by code.
 
 Both `SyncProducts` and `SyncBundles` wrap the entire batch in a single DB transaction. Individual item failures are recorded in `SyncResult.Details` but do NOT roll back the transaction — successfully processed items are committed. The transaction only rolls back if `tx.Commit()` fails.
 
+Each item is wrapped in a **savepoint** (`SAVEPOINT sp_N` / `RELEASE SAVEPOINT sp_N` / `ROLLBACK TO SAVEPOINT sp_N`). This ensures that a failure in one item does not abort the entire transaction — the savepoint rolls back only the failed item's changes, allowing subsequent items to proceed normally.
+
+### Pre-resolution of codes (batch dedup)
+
+All codes that support auto-creation (`brand_code`, `prices[].code`) are **pre-resolved before the item loop**. This prevents duplicate auto-create conflicts when multiple items in the same batch reference the same non-existent code.
+
+**Pattern:**
+1. Collect all unique codes from the entire batch
+2. Resolve / auto-create them once (outside savepoints)
+3. Use the pre-resolved map inside the item loop
+
+This avoids the scenario where item A auto-creates code "X" inside its savepoint, fails for another reason (savepoint rolls back the creation), then item B tries to create "X" again → `duplicate key` error.
+
 ## Chain stock helpers (`pricing/chain.go`)
 
 Used by bundle sync when `blocks_product_stock = true`:
@@ -143,12 +159,25 @@ All `_code` fields in the request are resolved to UUID primary keys before DB op
 
 | Request field | Resolves to | Lookup table | Lookup column |
 |---|---|---|---|
-| `brand_code` | `brands.id` | `brands` | `code` |
+| `brand_code` | `brands.id` | `brands` | `code` (auto-creates if missing) |
 | `category_code` | `categories.category_id` | `categories` | `code` |
+| `category_name` | `categories.category_id` | `categories` | `name` (fallback) |
 | `branch_code` | `branches.id` | `branches` | `code` |
 | `base_unit_code` | `measurement_units.id` | `measurement_units` | `code` |
-| `prices[].code` | `price_categories.id` | `price_categories` | `code` |
+| `base_unit_name` | `measurement_units.id` | `measurement_units` | `name` (fallback) |
+| `prices[].code` | `price_categories.id` | `price_categories` | `code` (auto-creates if missing) |
 | `items[].product_code` | `products.product_id` | `products` | `sku` + `branch_id` |
+
+### Auto-create for brands, categories, measurement units, and price categories
+
+When `brand_code`, `category_code`, `base_unit_code`, or `prices[].code` is provided but not found in the DB, the system auto-creates the missing record:
+
+1. Try by code (`WHERE code = $1`)
+2. If not found, **INSERT** a new record:
+   - `code` = slugified value (lowercase, no accents, hyphens)
+   - `name` = the provided `_name` value for categories/units, or the raw code value for brands/price categories
+
+This ensures the sync never fails due to missing brands, categories, measurement units, or price categories.
 
 ## Relevant migrations
 

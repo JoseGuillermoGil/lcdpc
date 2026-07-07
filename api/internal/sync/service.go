@@ -3,21 +3,31 @@ package sync
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 const maxSyncBatchSize = 500
 
-type Service struct {
-	pool *pgxpool.Pool
+type SystemConfigReader interface {
+	GetNegativeStock(ctx context.Context) (bool, error)
 }
 
-func NewService(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool}
+type Service struct {
+	pool   *pgxpool.Pool
+	sysCfg SystemConfigReader
+}
+
+func NewService(pool *pgxpool.Pool, sysCfg SystemConfigReader) *Service {
+	return &Service{pool: pool, sysCfg: sysCfg}
 }
 
 // ---------------------------------------------------------------------------
@@ -30,9 +40,11 @@ type SyncProductRequest struct {
 	IsActive     bool               `json:"is_active"`
 	BrandCode    string             `json:"brand_code"`
 	CategoryCode *string            `json:"category_code"`
-	BranchCode   *string            `json:"branch_code"`
+	CategoryName *string            `json:"category_name"`
+	BranchCode   string             `json:"branch_code"`
 	BaseUnitCode *string            `json:"base_unit_code"`
-	Stock        *int               `json:"stock"`
+	BaseUnitName *string            `json:"base_unit_name"`
+	Stock        *float64           `json:"stock"`
 	Prices       []SyncProductPrice `json:"prices"`
 }
 
@@ -45,11 +57,12 @@ type SyncBundleRequest struct {
 	Code               string            `json:"code"`
 	Name               string            `json:"name"`
 	IsActive           bool              `json:"is_active"`
-	BranchCode         *string           `json:"branch_code"`
+	BranchCode         string            `json:"branch_code"`
 	CategoryCode       *string           `json:"category_code"`
+	CategoryName       *string           `json:"category_name"`
 	Items              []SyncBundleItem  `json:"items"`
 	Prices             []SyncBundlePrice `json:"prices"`
-	Stock              *int              `json:"stock"`
+	Stock              *float64          `json:"stock"`
 	BlocksProductStock bool              `json:"blocks_product_stock"`
 }
 
@@ -78,6 +91,16 @@ type SyncResult struct {
 // Validation
 // ---------------------------------------------------------------------------
 
+func (p SyncProductRequest) identifier() string {
+	if p.Code != "" {
+		return p.Code
+	}
+	if p.Name != "" {
+		return fmt.Sprintf("(name=%q)", p.Name)
+	}
+	return "(unknown)"
+}
+
 func (p SyncProductRequest) validate() error {
 	if p.Name == "" {
 		return fmt.Errorf("name is required")
@@ -88,7 +111,20 @@ func (p SyncProductRequest) validate() error {
 	if p.BrandCode == "" {
 		return fmt.Errorf("brand_code is required")
 	}
+	if p.BranchCode == "" {
+		return fmt.Errorf("branch_code is required")
+	}
 	return nil
+}
+
+func (b SyncBundleRequest) identifier() string {
+	if b.Code != "" {
+		return b.Code
+	}
+	if b.Name != "" {
+		return fmt.Sprintf("(name=%q)", b.Name)
+	}
+	return "(unknown)"
 }
 
 func (b SyncBundleRequest) validate() error {
@@ -98,58 +134,126 @@ func (b SyncBundleRequest) validate() error {
 	if b.Code == "" {
 		return fmt.Errorf("code is required")
 	}
+	if b.BranchCode == "" {
+		return fmt.Errorf("branch_code is required")
+	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+func slugify(name string) string {
+	t := transform.Chain(norm.NFD, transform.RemoveFunc(func(r rune) bool {
+		return unicode.Is(unicode.Mn, r)
+	}))
+	s, _, _ := transform.String(t, name)
+	s = strings.ToLower(s)
+	s = slugRe.ReplaceAllString(s, "-")
+	s = strings.Trim(s, "-")
+	if len(s) > 50 {
+		s = s[:50]
+		s = strings.TrimRight(s, "-")
+	}
+	if s == "" {
+		return "item"
+	}
+	return s
 }
 
 // ---------------------------------------------------------------------------
 // Code → UUID resolvers
 // ---------------------------------------------------------------------------
 
-func (s *Service) resolveBranchID(ctx context.Context, tx pgx.Tx, code *string) (*uuid.UUID, error) {
-	if code == nil {
-		return nil, nil
-	}
+func (s *Service) resolveBranchID(ctx context.Context, tx pgx.Tx, code string) (uuid.UUID, error) {
 	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM branches WHERE code = $1`, *code).Scan(&id)
+	err := tx.QueryRow(ctx, `SELECT id FROM branches WHERE code = $1`, code).Scan(&id)
 	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("branch_code %q not found", *code)
+		return uuid.Nil, fmt.Errorf("branch_code %q not found", code)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("resolve branch: %w", err)
+		return uuid.Nil, fmt.Errorf("resolve branch: %w", err)
 	}
-	return &id, nil
+	return id, nil
 }
 
-func (s *Service) resolveCategoryID(ctx context.Context, tx pgx.Tx, code *string) (*uuid.UUID, error) {
-	if code == nil {
+func (s *Service) resolveCategoryID(ctx context.Context, tx pgx.Tx, code *string, name *string) (*uuid.UUID, error) {
+	if code == nil && name == nil {
 		return nil, nil
 	}
-	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT category_id FROM categories WHERE code = $1`, *code).Scan(&id)
-	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("category_code %q not found", *code)
+
+	// 1. Try by code
+	if code != nil {
+		newCode := slugify(*code)
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT category_id FROM categories WHERE code = $1`, newCode).Scan(&id)
+		if err == nil {
+			return &id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("resolve category: %w", err)
+		}
 	}
+
+	// 2. Try by name
+	if name != nil {
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT category_id FROM categories WHERE name = $1`, *name).Scan(&id)
+		if err == nil {
+			return &id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("resolve category by name: %w", err)
+		}
+	}
+
+	// 3. Auto-create
+	displayName := ""
+	if name != nil {
+		displayName = *name
+	} else if code != nil {
+		displayName = *code
+	}
+	newCode := slugify(displayName)
+
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `
+		INSERT INTO categories (category_id, name, code) VALUES ($1, $2, $3)
+		RETURNING category_id
+	`, uuid.New(), displayName, newCode).Scan(&id)
 	if err != nil {
-		return nil, fmt.Errorf("resolve category: %w", err)
+		return nil, fmt.Errorf("auto-create category: %w", err)
 	}
 	return &id, nil
 }
 
 func (s *Service) resolveBrandID(ctx context.Context, tx pgx.Tx, code string) (uuid.UUID, error) {
+	newCode := slugify(code)
 	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM brands WHERE code = $1`, code).Scan(&id)
-	if err == pgx.ErrNoRows {
-		return uuid.Nil, fmt.Errorf("brand_code %q not found", code)
+	err := tx.QueryRow(ctx, `SELECT id FROM brands WHERE code = $1`, newCode).Scan(&id)
+	if err == nil {
+		return id, nil
 	}
-	if err != nil {
+	if err != pgx.ErrNoRows {
 		return uuid.Nil, fmt.Errorf("resolve brand: %w", err)
+	}
+
+	err = tx.QueryRow(ctx, `
+		INSERT INTO brands (id, name, code) VALUES ($1, $2, $3)
+		RETURNING id
+	`, uuid.New(), code, newCode).Scan(&id)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("auto-create brand: %w", err)
 	}
 	return id, nil
 }
 
-func (s *Service) resolveProductID(ctx context.Context, tx pgx.Tx, sku string, branchID *uuid.UUID) (uuid.UUID, error) {
+func (s *Service) resolveProductID(ctx context.Context, tx pgx.Tx, sku string, branchID uuid.UUID) (uuid.UUID, error) {
 	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT product_id FROM products WHERE sku = $1 AND branch_id IS NOT DISTINCT FROM $2`, sku, branchID).Scan(&id)
+	err := tx.QueryRow(ctx, `SELECT product_id FROM products WHERE sku = $1 AND branch_id = $2`, sku, branchID).Scan(&id)
 	if err == pgx.ErrNoRows {
 		return uuid.Nil, fmt.Errorf("product with code %q not found for branch", sku)
 	}
@@ -163,28 +267,130 @@ func (s *Service) resolvePriceCategoryID(ctx context.Context, tx pgx.Tx, code *s
 	if code == nil {
 		return nil, nil
 	}
+	newCode := slugify(*code)
 	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM price_categories WHERE code = $1`, *code).Scan(&id)
-	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("price_category_code %q not found", *code)
+	err := tx.QueryRow(ctx, `SELECT id FROM price_categories WHERE code = $1`, newCode).Scan(&id)
+	if err == nil {
+		return &id, nil
 	}
-	if err != nil {
+	if err != pgx.ErrNoRows {
 		return nil, fmt.Errorf("resolve price category: %w", err)
+	}
+
+	err = tx.QueryRow(ctx, `
+		INSERT INTO price_categories (id, name, code) VALUES ($1, $2, $3)
+		RETURNING id
+	`, uuid.New(), *code, newCode).Scan(&id)
+	if err != nil {
+		return nil, fmt.Errorf("auto-create price category: %w", err)
 	}
 	return &id, nil
 }
 
-func (s *Service) resolveMeasurementUnitID(ctx context.Context, tx pgx.Tx, code *string) (*uuid.UUID, error) {
-	if code == nil {
+// ---------------------------------------------------------------------------
+// Batch resolvers — pre-resolve all unique codes before the item loop
+// ---------------------------------------------------------------------------
+
+func (s *Service) resolveBrandIDs(ctx context.Context, tx pgx.Tx, codes []string) (map[string]uuid.UUID, error) {
+	seen := make(map[string]struct{})
+	unique := make([]string, 0, len(codes))
+	for _, c := range codes {
+		if _, dup := seen[slugify(c)]; !dup {
+			seen[slugify(c)] = struct{}{}
+			unique = append(unique, c)
+		}
+	}
+
+	result := make(map[string]uuid.UUID, len(unique))
+	for _, code := range unique {
+		id, err := s.resolveBrandID(ctx, tx, code)
+		if err != nil {
+			return nil, err
+		}
+		result[code] = id
+	}
+	return result, nil
+}
+
+func (s *Service) resolvePriceCategoryIDs(ctx context.Context, tx pgx.Tx, codes []*string) (map[string]uuid.UUID, error) {
+	seen := make(map[string]struct{})
+	unique := make([]*string, 0, len(codes))
+	for _, c := range codes {
+		if c == nil {
+			continue
+		}
+		if _, dup := seen[slugify(*c)]; !dup {
+			seen[slugify(*c)] = struct{}{}
+			unique = append(unique, c)
+		}
+	}
+
+	result := make(map[string]uuid.UUID, len(unique))
+	for _, code := range unique {
+		id, err := s.resolvePriceCategoryID(ctx, tx, code)
+		if err != nil {
+			return nil, err
+		}
+		if id != nil {
+			result[*code] = *id
+		}
+	}
+	return result, nil
+}
+
+func (s *Service) resolveMeasurementUnitID(ctx context.Context, tx pgx.Tx, code *string, name *string) (*uuid.UUID, error) {
+	if code == nil && name == nil {
 		return nil, nil
 	}
-	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM measurement_units WHERE code = $1`, *code).Scan(&id)
-	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("base_unit_code %q not found", *code)
+
+	// 1. Try by code
+	if code != nil {
+		newCode := slugify(*code)
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT id FROM measurement_units WHERE code = $1`, newCode).Scan(&id)
+		if err == nil {
+			return &id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("resolve measurement unit: %w", err)
+		}
 	}
+
+	// 2. Try by name
+	if name != nil {
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT id FROM measurement_units WHERE name = $1`, *name).Scan(&id)
+		if err == nil {
+			return &id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("resolve measurement unit by name: %w", err)
+		}
+	}
+
+	// 3. Auto-create
+	displayName := ""
+	if name != nil {
+		displayName = *name
+	} else if code != nil {
+		displayName = *code
+	}
+	newCode := slugify(displayName)
+
+	var classID *uuid.UUID
+	var cid uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM measurement_unit_classifications WHERE code = 'generic'`).Scan(&cid)
+	if err == nil {
+		classID = &cid
+	}
+
+	var id uuid.UUID
+	err = tx.QueryRow(ctx, `
+		INSERT INTO measurement_units (id, name, code, symbol, classification_id) VALUES ($1, $2, $3, '', $4)
+		RETURNING id
+	`, uuid.New(), displayName, newCode, classID).Scan(&id)
 	if err != nil {
-		return nil, fmt.Errorf("resolve measurement unit: %w", err)
+		return nil, fmt.Errorf("auto-create measurement unit: %w", err)
 	}
 	return &id, nil
 }
@@ -204,56 +410,80 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 	}
 	defer tx.Rollback(ctx)
 
-	result := &SyncResult{}
+	// Pre-resolve all unique codes before the item loop to avoid duplicate
+	// auto-create conflicts when multiple items reference the same code.
+	brandCodes := make([]string, 0, len(products))
+	priceCodes := make([]*string, 0)
 	for _, p := range products {
+		brandCodes = append(brandCodes, p.BrandCode)
+		for _, price := range p.Prices {
+			priceCodes = append(priceCodes, price.Code)
+		}
+	}
+
+	brandMap, err := s.resolveBrandIDs(ctx, tx, brandCodes)
+	if err != nil {
+		return nil, fmt.Errorf("pre-resolve brands: %w", err)
+	}
+	priceCatMap, err := s.resolvePriceCategoryIDs(ctx, tx, priceCodes)
+	if err != nil {
+		return nil, fmt.Errorf("pre-resolve price categories: %w", err)
+	}
+
+	negativeStock, _ := s.sysCfg.GetNegativeStock(ctx)
+
+	result := &SyncResult{}
+	for i, p := range products {
+		sp := fmt.Sprintf("sp_%d", i)
+		tx.Exec(ctx, "SAVEPOINT "+sp)
+
 		if err := p.validate(); err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
-		// Resolve codes → UUIDs
-		brandID, err := s.resolveBrandID(ctx, tx, p.BrandCode)
-		if err != nil {
-			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
-			continue
-		}
+		// Resolve codes → UUIDs (brand from pre-resolved map)
+		brandID := brandMap[p.BrandCode]
 
-		categoryID, err := s.resolveCategoryID(ctx, tx, p.CategoryCode)
+		categoryID, err := s.resolveCategoryID(ctx, tx, p.CategoryCode, p.CategoryName)
 		if err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
 		branchID, err := s.resolveBranchID(ctx, tx, p.BranchCode)
 		if err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
-		baseUnitID, err := s.resolveMeasurementUnitID(ctx, tx, p.BaseUnitCode)
+		baseUnitID, err := s.resolveMeasurementUnitID(ctx, tx, p.BaseUnitCode, p.BaseUnitName)
 		if err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
 		// Stock handling
-		stock := 0
+		stock := 0.0
 		if p.Stock != nil {
 			stock = *p.Stock
 		}
 
 		stockAvail := stock
-		stockBlocked := 0
-		var currentStock, currentBlocked int
+		stockBlocked := 0.0
+		var currentStock, currentBlocked float64
 		var productID uuid.UUID
 
 		err = tx.QueryRow(ctx, `
-			SELECT product_id, stock, stock_blocked FROM products WHERE sku = $1 AND branch_id IS NOT DISTINCT FROM $2 FOR UPDATE
+			SELECT product_id, stock, stock_blocked FROM products WHERE sku = $1 AND branch_id = $2 FOR UPDATE
 		`, p.Code, branchID).Scan(&productID, &currentStock, &currentBlocked)
 		if err == nil {
 			// Product exists — compute delta
@@ -261,27 +491,31 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 			stockAvail = (currentStock - currentBlocked) + delta
 			stockBlocked = currentBlocked
 
-			if stock < 0 {
+			if stock < 0 && !negativeStock {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: "STOCK_BELOW_ZERO"})
+				result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: "STOCK_BELOW_ZERO"})
 				continue
 			}
-			if stockAvail < 0 {
+			if stockAvail < 0 && !negativeStock {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: "STOCK_AVAILABLE_BELOW_ZERO"})
+				result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: "STOCK_AVAILABLE_BELOW_ZERO"})
 				continue
 			}
 			if stockBlocked > stock {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: "STOCK_BLOCKED_EXCEEDS_STOCK"})
+				result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: "STOCK_BLOCKED_EXCEEDS_STOCK"})
 				continue
 			}
 		} else if err == pgx.ErrNoRows {
 			stockAvail = stock
 			stockBlocked = 0
 		} else {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: "lookup failed"})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: "lookup failed"})
 			continue
 		}
 
@@ -301,34 +535,43 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 			RETURNING product_id
 		`, uuid.New(), p.Name, p.Code, p.IsActive, brandID, categoryID, branchID, baseUnitID, stock, stockAvail, stockBlocked).Scan(&productID)
 		if err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
-		// Replace product prices
+		// Replace product prices (using pre-resolved price category map)
 		if _, err := tx.Exec(ctx, `DELETE FROM product_branch_prices WHERE product_id = $1`, productID); err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: fmt.Sprintf("delete prices: %v", err)})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: fmt.Sprintf("delete prices: %v", err)})
 			continue
 		}
+		priceFailed := false
 		for _, price := range p.Prices {
-			pcID, err := s.resolvePriceCategoryID(ctx, tx, price.Code)
-			if err != nil {
-				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
-				continue
+			var pcID *uuid.UUID
+			if price.Code != nil {
+				if id, ok := priceCatMap[*price.Code]; ok {
+					pcID = &id
+				}
 			}
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO product_branch_prices (id, product_id, price_category_id, amount, currency)
 				VALUES ($1, $2, $3, $4, 'USD')
 			`, uuid.New(), productID, pcID, price.Amount); err != nil {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: fmt.Sprintf("price insert: %v", err)})
-				continue
+				result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: fmt.Sprintf("price insert: %v", err)})
+				priceFailed = true
+				break
 			}
 		}
+		if priceFailed {
+			continue
+		}
 
+		tx.Exec(ctx, "RELEASE SAVEPOINT "+sp)
 		result.Processed++
 	}
 
@@ -354,11 +597,29 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 	}
 	defer tx.Rollback(ctx)
 
-	result := &SyncResult{}
+	// Pre-resolve all unique codes before the item loop to avoid duplicate
+	// auto-create conflicts when multiple items reference the same code.
+	priceCodes := make([]*string, 0)
 	for _, b := range bundles {
+		for _, p := range b.Prices {
+			priceCodes = append(priceCodes, p.Code)
+		}
+	}
+
+	priceCatMap, err := s.resolvePriceCategoryIDs(ctx, tx, priceCodes)
+	if err != nil {
+		return nil, fmt.Errorf("pre-resolve price categories: %w", err)
+	}
+
+	result := &SyncResult{}
+	for i, b := range bundles {
+		sp := fmt.Sprintf("sp_%d", i)
+		tx.Exec(ctx, "SAVEPOINT "+sp)
+
 		if err := b.validate(); err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 
@@ -371,30 +632,33 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 		// Resolve codes → UUIDs
 		branchID, err := s.resolveBranchID(ctx, tx, b.BranchCode)
 		if err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 
-		categoryID, err := s.resolveCategoryID(ctx, tx, b.CategoryCode)
+		categoryID, err := s.resolveCategoryID(ctx, tx, b.CategoryCode, b.CategoryName)
 		if err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 
 		// 1. Check existing bundle state for chain recalculation
 		var bundleID uuid.UUID
-		var oldStock int
+		var oldStock float64
 		var oldBlocksProductStock bool
 		err = tx.QueryRow(ctx, `
-			SELECT bundle_id, stock, blocks_product_stock FROM bundles WHERE code = $1 AND branch_id IS NOT DISTINCT FROM $2 FOR UPDATE
+			SELECT bundle_id, stock, blocks_product_stock FROM bundles WHERE code = $1 AND branch_id = $2 FOR UPDATE
 		`, b.Code, branchID).Scan(&bundleID, &oldStock, &oldBlocksProductStock)
 		bundleExists := err != pgx.ErrNoRows
 
 		if err != nil && err != pgx.ErrNoRows {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: "lookup failed"})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: "lookup failed"})
 			continue
 		}
 
@@ -411,14 +675,15 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 				rows.Close()
 			}
 			if err := pricing.ReleaseProductStock(ctx, tx, oldItems, oldStock); err != nil {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 				continue
 			}
 		}
 
 		// 2. Upsert bundle
-		newStock := 0
+		newStock := 0.0
 		if b.Stock != nil {
 			newStock = *b.Stock
 		}
@@ -436,79 +701,100 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 			RETURNING bundle_id
 		`, uuid.New(), b.Code, b.Name, status, branchID, categoryID, newStock, b.BlocksProductStock).Scan(&bundleID)
 		if err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 
 		// 3. Replace bundle items
 		if _, err := tx.Exec(ctx, `DELETE FROM bundle_items WHERE bundle_id = $1`, bundleID); err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 		newItems := make([]pricing.ChainItem, 0)
+		itemsFailed := false
 		for _, item := range b.Items {
 			productID, err := s.resolveProductID(ctx, tx, item.ProductCode, branchID)
 			if err != nil {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
-				continue
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
+				itemsFailed = true
+				break
 			}
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO bundle_items (id, bundle_id, product_id, quantity)
 				VALUES ($1, $2, $3, $4)
 			`, uuid.New(), bundleID, productID, item.Quantity); err != nil {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: fmt.Sprintf("item insert: %v", err)})
-				continue
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: fmt.Sprintf("item insert: %v", err)})
+				itemsFailed = true
+				break
 			}
 			newItems = append(newItems, pricing.ChainItem{ProductID: productID, Quantity: item.Quantity})
 		}
-
-		// 4. Replace bundle prices
-		if _, err := tx.Exec(ctx, `DELETE FROM bundle_prices WHERE bundle_id = $1`, bundleID); err != nil {
-			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+		if itemsFailed {
 			continue
 		}
+
+		// 4. Replace bundle prices (using pre-resolved price category map)
+		if _, err := tx.Exec(ctx, `DELETE FROM bundle_prices WHERE bundle_id = $1`, bundleID); err != nil {
+			tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
+			result.Errors++
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
+			continue
+		}
+		priceFailed := false
 		for _, p := range b.Prices {
-			pcID, err := s.resolvePriceCategoryID(ctx, tx, p.Code)
-			if err != nil {
-				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
-				continue
+			var pcID *uuid.UUID
+			if p.Code != nil {
+				if id, ok := priceCatMap[*p.Code]; ok {
+					pcID = &id
+				}
 			}
 			if _, err := tx.Exec(ctx, `
 				INSERT INTO bundle_prices (id, bundle_id, price_category_id, amount)
 				VALUES ($1, $2, $3, $4)
 			`, uuid.New(), bundleID, pcID, p.Amount); err != nil {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: fmt.Sprintf("price insert: %v", err)})
-				continue
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: fmt.Sprintf("price insert: %v", err)})
+				priceFailed = true
+				break
 			}
+		}
+		if priceFailed {
+			continue
 		}
 
 		// 5. Block new stock if chain enabled
 		if b.BlocksProductStock && newStock > 0 {
 			maxStock, chainErr := pricing.MaxBundleStock(ctx, tx, newItems)
 			if chainErr != nil {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: chainErr.Error()})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: chainErr.Error()})
 				continue
 			}
 			if newStock > maxStock {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: fmt.Sprintf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %d, requested %d", maxStock, newStock)})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: fmt.Sprintf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %.4f, requested %.4f", maxStock, newStock)})
 				continue
 			}
 			if blockErr := pricing.BlockProductStock(ctx, tx, newItems, newStock); blockErr != nil {
+				tx.Exec(ctx, "ROLLBACK TO SAVEPOINT "+sp)
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: blockErr.Error()})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: blockErr.Error()})
 				continue
 			}
 		}
 
+		tx.Exec(ctx, "RELEASE SAVEPOINT "+sp)
 		result.Processed++
 	}
 

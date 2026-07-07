@@ -22,6 +22,7 @@ import { BrandApiService } from '../../../core/services/brand-api.service';
 import { MeasurementUnitApiService } from '../../../core/services/measurement-unit-api.service';
 import { PriceCategoryApiService } from '../../../core/services/price-category-api.service';
 import { CategoryStore } from '../../../core/stores/category.store';
+import { SystemConfigStore } from '../../../core/stores/system-config.store';
 
 type PriceRow = {
   price_category_id: string | null;
@@ -55,6 +56,7 @@ export class ProductFormDialogComponent implements OnChanges {
   @Output() closed = new EventEmitter<void>();
 
   private readonly authStore = inject(AuthStore);
+  private readonly systemConfigStore = inject(SystemConfigStore);
   private readonly productApi = inject(ProductApiService);
   private readonly priceApi = inject(PriceApiService);
   private readonly conversionApi = inject(ConversionFactorApiService);
@@ -294,7 +296,7 @@ export class ProductFormDialogComponent implements OnChanges {
       return;
     }
 
-    if (this.form.stock != null && this.form.stock < 0) {
+    if (this.form.stock != null && this.form.stock < 0 && !this.systemConfigStore.negativeStock()) {
       return;
     }
 

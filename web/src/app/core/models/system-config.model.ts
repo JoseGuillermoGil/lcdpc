@@ -5,6 +5,7 @@ export interface SystemConfig {
   pageName: string;
   title: string;
   showPriceInCatalog: boolean;
+  negativeStock: boolean;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -16,6 +17,7 @@ export interface CreateSystemConfigRequest {
   page_name: string;
   title: string;
   show_price_in_catalog: boolean;
+  negative_stock: boolean;
   active: boolean;
 }
 
@@ -25,5 +27,6 @@ export interface UpdateSystemConfigRequest {
   page_name?: string;
   title?: string;
   show_price_in_catalog?: boolean;
+  negative_stock?: boolean;
   active?: boolean;
 }

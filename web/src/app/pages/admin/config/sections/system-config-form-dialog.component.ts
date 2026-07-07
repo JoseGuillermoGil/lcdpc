@@ -65,12 +65,19 @@ import { SystemConfigApiService } from '../../../../core/services/system-config-
           </div>
         </div>
 
-        <div class="field">
-          <p-checkbox [(ngModel)]="form.show_price_in_catalog" [binary]="true" inputId="showPrice" label="Mostrar precios en catalogo" />
+        <div class="field checkbox-field">
+          <p-checkbox [(ngModel)]="form.show_price_in_catalog" [binary]="true" inputId="showPrice" />
+          <label for="showPrice" class="checkbox-label">Mostrar precios en catalogo</label>
         </div>
 
-        <div class="field">
-          <p-checkbox [(ngModel)]="form.active" [binary]="true" inputId="active" label="Activo" />
+        <div class="field checkbox-field">
+          <p-checkbox [(ngModel)]="form.negative_stock" [binary]="true" inputId="negativeStock" />
+          <label for="negativeStock" class="checkbox-label">Permitir stock negativo</label>
+        </div>
+
+        <div class="field checkbox-field">
+          <p-checkbox [(ngModel)]="form.active" [binary]="true" inputId="active" />
+          <label for="active" class="checkbox-label">Activo</label>
         </div>
       </div>
       <ng-template pTemplate="footer">
@@ -95,6 +102,16 @@ import { SystemConfigApiService } from '../../../../core/services/system-config-
       font-size: 0.875rem;
       font-weight: 500;
       color: var(--text-soft);
+    }
+    .checkbox-field {
+      flex-direction: row;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .checkbox-label {
+      font-size: 0.875rem;
+      color: var(--text-soft);
+      cursor: pointer;
     }
     .image-upload {
       display: flex;
@@ -144,6 +161,7 @@ export class SystemConfigFormDialogComponent implements OnChanges {
           page_name: this.entity.pageName,
           title: this.entity.title,
           show_price_in_catalog: this.entity.showPriceInCatalog,
+          negative_stock: this.entity.negativeStock,
           active: this.entity.active,
         };
         this.logoPreview = this.systemConfigApi.resolveImageUrl(this.entity.logoPath);
@@ -202,6 +220,7 @@ export class SystemConfigFormDialogComponent implements OnChanges {
         page_name: this.form.page_name,
         title: this.form.title,
         show_price_in_catalog: this.form.show_price_in_catalog,
+        negative_stock: this.form.negative_stock,
         active: this.form.active,
       };
       this.systemConfigApi.update(this.entity!.id, req, this.logoFile ?? undefined, this.iconFile ?? undefined).subscribe({
@@ -213,6 +232,7 @@ export class SystemConfigFormDialogComponent implements OnChanges {
         page_name: this.form.page_name,
         title: this.form.title,
         show_price_in_catalog: this.form.show_price_in_catalog,
+        negative_stock: this.form.negative_stock,
         active: this.form.active,
       };
       this.systemConfigApi.create(req, this.logoFile ?? undefined, this.iconFile ?? undefined).subscribe({
@@ -231,6 +251,7 @@ export class SystemConfigFormDialogComponent implements OnChanges {
       page_name: '',
       title: '',
       show_price_in_catalog: true,
+      negative_stock: false,
       active: true,
     };
   }

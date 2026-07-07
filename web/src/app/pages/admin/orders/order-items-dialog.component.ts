@@ -16,6 +16,7 @@ import { ProductApiService } from '../../../core/services/product-api.service';
 import { BundleApiService } from '../../../core/services/bundle-api.service';
 import { PriceApiService } from '../../../core/services/price-api.service';
 import { PriceCategoryApiService } from '../../../core/services/price-category-api.service';
+import { SystemConfigStore } from '../../../core/stores/system-config.store';
 import { Product } from '../../../core/models/product.model';
 import { Bundle } from '../../../core/models/bundle.model';
 import { PriceCategory } from '../../../core/models/price-category.model';
@@ -75,6 +76,7 @@ export class OrderItemsDialogComponent implements OnChanges {
   private readonly bundleApi = inject(BundleApiService);
   private readonly priceApi = inject(PriceApiService);
   private readonly priceCategoryApi = inject(PriceCategoryApiService);
+  private readonly systemConfigStore = inject(SystemConfigStore);
   private readonly messageService = inject(MessageService);
 
   protected readonly saving = signal(false);
@@ -134,6 +136,7 @@ export class OrderItemsDialogComponent implements OnChanges {
   }
 
   protected get hasStockIssues(): boolean {
+    if (this.systemConfigStore.negativeStock()) return false;
     return this.visibleItems.some((item) => this.checkStockIssue(item));
   }
 
@@ -316,6 +319,7 @@ export class OrderItemsDialogComponent implements OnChanges {
   }
 
   protected isOverStock(item: EditableOrderItem): boolean {
+    if (this.systemConfigStore.negativeStock()) return false;
     return this.checkStockIssue(item);
   }
 

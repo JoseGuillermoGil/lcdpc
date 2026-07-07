@@ -1,4 +1,5 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, signal, inject } from '@angular/core';
+import { SystemConfigStore } from './system-config.store';
 
 const CART_KEY = 'lcdpc_cart';
 
@@ -20,7 +21,6 @@ function loadCart(): CartItem[] {
     if (!raw) return [];
     const items = JSON.parse(raw) as CartItem[];
     return items
-      .filter((item) => item.stockAvailable != null && item.stockAvailable > 0)
       .map((item) => ({
         ...item,
         itemType: item.itemType ?? 'product',
@@ -36,6 +36,8 @@ function saveCart(items: CartItem[]): void {
 
 @Injectable({ providedIn: 'root' })
 export class CartStore {
+  private readonly systemConfigStore = inject(SystemConfigStore);
+
   private readonly _items = signal<CartItem[]>(loadCart());
   private readonly _lastOrderCreatedAt = signal(0);
 
@@ -52,12 +54,17 @@ export class CartStore {
     this._items().reduce((sum, item) => sum + item.price * item.quantity, 0)
   );
 
+  private capQty(quantity: number, stockAvailable: number): number {
+    if (this.systemConfigStore.negativeStock()) return quantity;
+    return stockAvailable > 0 ? Math.min(quantity, stockAvailable) : 0;
+  }
+
   addItem(item: Omit<CartItem, 'quantity'>, quantity: number = 1): void {
     this._items.update((items) => {
       if (items.length > 0 && item.branchId !== null) {
         const currentBranchId = items[0].branchId ?? null;
         if (currentBranchId !== null && currentBranchId !== item.branchId) {
-          const capped = item.stockAvailable > 0 ? Math.min(quantity, item.stockAvailable) : 0;
+          const capped = this.capQty(quantity, item.stockAvailable);
           const next = [...(capped > 0 ? [{ ...item, quantity: capped } as CartItem] : [])];
           saveCart(next);
           return next;
@@ -68,7 +75,7 @@ export class CartStore {
       if (existing) {
         const newQty = existing.quantity + quantity;
         const freshStockAvailable = item.stockAvailable;
-        const capped = freshStockAvailable > 0 ? Math.min(newQty, freshStockAvailable) : 0;
+        const capped = this.capQty(newQty, freshStockAvailable);
         if (capped <= 0) {
           next = items.filter((i) => i.id !== item.id);
         } else {
@@ -77,7 +84,7 @@ export class CartStore {
           );
         }
       } else {
-        const capped = item.stockAvailable > 0 ? Math.min(quantity, item.stockAvailable) : 0;
+        const capped = this.capQty(quantity, item.stockAvailable);
         if (capped <= 0) return items;
         next = [...items, { ...item, quantity: capped }];
       }
@@ -102,7 +109,7 @@ export class CartStore {
     this._items.update((items) => {
       const next = items.map((i) => {
         if (i.id !== id) return i;
-        const capped = i.stockAvailable > 0 ? Math.min(quantity, i.stockAvailable) : 0;
+        const capped = this.capQty(quantity, i.stockAvailable);
         return { ...i, quantity: capped };
       });
       saveCart(next);
@@ -114,8 +121,10 @@ export class CartStore {
     this._items.update((items) => {
       const next = items.map((i) => {
         if (i.id !== id) return i;
-        if (i.stockAvailable <= 0) return i;
-        if (i.quantity >= i.stockAvailable) return i;
+        if (!this.systemConfigStore.negativeStock()) {
+          if (i.stockAvailable <= 0) return i;
+          if (i.quantity >= i.stockAvailable) return i;
+        }
         return { ...i, quantity: i.quantity + 1 };
       });
       saveCart(next);
@@ -155,8 +164,10 @@ export class CartStore {
           if (freshStock == null) return item;
           if (freshStock === item.stockAvailable) return item;
           changed = true;
-          if (freshStock <= 0) return null;
-          const capped = Math.min(item.quantity, freshStock);
+          if (!this.systemConfigStore.negativeStock() && freshStock <= 0) return null;
+          const capped = this.systemConfigStore.negativeStock()
+            ? item.quantity
+            : Math.min(item.quantity, freshStock);
           return { ...item, stockAvailable: freshStock, quantity: capped };
         })
         .filter(Boolean) as CartItem[];
