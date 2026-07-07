@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -131,6 +132,10 @@ func (h *StaffHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.Delete(r.Context(), id); err != nil {
+		if strings.Contains(err.Error(), "LAST_SUPERADMIN_FORBIDDEN") {
+			response.Error(w, http.StatusForbidden, err.Error())
+			return
+		}
 		response.Error(w, http.StatusNotFound, err.Error())
 		return
 	}

@@ -5,6 +5,7 @@ import { AuthStore } from './core/auth/auth.store';
 import { LandingPageComponent } from './pages/landing-page/landing-page.component';
 import { RegisterPageComponent } from './pages/register-page/register-page.component';
 import { SearchPageComponent } from './pages/search-page/search-page.component';
+import { CartPageComponent } from './pages/cart-page/cart-page.component';
 import { AdminLayoutComponent } from './pages/admin/admin-layout.component';
 import { DashboardPageComponent } from './pages/admin/dashboard/dashboard-page.component';
 import { ProductsPageComponent } from './pages/admin/products/products-page.component';
@@ -18,6 +19,7 @@ import { permissionGuard } from './core/auth/permission.guard';
 export const routes: Routes = [
 	{ path: '', component: LandingPageComponent },
 	{ path: 'search', component: SearchPageComponent },
+	{ path: 'cart', component: CartPageComponent },
 	{ path: 'register', component: RegisterPageComponent },
 	{
 		path: 'admin',

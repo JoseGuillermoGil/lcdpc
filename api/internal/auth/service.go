@@ -18,8 +18,8 @@ const (
 	StatusOtpAttemptsExceeded      = "otp_attempts_exceeded"
 	StatusActive                   = "active"
 
-	OtpTTLMinutes    = 10
-	OtpMaxAttempts   = 5
+	OtpTTLMinutes      = 10
+	OtpMaxAttempts     = 5
 	OtpCooldownMinutes = 10
 )
 
@@ -66,9 +66,9 @@ func NewService(pool *pgxpool.Pool, emailSvc emailSender, keySvc *KeyService, cf
 // Registration Flow
 
 type StartRegistrationResponse struct {
-	FlowID     uuid.UUID `json:"flow_id"`
-	Status     string    `json:"status"`
-	OtpPolicy  OtpPolicy `json:"otp_policy"`
+	FlowID    uuid.UUID `json:"flow_id"`
+	Status    string    `json:"status"`
+	OtpPolicy OtpPolicy `json:"otp_policy"`
 }
 
 type OtpPolicy struct {
@@ -118,8 +118,8 @@ func (s *Service) StartRegistration(ctx context.Context, email string) (*StartRe
 		}
 
 		return &StartRegistrationResponse{
-			FlowID: flowID,
-			Status: StatusPendingEmailVerification,
+			FlowID:    flowID,
+			Status:    StatusPendingEmailVerification,
 			OtpPolicy: OtpPolicy{TTLMinutes: OtpTTLMinutes, MaxAttempts: OtpMaxAttempts, CooldownMin: OtpCooldownMinutes},
 		}, nil
 	}
@@ -144,8 +144,8 @@ func (s *Service) StartRegistration(ctx context.Context, email string) (*StartRe
 		}
 
 		return &StartRegistrationResponse{
-			FlowID: flowID,
-			Status: StatusPendingEmailVerification,
+			FlowID:    flowID,
+			Status:    StatusPendingEmailVerification,
 			OtpPolicy: OtpPolicy{TTLMinutes: OtpTTLMinutes, MaxAttempts: OtpMaxAttempts, CooldownMin: OtpCooldownMinutes},
 		}, nil
 	}
@@ -174,8 +174,8 @@ func (s *Service) StartRegistration(ctx context.Context, email string) (*StartRe
 	}
 
 	return &StartRegistrationResponse{
-		FlowID: flowID,
-		Status: StatusPendingEmailVerification,
+		FlowID:    flowID,
+		Status:    StatusPendingEmailVerification,
 		OtpPolicy: OtpPolicy{TTLMinutes: OtpTTLMinutes, MaxAttempts: OtpMaxAttempts, CooldownMin: OtpCooldownMinutes},
 	}, nil
 }
@@ -189,11 +189,11 @@ func (s *Service) VerifyEmail(ctx context.Context, flowID uuid.UUID, otp string)
 	now := time.Now().UTC()
 
 	var flow struct {
-		ID               uuid.UUID
-		Status           string
-		OtpHash          string
-		OtpExpiresAtUtc  time.Time
-		OtpAttempts      int
+		ID              uuid.UUID
+		Status          string
+		OtpHash         string
+		OtpExpiresAtUtc time.Time
+		OtpAttempts     int
 	}
 
 	err := s.pool.QueryRow(ctx, `
@@ -254,14 +254,14 @@ func (s *Service) VerifyEmail(ctx context.Context, flowID uuid.UUID, otp string)
 }
 
 type CompleteProfileRequest struct {
-	FlowID             uuid.UUID `json:"flow_id"`
-	FirstName          string    `json:"first_name"`
-	LastName           string    `json:"last_name"`
-	IdentityDocument   string    `json:"identity_document"`
-	TaxID              string    `json:"tax_id"`
-	WhatsAppPhone      string    `json:"whatsapp_phone"`
-	FullAddress        string    `json:"full_address"`
-	Password           string    `json:"password"`
+	FlowID           uuid.UUID `json:"flow_id"`
+	FirstName        string    `json:"first_name"`
+	LastName         string    `json:"last_name"`
+	IdentityDocument string    `json:"identity_document"`
+	TaxID            string    `json:"tax_id"`
+	WhatsAppPhone    string    `json:"whatsapp_phone"`
+	FullAddress      string    `json:"full_address"`
+	Password         string    `json:"password"`
 }
 
 type CompleteProfileResponse struct {
@@ -272,9 +272,9 @@ type CompleteProfileResponse struct {
 
 func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileRequest) (*CompleteProfileResponse, error) {
 	var flow struct {
-		ID           uuid.UUID
-		Email        string
-		Status       string
+		ID            uuid.UUID
+		Email         string
+		Status        string
 		VerifiedAtUtc *time.Time
 	}
 
@@ -316,19 +316,11 @@ func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileReques
 
 	userID := uuid.New()
 	profileID := uuid.New()
+	personID := uuid.New()
 
 	userName := req.FirstName
 	if req.LastName != "" {
 		userName = req.FirstName + " " + req.LastName
-	}
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO users (id, email, password_hash, onboarding_status, email_verified_at_utc, status, name, profile_id, identity_document, tax_id, whatsapp_phone, full_address, created_at_utc)
-		VALUES ($1, $2, $3, 'active', $4, 'Active', $5, $6, $7, $8, $9, $10, now())
-	`, userID, normalizedEmail, pwHash, flow.VerifiedAtUtc, userName, profileID, req.IdentityDocument,
-		nullString(req.TaxID), req.WhatsAppPhone, req.FullAddress)
-	if err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -337,6 +329,25 @@ func (s *Service) CompleteProfile(ctx context.Context, req CompleteProfileReques
 	`, profileID, userName, req.IdentityDocument)
 	if err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO persons (id, name, identity_document, tax_id, whatsapp_phone, full_address, is_client, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, $4, $5, $6, true, now(), now())
+	`, personID, userName, req.IdentityDocument, nullString(req.TaxID), req.WhatsAppPhone, req.FullAddress)
+	if err != nil {
+		return nil, fmt.Errorf("create person: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO users (
+			id, email, password_hash, onboarding_status, email_verified_at_utc, status,
+			profile_id, person_id, created_at_utc
+		)
+		VALUES ($1, $2, $3, 'active', $4, 'Active', $5, $6, now())
+	`, userID, normalizedEmail, pwHash, flow.VerifiedAtUtc, profileID, personID)
+	if err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	var clientRoleID uuid.UUID
@@ -472,10 +483,10 @@ func (s *Service) Login(ctx context.Context, req LoginRequest) (*LoginResponse, 
 // Me
 
 type MeResponse struct {
-	Authenticated bool           `json:"authenticated"`
-	User          *UserSummary   `json:"user,omitempty"`
-	Permissions   []string       `json:"permissions"`
-	ExpiresIn     *int           `json:"expires_in,omitempty"`
+	Authenticated bool         `json:"authenticated"`
+	User          *UserSummary `json:"user,omitempty"`
+	Permissions   []string     `json:"permissions"`
+	ExpiresIn     *int         `json:"expires_in,omitempty"`
 }
 
 type UserSummary struct {
@@ -498,7 +509,7 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 	accessTokenHash := HashToken(accessToken)
 
 	var session struct {
-		UserID                 uuid.UUID
+		UserID                  uuid.UUID
 		AccessTokenExpiresAtUtc time.Time
 	}
 
@@ -520,25 +531,27 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 		Status           string
 		OnboardingStatus string
 		EmailVerifiedAt  *time.Time
-		Name             *string
+		Name             string
+		PersonIsClient   *bool
 		ProfileID        uuid.UUID
 		BranchID         *uuid.UUID
 	}
 
 	err = s.pool.QueryRow(ctx, `
 		SELECT u.id, u.email, u.status, u.onboarding_status, u.email_verified_at_utc,
-		       u.name, u.profile_id, u.branch_id
+		       COALESCE(per.name, ''), per.is_client, u.profile_id, u.branch_id
 		FROM users u
+		LEFT JOIN persons per ON per.id = u.person_id
 		WHERE u.id = $1
 	`, session.UserID).Scan(&user.ID, &user.Email, &user.Status, &user.OnboardingStatus,
-		&user.EmailVerifiedAt, &user.Name, &user.ProfileID, &user.BranchID)
+		&user.EmailVerifiedAt, &user.Name, &user.PersonIsClient, &user.ProfileID, &user.BranchID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 
 	displayName := user.Email
-	if user.Name != nil {
-		displayName = *user.Name
+	if user.Name != "" {
+		displayName = user.Name
 	}
 
 	userStatus := "active"
@@ -556,10 +569,16 @@ func (s *Service) Me(ctx context.Context, accessToken string) (*MeResponse, erro
 	}
 
 	accountType := "client"
-	for _, code := range permissions {
-		if code == "rbac:resource:create" || code == "rbac:role:create" {
+	if user.PersonIsClient != nil {
+		if !*user.PersonIsClient {
 			accountType = "administrator"
-			break
+		}
+	} else {
+		for _, code := range permissions {
+			if code == "rbac:resource:create" || code == "rbac:role:create" {
+				accountType = "administrator"
+				break
+			}
 		}
 	}
 
@@ -602,12 +621,12 @@ func (s *Service) Refresh(ctx context.Context, refreshToken string) (*LoginRespo
 	refreshTokenHash := HashToken(refreshToken)
 
 	var rt struct {
-		TokenHash  string
-		ClientID   string
-		UserID     uuid.UUID
-		Scope      string
-		FamilyID   uuid.UUID
-		ExpiresAt  time.Time
+		TokenHash string
+		ClientID  string
+		UserID    uuid.UUID
+		Scope     string
+		FamilyID  uuid.UUID
+		ExpiresAt time.Time
 	}
 
 	err := s.pool.QueryRow(ctx, `
@@ -722,7 +741,7 @@ func (s *Service) ForgotPassword(ctx context.Context, email, ipAddress string) (
 
 	// Get policy
 	var policy struct {
-		TTLMinutes  int
+		TTLMinutes     int
 		RevokeSessions bool
 	}
 	err = s.pool.QueryRow(ctx, `
@@ -766,7 +785,7 @@ func (s *Service) ForgotPassword(ctx context.Context, email, ipAddress string) (
 
 type ResetPasswordResponse struct {
 	Status          string `json:"status"`
-	SessionsRevoked bool  `json:"sessions_revoked"`
+	SessionsRevoked bool   `json:"sessions_revoked"`
 }
 
 func (s *Service) ResetPassword(ctx context.Context, token, newPassword, ipAddress string) (*ResetPasswordResponse, error) {
@@ -905,5 +924,3 @@ func nullString(s string) interface{} {
 	}
 	return s
 }
-
-

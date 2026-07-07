@@ -1,0 +1,163 @@
+<p-toast position="top-right"></p-toast>
+
+<section class="cart-page">
+  <div class="cart-hero card-surface">
+    <div>
+          <p class="eyebrow">Checkout</p>
+          <h1>Checkout</h1>
+      <p class="hero-copy">Revisa el pedido, ajusta cantidades y completa los datos para coordinar la entrega.</p>
+    </div>
+
+    <div class="hero-chip">
+      <span class="pi pi-shopping-basket"></span>
+          <span>{{ totalQuantity() }} items</span>
+    </div>
+  </div>
+
+  <div class="cart-layout">
+    <div class="cart-panel order-summary">
+      <div class="panel-header">
+        <div>
+          <p class="panel-kicker">Your cart</p>
+          <h2>Order summary</h2>
+        </div>
+        <span class="panel-badge">{{ items().length }} lines</span>
+      </div>
+
+      @if (isEmpty()) {
+            <div class="empty-state">
+              <i class="pi pi-shopping-cart empty-icon"></i>
+              <p>Your cart is empty</p>
+              <span>Add products from the catalog to start.</span>
+            </div>
+      } @else {
+        <div class="cart-items">
+          @for (item of items(); track item.id) {
+                <article class="cart-item" [class.over-stock]="isOverStock(item)">
+                  <img [src]="item.imageUrl" [alt]="item.name" loading="lazy" (error)="onImageError($event)" />
+                  <div class="item-body">
+                    <div class="item-topline">
+                      <h3>{{ item.name }}</h3>
+                      <strong>{{ item.price | currency:'USD' }}</strong>
+                    </div>
+                    <div class="item-tags">
+                      <span class="item-tag">{{ item.itemType === 'bundle' ? 'Bundle' : 'Product' }}</span>
+                      <span class="item-tag subtle">Qty {{ item.quantity }}</span>
+                    </div>
+                    @if (item.itemType === 'bundle' && item.items?.length) {
+                      <ul class="bundle-items">
+                        @for (bi of item.items; track $index) {
+                          <li>{{ bi.quantity }} {{ bi.name }}</li>
+                        }
+                  </ul>
+                }
+                <div class="item-meta">
+                  <span [class.stock-warning]="isOverStock(item)">Available stock: {{ item.stockAvailable }}</span>
+                  <span>{{ item.itemType === 'bundle' ? 'Bundle' : 'Product' }}</span>
+                </div>
+              </div>
+
+                <div class="item-actions">
+                  <div class="stepper">
+                    <p-button icon="pi pi-minus" [text]="true" [rounded]="true" size="small" (onClick)="decrement(item.id)"></p-button>
+                    <span>{{ item.quantity }}</span>
+                    <p-button icon="pi pi-plus" [text]="true" [rounded]="true" size="small" [disabled]="item.quantity >= item.stockAvailable" (onClick)="increment(item.id)"></p-button>
+                </div>
+                <p-button icon="pi pi-trash" [text]="true" [rounded]="true" severity="danger" size="small" ariaLabel="Eliminar" (onClick)="removeItem(item.id)"></p-button>
+              </div>
+            </article>
+          }
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-row">
+          <span>Items</span>
+            <strong>{{ items().length }}</strong>
+          </div>
+          <div class="summary-row">
+          <span>Total quantity</span>
+            <strong>{{ totalQuantity() }}</strong>
+          </div>
+          <div class="summary-row total">
+            <span>Total</span>
+            <strong>{{ totalPrice() | currency:'USD' }}</strong>
+          </div>
+        </div>
+      }
+
+      <div class="panel-actions">
+        @if (!isEmpty()) {
+          <p-button label="Clear cart" icon="pi pi-trash" severity="danger" [text]="true" (onClick)="clearCart()"></p-button>
+        }
+        <div class="action-spacer"></div>
+        <p-button label="Continue shopping" severity="secondary" [text]="true" (onClick)="goBack()"></p-button>
+      </div>
+    </div>
+
+    <aside class="cart-panel checkout-panel">
+      <div class="panel-header">
+        <div>
+          <p class="panel-kicker">Shipping details</p>
+          <h2>Complete your order</h2>
+        </div>
+        <span class="panel-badge accent">Checkout</span>
+      </div>
+
+      <form class="checkout-form">
+        <label>
+          <span>Full name</span>
+          <input pInputText [ngModel]="contactName()" (ngModelChange)="contactName.set($event)" name="contactName" placeholder="e.g. John Perez" />
+        </label>
+        <label>
+          <span>WhatsApp number</span>
+          <input pInputText [ngModel]="phone()" (ngModelChange)="phone.set($event)" name="phone" placeholder="+1 555 123 4567" />
+        </label>
+        <label>
+          <span>Delivery address</span>
+          <textarea [ngModel]="address()" (ngModelChange)="address.set($event)" name="address" rows="4" placeholder="Street, building, apartment, reference..."></textarea>
+        </label>
+        <label>
+          <span>Notes</span>
+          <textarea [ngModel]="notes()" (ngModelChange)="notes.set($event)" name="notes" rows="3" placeholder="Additional instructions"></textarea>
+        </label>
+      </form>
+
+      @if (!isEmpty() && !isAuthenticated()) {
+        <div class="login-strip">
+          To place the order you must <button type="button" class="inline-link" (click)="openLogin()">sign in</button>
+        </div>
+      }
+
+      <div class="checkout-total">
+        <div>
+          <span>Subtotal</span>
+          <strong>{{ totalPrice() | currency:'USD' }}</strong>
+        </div>
+        <div>
+          <span>Shipping</span>
+          <strong>To be calculated</strong>
+        </div>
+        <div class="final-total">
+          <span>Total</span>
+          <strong>{{ totalPrice() | currency:'USD' }}</strong>
+        </div>
+      </div>
+
+      <p-button
+        label="Confirm order"
+        icon="pi pi-check"
+        [loading]="buying()"
+        [disabled]="isEmpty() || hasStockIssues() || !isAuthenticated()"
+        (onClick)="buy()"
+      ></p-button>
+
+      <p class="checkout-note">Confirming creates the order with the current cart details.</p>
+    </aside>
+  </div>
+</section>
+
+<app-login-dialog
+  [visible]="showLoginDialog()"
+  (visibleChange)="showLoginDialog.set($event)"
+  (loginSuccess)="onLoginSuccess()"
+/>

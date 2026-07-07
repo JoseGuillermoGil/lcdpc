@@ -1,38 +1,41 @@
 import { CommonModule } from '@angular/common';
-import { Component, EventEmitter, Input, Output, inject, computed, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { MessageService } from 'primeng/api';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
 import { TagModule } from 'primeng/tag';
 import { ToastModule } from 'primeng/toast';
-import { MessageService } from 'primeng/api';
-import { CartStore, CartItem } from '../../core/stores/cart.store';
 import { AuthStore } from '../../core/auth/auth.store';
-import { BranchStore } from '../../core/stores/branch.store';
+import { CartItem, CartStore } from '../../core/stores/cart.store';
 import { OrderApiService } from '../../core/services/order-api.service';
-import { ProductApiService } from '../../core/services/product-api.service';
-import { LoginDialogComponent } from '../login-dialog/login-dialog.component';
+import { LoginDialogComponent } from '../../shared/login-dialog/login-dialog.component';
 
 @Component({
-  selector: 'app-cart-dialog',
+  selector: 'app-cart-page',
   standalone: true,
-  imports: [CommonModule, ButtonModule, DialogModule, TagModule, ToastModule, LoginDialogComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ButtonModule,
+    DialogModule,
+    InputTextModule,
+    TagModule,
+    ToastModule,
+    LoginDialogComponent,
+  ],
   providers: [MessageService],
-  templateUrl: './cart-dialog.component.html',
-  styleUrl: './cart-dialog.component.scss',
+  templateUrl: './cart-page.component.html',
+  styleUrl: './cart-page.component.scss',
 })
-export class CartDialogComponent {
+export class CartPageComponent {
   private readonly cartStore = inject(CartStore);
   private readonly authStore = inject(AuthStore);
-  private readonly branchStore = inject(BranchStore);
   private readonly orderApi = inject(OrderApiService);
-  private readonly productApi = inject(ProductApiService);
+  private readonly router = inject(Router);
   private readonly messageService = inject(MessageService);
-
-  @Input() visible = false;
-  @Output() visibleChange = new EventEmitter<boolean>();
-
-  protected readonly buying = signal(false);
-  protected readonly showLoginDialog = signal(false);
 
   protected readonly items = this.cartStore.items;
   protected readonly totalPrice = this.cartStore.totalPrice;
@@ -40,8 +43,14 @@ export class CartDialogComponent {
   protected readonly isAuthenticated = this.authStore.isAuthenticated;
   protected readonly currentUser = this.authStore.currentUser;
 
-  protected readonly isEmpty = computed(() => this.items().length === 0);
+  protected readonly buying = signal(false);
+  protected readonly showLoginDialog = signal(false);
+  protected readonly contactName = signal('');
+  protected readonly phone = signal('');
+  protected readonly address = signal('');
+  protected readonly notes = signal('');
 
+  protected readonly isEmpty = computed(() => this.items().length === 0);
   protected readonly hasStockIssues = computed(() =>
     this.items().some((item) => item.quantity > item.stockAvailable)
   );
@@ -52,47 +61,54 @@ export class CartDialogComponent {
     return items[0].branchId;
   });
 
-  close(): void {
-    this.visibleChange.emit(false);
-  }
+  protected readonly summaryLines = computed(() => {
+    const lines = [
+      this.contactName().trim() ? `Nombre: ${this.contactName().trim()}` : '',
+      this.phone().trim() ? `WhatsApp: ${this.phone().trim()}` : '',
+      this.address().trim() ? `Dirección: ${this.address().trim()}` : '',
+      this.notes().trim() ? `Notas: ${this.notes().trim()}` : '',
+    ].filter(Boolean);
 
-  onImageError(event: Event): void {
+    return lines.join('\n');
+  });
+
+  protected onImageError(event: Event): void {
     (event.target as HTMLImageElement).src = '/not-found.png';
   }
 
-  clearCart(): void {
+  protected clearCart(): void {
     this.cartStore.clear();
   }
 
-  removeItem(id: string): void {
+  protected removeItem(id: string): void {
     this.cartStore.removeItem(id);
   }
 
-  increment(id: string): void {
+  protected increment(id: string): void {
     const item = this.items().find((i) => i.id === id);
     if (item && item.quantity < item.stockAvailable) {
       this.cartStore.increment(id);
     }
   }
 
-  decrement(id: string): void {
+  protected decrement(id: string): void {
     this.cartStore.decrement(id);
   }
 
-  isOverStock(item: CartItem): boolean {
+  protected isOverStock(item: CartItem): boolean {
     return item.quantity > item.stockAvailable;
   }
 
-  openLogin(): void {
+  protected openLogin(): void {
     this.showLoginDialog.set(true);
   }
 
-  onLoginSuccess(): void {
+  protected onLoginSuccess(): void {
     this.showLoginDialog.set(false);
     this.buy();
   }
 
-  buy(): void {
+  protected buy(): void {
     if (this.isEmpty()) return;
 
     if (!this.isAuthenticated()) {
@@ -109,24 +125,22 @@ export class CartDialogComponent {
     }
 
     const user = this.currentUser();
-    const bId = this.branchId();
-    if (!user || !bId) return;
+    const branchId = this.branchId();
+    if (!user || !branchId) return;
 
     this.buying.set(true);
 
-    const req = {
-      branch_id: bId,
+    this.orderApi.create({
+      branch_id: branchId,
       client_user_id: user.id,
-      notes: '',
+      notes: this.summaryLines(),
       items: this.items().map((item) => ({
         item_type: item.itemType,
         ...(item.itemType === 'bundle' ? { bundle_id: item.id } : { product_id: item.id }),
         quantity: item.quantity,
         unit_price: item.price,
       })),
-    };
-
-    this.orderApi.create(req).subscribe({
+    }).subscribe({
       next: () => {
         this.cartStore.clear();
         this.cartStore.notifyOrderCreated();
@@ -136,7 +150,6 @@ export class CartDialogComponent {
           summary: 'Éxito',
           detail: 'Orden creada exitosamente',
         });
-        this.close();
       },
       error: (err) => {
         this.buying.set(false);
@@ -148,5 +161,9 @@ export class CartDialogComponent {
         });
       },
     });
+  }
+
+  protected goBack(): Promise<boolean> {
+    return this.router.navigateByUrl('/');
   }
 }

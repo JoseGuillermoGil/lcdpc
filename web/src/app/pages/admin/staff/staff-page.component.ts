@@ -12,10 +12,13 @@ import { ToolbarModule } from 'primeng/toolbar';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ToastModule } from 'primeng/toast';
 import { TooltipModule } from 'primeng/tooltip';
+import { TabsModule } from 'primeng/tabs';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { AuthStore } from '../../../core/auth/auth.store';
+import { AppUser } from '../../../core/models/user.model';
 import { StaffApiService } from '../../../core/services/staff-api.service';
 import { BranchApiService } from '../../../core/services/branch-api.service';
+import { UserApiService } from '../../../core/services/user-api.service';
 import { StaffMember } from '../../../core/models/staff.model';
 import { StaffFormDialogComponent } from './staff-form-dialog.component';
 
@@ -25,7 +28,7 @@ import { StaffFormDialogComponent } from './staff-form-dialog.component';
   imports: [
     CommonModule, FormsModule, ButtonModule, TableModule, TagModule,
     SelectModule, InputTextModule, IconFieldModule, InputIconModule,
-    ToolbarModule, ConfirmDialogModule, ToastModule, TooltipModule,
+    ToolbarModule, ConfirmDialogModule, ToastModule, TooltipModule, TabsModule,
     StaffFormDialogComponent
   ],
   providers: [ConfirmationService, MessageService],
@@ -35,6 +38,7 @@ import { StaffFormDialogComponent } from './staff-form-dialog.component';
 export class StaffPageComponent implements OnInit {
   private readonly authStore = inject(AuthStore);
   private readonly staffApi = inject(StaffApiService);
+  private readonly userApi = inject(UserApiService);
   private readonly branchApi = inject(BranchApiService);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
@@ -46,14 +50,19 @@ export class StaffPageComponent implements OnInit {
   protected readonly userBranchId = computed(() => this.authStore.currentUser()?.branchId ?? null);
 
   protected readonly staffMembers = signal<StaffMember[]>([]);
+  protected readonly personas = signal<AppUser[]>([]);
   protected readonly branches = signal<{ id: string; name: string }[]>([]);
   protected readonly loading = signal(false);
   protected readonly totalCount = signal(0);
+  protected readonly personasLoading = signal(false);
+  protected readonly personasTotalCount = signal(0);
   protected readonly pageSize = 10;
+  protected readonly personasPageSize = 10;
 
   protected filterSearch = '';
   protected filterBranchId: string | null = null;
   protected filterRoleCode: string | null = null;
+  protected personasSearch = '';
 
   protected readonly branchOptions = computed(() =>
     this.branches().map((b) => ({ label: b.name, value: b.id }))
@@ -96,8 +105,32 @@ export class StaffPageComponent implements OnInit {
     });
   }
 
+  loadPersonas(event: any): void {
+    const offset = event.first ?? 0;
+    const limit = event.rows ?? this.personasPageSize;
+    this.personasLoading.set(true);
+
+    const query = this.personasSearch.trim();
+    const request = query
+      ? this.userApi.search(query, limit, offset)
+      : this.userApi.list({ limit, offset });
+
+    request.subscribe({
+      next: (res) => {
+        this.personas.set(res.items);
+        this.personasTotalCount.set(res.totalCount);
+        this.personasLoading.set(false);
+      },
+      error: () => this.personasLoading.set(false),
+    });
+  }
+
   applyFilters(): void {
     this.loadStaff({ first: 0, rows: this.pageSize });
+  }
+
+  applyPersonasFilters(): void {
+    this.loadPersonas({ first: 0, rows: this.personasPageSize });
   }
 
   roleSeverity(roleCode: string): 'info' | 'warn' {
@@ -111,6 +144,25 @@ export class StaffPageComponent implements OnInit {
   openCreateDialog(): void {
     this.selectedStaff.set(null);
     this.dialogVisible.set(true);
+  }
+
+  protected statusSeverity(status: string): 'success' | 'warn' | 'info' | 'danger' {
+    switch (status) {
+      case 'Active':
+        return 'success';
+      case 'Inactive':
+        return 'danger';
+      default:
+        return 'info';
+    }
+  }
+
+  protected formatDate(value: string): string {
+    return new Date(value).toLocaleDateString('es-VE', {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+    });
   }
 
   openEditDialog(member: StaffMember): void {

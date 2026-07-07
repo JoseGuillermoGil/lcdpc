@@ -2,12 +2,10 @@
   <app-header
     [branches]="branchStore.branches()"
     [selectedBranchId]="branchStore.selectedBranchId()"
-    [cartCount]="cartStore.totalItems()"
     (branchChange)="selectBranch($event)"
-    (cartClick)="openCartDialog()"
   ></app-header>
 
-  <main class="landing-shell">
+  <main class="landing-shell" [class.cart-shell]="isCartRoute()">
     <router-outlet></router-outlet>
   </main>
 
@@ -20,7 +18,7 @@
       <span class="pi pi-map-marker"></span>
       <span>Ubicación</span>
     </button>
-    <button class="mobile-nav-item" type="button" (click)="openCartDialog()">
+    <button class="mobile-nav-item" type="button" (click)="goToCart()">
       <span class="pi pi-shopping-basket"></span>
       <span>Carrito</span>
       <span class="mobile-badge">{{ cartStore.totalItems() }}</span>
@@ -30,8 +28,6 @@
       <span>Perfil</span>
     </button>
   </nav>
-
-  <app-cart-dialog [(visible)]="showCartDialog"></app-cart-dialog>
 
   <app-footer></app-footer>
 } @else {

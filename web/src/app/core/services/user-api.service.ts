@@ -37,10 +37,10 @@ export class UserApiService {
     this.baseUrl = apiBaseUrl.replace(/\/$/, '');
   }
 
-  search(query: string, limit = 10): Observable<PaginatedResponse<AppUser>> {
+  search(query: string, limit = 10, offset = 0): Observable<PaginatedResponse<AppUser>> {
     return this.http
       .get<JsendEnvelope<PaginatedGoData<UserGoData>>>(`${this.baseUrl}/api/v1/users/search`, {
-        params: { q: query, limit: String(limit) },
+        params: { q: query, limit: String(limit), offset: String(offset) },
         withCredentials: true,
       })
       .pipe(map((res) => ({

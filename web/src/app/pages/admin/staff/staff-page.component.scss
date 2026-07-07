@@ -12,4 +12,12 @@
       margin: 0;
     }
   }
+
+  :host ::ng-deep .p-tabpanels {
+    padding-top: 0.75rem;
+  }
+
+  .admin-toolbar {
+    margin-bottom: 0.75rem;
+  }
 }

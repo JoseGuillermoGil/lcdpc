@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"crypto/rand"
+	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -38,8 +38,13 @@ func Seed(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) error {
 }
 
 func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) error {
+	email := cfg.SuperUserEmail
+	if email == "" {
+		email = "admin@lcdpc.local"
+	}
+
 	var exists bool
-	err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`, cfg.SuperUserEmail).Scan(&exists)
+	err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`, email).Scan(&exists)
 	if err != nil {
 		return err
 	}
@@ -47,14 +52,13 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 		return nil
 	}
 
-	email := cfg.SuperUserEmail
-	if email == "" {
-		email = "admin@lcdpc.local"
-	}
-
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
+	err = pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM profiles WHERE code = $1)`, cfg.SuperUserIdentityDocument).Scan(&exists)
+	if err != nil {
 		return err
+	}
+	if exists {
+		slog.Warn("superuser seed skipped: profile code already exists", "email", email, "code", cfg.SuperUserIdentityDocument)
+		return nil
 	}
 
 	pwHash, err := auth.HashPassword(cfg.SuperUserPassword)
@@ -64,6 +68,7 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 
 	userID := uuid.New()
 	profileID := uuid.New()
+	personID := uuid.New()
 
 	profileName := cfg.SuperUserFirstName
 	if cfg.SuperUserLastName != "" {
@@ -71,17 +76,27 @@ func seedSuperUser(ctx context.Context, pool *pgxpool.Pool, cfg SeedConfig) erro
 	}
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO users (id, email, password_hash, onboarding_status, status, name, profile_id, identity_document, whatsapp_phone, full_address, created_at_utc)
-		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, $6, $7, $8, now())
-	`, userID, email, pwHash, profileName, profileID, cfg.SuperUserIdentityDocument, cfg.SuperUserWhatsAppPhone, cfg.SuperUserFullAddress)
+		INSERT INTO profiles (id, name, code, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, now(), now())
+	`, profileID, profileName, cfg.SuperUserIdentityDocument)
 	if err != nil {
 		return err
 	}
 
 	_, err = pool.Exec(ctx, `
-		INSERT INTO profiles (id, name, code, created_at_utc, updated_at_utc)
-		VALUES ($1, $2, $3, now(), now())
-	`, profileID, profileName, cfg.SuperUserIdentityDocument)
+		INSERT INTO persons (id, name, identity_document, tax_id, whatsapp_phone, full_address, is_client, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, NULL, $4, $5, false, now(), now())
+	`, personID, profileName, cfg.SuperUserIdentityDocument, cfg.SuperUserWhatsAppPhone, cfg.SuperUserFullAddress)
+	if err != nil {
+		return err
+	}
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO users (
+			id, email, password_hash, onboarding_status, status, profile_id, person_id, created_at_utc
+		)
+		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, now())
+	`, userID, email, pwHash, profileID, personID)
 	if err != nil {
 		return err
 	}
@@ -140,7 +155,7 @@ func seedAPIToken(ctx context.Context, pool *pgxpool.Pool) error {
 	}
 
 	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
+	if _, err := crand.Read(tokenBytes); err != nil {
 		return err
 	}
 	token := hex.EncodeToString(tokenBytes)

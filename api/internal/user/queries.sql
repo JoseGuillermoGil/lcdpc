@@ -26,9 +26,9 @@ UPDATE users SET status = $2 WHERE id = $1;
 
 -- name: ListUsers :many
 SELECT u.id, u.email, u.onboarding_status, u.status, u.created_at_utc,
-       p.first_name, p.last_name
+       p.name
 FROM users u
-LEFT JOIN profiles p ON p.user_id = u.id
+LEFT JOIN persons p ON p.id = u.person_id
 ORDER BY u.created_at_utc DESC
 LIMIT $1 OFFSET $2;
 
@@ -37,25 +37,24 @@ SELECT COUNT(*) FROM users;
 
 -- name: SearchUsers :many
 SELECT u.id, u.email, u.onboarding_status, u.status, u.created_at_utc,
-       p.first_name, p.last_name
+       p.name
 FROM users u
-LEFT JOIN profiles p ON p.user_id = u.id
+LEFT JOIN persons p ON p.id = u.person_id
 WHERE u.email ILIKE '%' || $1 || '%'
-   OR p.first_name ILIKE '%' || $1 || '%'
-   OR p.last_name ILIKE '%' || $1 || '%'
+   OR p.name ILIKE '%' || $1 || '%'
 ORDER BY u.created_at_utc DESC
 LIMIT $2 OFFSET $3;
 
 -- Profile queries
 
 -- name: GetProfileByUserID :one
-SELECT id, user_id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc
+SELECT id, name, code, created_at_utc, updated_at_utc
 FROM profiles
-WHERE user_id = $1;
+WHERE id = (SELECT profile_id FROM users WHERE id = $1);
 
 -- name: CreateProfile :exec
-INSERT INTO profiles (id, user_id, first_name, last_name, identity_document, rif, whatsapp_phone, full_address, created_at_utc, updated_at_utc)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+INSERT INTO profiles (id, name, code, created_at_utc, updated_at_utc)
+VALUES ($1, $2, $3, $4, $5);
 
 -- Role queries
 

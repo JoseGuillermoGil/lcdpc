@@ -2,9 +2,11 @@
 
 -- name: ListUsersWithProfiles :many
 SELECT u.id, u.email, u.onboarding_status, u.status, u.created_at_utc,
-       p.first_name, p.last_name, p.identity_document, p.whatsapp_phone
+	       per.name AS person_name,
+	       per.identity_document AS identity_document,
+	       per.whatsapp_phone AS whatsapp_phone
 FROM users u
-LEFT JOIN profiles p ON p.user_id = u.id
+LEFT JOIN persons per ON per.id = u.person_id
 ORDER BY u.created_at_utc DESC
 LIMIT $1 OFFSET $2;
 

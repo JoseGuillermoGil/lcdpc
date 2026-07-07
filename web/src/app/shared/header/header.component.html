@@ -60,12 +60,64 @@
           styleClass="cart-button"
           [rounded]="true"
           [text]="true"
-          severity="secondary"
+          [severity]="isCartRoute() ? 'warn' : 'secondary'"
           ariaLabel="Carrito"
-          (onClick)="cartClick.emit()"
+          (onClick)="toggleCartOverlay($event)"
         ></p-button>
-        <span class="cart-count-badge">{{ cartCount }}</span>
+        <span class="cart-count-badge">{{ cartCount() }}</span>
       </div>
+
+      <p-popover
+        #cartOverlay
+        [style]="{ width: '19rem', padding: '0' }"
+        [dismissable]="true"
+        appendTo="body"
+      >
+        <div class="cart-popover">
+          <div class="cart-popover-header">
+            <div>
+              <p class="cart-popover-kicker">Resumen del carrito</p>
+              <strong>{{ cartQuantity() }} artículos</strong>
+            </div>
+            <span class="cart-popover-total">{{ cartCount() }} líneas</span>
+          </div>
+
+          @if (hasCartItems()) {
+            <ul class="cart-popover-list">
+              @for (item of visibleCartItems(); track item.id) {
+                <li class="cart-popover-item">
+                  <span class="cart-item-name" [title]="item.name">{{ item.name }}</span>
+                  <span class="cart-item-qty">x{{ item.quantity }}</span>
+                </li>
+              }
+
+              @if (hiddenCartItems() > 0) {
+                <li class="cart-popover-more">+{{ hiddenCartItems() }} más</li>
+              }
+            </ul>
+
+            <p-button
+              label="Ir al carrito"
+              icon="pi pi-arrow-right"
+              styleClass="cart-popover-action"
+              [disabled]="!hasCartItems()"
+              (onClick)="goToCart()"
+            ></p-button>
+          } @else {
+            <div class="cart-popover-empty">
+              <i class="pi pi-shopping-cart"></i>
+              <p>Tu carrito está vacío.</p>
+            </div>
+
+            <p-button
+              label="Ir al carrito"
+              icon="pi pi-arrow-right"
+              styleClass="cart-popover-action"
+              [disabled]="true"
+            ></p-button>
+          }
+        </div>
+      </p-popover>
 
       @if (isAuthenticated()) {
         <div class="user-menu">

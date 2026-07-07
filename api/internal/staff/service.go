@@ -70,6 +70,8 @@ type StaffFilter struct {
 
 var excludedRoles = []string{"global_admin", "branch_admin", "client"}
 
+const errLastSuperadminForbidden = "LAST_SUPERADMIN_FORBIDDEN"
+
 func (f StaffFilter) GetLimit() int {
 	if f.Limit <= 0 {
 		return 10
@@ -91,6 +93,7 @@ func (s *Service) List(ctx context.Context, filter StaffFilter) ([]StaffMember, 
 	countQuery := `
 		SELECT COUNT(*)
 		FROM users u
+		LEFT JOIN persons per ON per.id = u.person_id
 		JOIN profiles p ON p.id = u.profile_id
 		JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
 		JOIN roles r ON r.id = pra.role_id
@@ -98,10 +101,11 @@ func (s *Service) List(ctx context.Context, filter StaffFilter) ([]StaffMember, 
 	`
 	dataQuery := `
 		SELECT u.id, u.email, u.status, u.branch_id, b.store_name,
-		       u.identity_document, u.whatsapp_phone,
-		       p.id, u.name, p.code,
+		       per.identity_document, per.whatsapp_phone,
+		       p.id, per.name, p.code,
 		       r.code, r.name, u.created_at_utc
 		FROM users u
+		LEFT JOIN persons per ON per.id = u.person_id
 		JOIN profiles p ON p.id = u.profile_id
 		JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
 		JOIN roles r ON r.id = pra.role_id
@@ -127,7 +131,7 @@ func (s *Service) List(ctx context.Context, filter StaffFilter) ([]StaffMember, 
 		argIdx++
 	}
 	if filter.Search != nil && *filter.Search != "" {
-		clause := fmt.Sprintf(` AND (u.name ILIKE '%%' || $%d || '%%' OR u.email ILIKE '%%' || $%d || '%%')`, argIdx, argIdx)
+		clause := fmt.Sprintf(` AND (per.name ILIKE '%%' || $%d || '%%' OR u.email ILIKE '%%' || $%d || '%%' OR per.identity_document ILIKE '%%' || $%d || '%%')`, argIdx, argIdx, argIdx)
 		countQuery += clause
 		dataQuery += clause
 		args = append(args, *filter.Search)
@@ -169,10 +173,11 @@ func (s *Service) GetByID(ctx context.Context, userID uuid.UUID) (*StaffMember, 
 	var m StaffMember
 	err := s.pool.QueryRow(ctx, `
 		SELECT u.id, u.email, u.status, u.branch_id, b.store_name,
-		       u.identity_document, u.whatsapp_phone,
-		       p.id, u.name, p.code,
+		       per.identity_document, per.whatsapp_phone,
+		       p.id, per.name, p.code,
 		       r.code, r.name, u.created_at_utc
 		FROM users u
+		LEFT JOIN persons per ON per.id = u.person_id
 		JOIN profiles p ON p.id = u.profile_id
 		JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
 		JOIN roles r ON r.id = pra.role_id
@@ -207,14 +212,7 @@ func (s *Service) Create(ctx context.Context, req CreateStaffRequest) (*StaffMem
 
 	userID := uuid.New()
 	profileID := uuid.New()
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO users (id, email, password_hash, onboarding_status, status, name, profile_id, identity_document, whatsapp_phone, full_address, branch_id, created_at_utc)
-		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, $6, $7, $8, $9, now())
-	`, userID, req.Email, pwHash, req.Name, profileID, req.IdentityDocument, req.WhatsAppPhone, req.FullAddress, req.BranchID)
-	if err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
-	}
+	personID := uuid.New()
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO profiles (id, name, code, created_at_utc, updated_at_utc)
@@ -222,6 +220,24 @@ func (s *Service) Create(ctx context.Context, req CreateStaffRequest) (*StaffMem
 	`, profileID, req.Name, req.Code)
 	if err != nil {
 		return nil, fmt.Errorf("create profile: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO persons (id, name, identity_document, tax_id, whatsapp_phone, full_address, is_client, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, NULL, $4, $5, false, now(), now())
+	`, personID, req.Name, req.IdentityDocument, req.WhatsAppPhone, req.FullAddress)
+	if err != nil {
+		return nil, fmt.Errorf("create person: %w", err)
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO users (
+			id, email, password_hash, onboarding_status, status, profile_id, person_id, branch_id, created_at_utc
+		)
+		VALUES ($1, $2, $3, 'active', 'Active', $4, $5, $6, now())
+	`, userID, req.Email, pwHash, profileID, personID, req.BranchID)
+	if err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	var roleID uuid.UUID
@@ -256,36 +272,46 @@ func (s *Service) Update(ctx context.Context, userID uuid.UUID, req UpdateStaffR
 	}
 	defer tx.Rollback(ctx)
 
-	// Update user fields
-	if req.IdentityDocument != "" || req.WhatsAppPhone != "" || req.FullAddress != "" || req.BranchID != nil || req.Status != nil {
-		_, err = tx.Exec(ctx, `
-			UPDATE users SET
-				identity_document = COALESCE(NULLIF($2, ''), identity_document),
-				whatsapp_phone = COALESCE(NULLIF($3, ''), whatsapp_phone),
-				full_address = COALESCE(NULLIF($4, ''), full_address),
-				branch_id = COALESCE($5, branch_id),
-				status = COALESCE($6, status)
-			WHERE id = $1
-		`, userID, req.IdentityDocument, req.WhatsAppPhone, req.FullAddress, req.BranchID, req.Status)
-		if err != nil {
-			return nil, fmt.Errorf("update user: %w", err)
-		}
-	}
-
-	// Get profile ID
+	// Get profile + person IDs
 	var profileID uuid.UUID
-	err = tx.QueryRow(ctx, `SELECT profile_id FROM users WHERE id = $1`, userID).Scan(&profileID)
+	var personID uuid.UUID
+	err = tx.QueryRow(ctx, `SELECT profile_id, person_id FROM users WHERE id = $1`, userID).Scan(&profileID, &personID)
 	if err != nil {
 		return nil, fmt.Errorf("get profile: %w", err)
 	}
 
-	// Update user name + profile code
-	if req.Name != "" {
-		_, err = tx.Exec(ctx, `UPDATE users SET name = $2 WHERE id = $1`, userID, req.Name)
+	if personID == uuid.Nil {
+		return nil, fmt.Errorf("PERSON_NOT_LINKED")
+	}
+
+	// Update person first (source of truth)
+	if req.Name != "" || req.IdentityDocument != "" || req.WhatsAppPhone != "" || req.FullAddress != "" {
+		_, err = tx.Exec(ctx, `
+			UPDATE persons SET
+				name = COALESCE(NULLIF($2, ''), name),
+				identity_document = COALESCE(NULLIF($3, ''), identity_document),
+				whatsapp_phone = COALESCE(NULLIF($4, ''), whatsapp_phone),
+				full_address = COALESCE(NULLIF($5, ''), full_address),
+				updated_at_utc = now()
+			WHERE id = $1
+		`, personID, req.Name, req.IdentityDocument, req.WhatsAppPhone, req.FullAddress)
 		if err != nil {
-			return nil, fmt.Errorf("update user name: %w", err)
+			return nil, fmt.Errorf("update person: %w", err)
 		}
 	}
+
+	if req.BranchID != nil || req.Status != nil {
+		_, err = tx.Exec(ctx, `
+			UPDATE users u SET
+				branch_id = COALESCE($2, u.branch_id),
+				status = COALESCE($3, u.status)
+			WHERE u.id = $1
+		`, userID, req.BranchID, req.Status)
+		if err != nil {
+			return nil, fmt.Errorf("mirror user: %w", err)
+		}
+	}
+
 	if req.Code != "" {
 		_, err = tx.Exec(ctx, `UPDATE profiles SET code = $2, updated_at_utc = now() WHERE id = $1`, profileID, req.Code)
 		if err != nil {
@@ -331,25 +357,63 @@ func (s *Service) Delete(ctx context.Context, userID uuid.UUID) error {
 	}
 	defer tx.Rollback(ctx)
 
-	// Delete profile_role_assignments
 	var profileID uuid.UUID
-	err = tx.QueryRow(ctx, `SELECT profile_id FROM users WHERE id = $1`, userID).Scan(&profileID)
+	var personID uuid.UUID
+	var isSuperadmin bool
+	err = tx.QueryRow(ctx, `
+		SELECT u.profile_id, u.person_id, EXISTS(
+			SELECT 1
+			FROM profile_role_assignments pra
+			JOIN roles r ON r.id = pra.role_id
+			WHERE pra.profile_id = u.profile_id
+			  AND pra.active = true
+			  AND r.code = 'global_admin'
+		) AS is_superadmin
+		FROM users u
+		WHERE u.id = $1
+	`, userID).Scan(&profileID, &personID, &isSuperadmin)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return fmt.Errorf("NOT_FOUND")
+		}
 		return fmt.Errorf("get profile: %w", err)
+	}
+
+	if isSuperadmin {
+		var superadminCount int
+		err = tx.QueryRow(ctx, `
+			SELECT COUNT(*)
+			FROM users u
+			JOIN profiles p ON p.id = u.profile_id
+			JOIN profile_role_assignments pra ON pra.profile_id = p.id AND pra.active = true
+			JOIN roles r ON r.id = pra.role_id
+			WHERE r.code = 'global_admin'
+			  AND lower(u.status) = 'active'
+		`).Scan(&superadminCount)
+		if err != nil {
+			return fmt.Errorf("count superadmins: %w", err)
+		}
+		if superadminCount <= 1 {
+			return fmt.Errorf(errLastSuperadminForbidden)
+		}
 	}
 
 	_, _ = tx.Exec(ctx, `DELETE FROM profile_role_assignments WHERE profile_id = $1`, profileID)
 
-	// Delete profile
-	_, err = tx.Exec(ctx, `DELETE FROM profiles WHERE id = $1`, profileID)
-	if err != nil {
-		return fmt.Errorf("delete profile: %w", err)
-	}
-
-	// Delete user
-	tag, err := tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
+	// Delete user first so users.person_id is not nulled by the FK action.
+	_, err = tx.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
 	if err != nil {
 		return fmt.Errorf("delete user: %w", err)
+	}
+
+	if _, err = tx.Exec(ctx, `DELETE FROM persons WHERE id = $1`, personID); err != nil {
+		return fmt.Errorf("delete person: %w", err)
+	}
+
+	// Delete profile
+	tag, err := tx.Exec(ctx, `DELETE FROM profiles WHERE id = $1`, profileID)
+	if err != nil {
+		return fmt.Errorf("delete profile: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("NOT_FOUND")

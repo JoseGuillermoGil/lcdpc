@@ -3,7 +3,7 @@ package auth
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/rand"
+	crand "crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
@@ -95,7 +95,7 @@ func (ks *KeyService) loadFromFile(path, decryptionKeyHex string) error {
 
 func (ks *KeyService) generateEphemeral() error {
 	key := make([]byte, chacha20poly1305.KeySize)
-	if _, err := randomRead(key); err != nil {
+	if _, err := crand.Read(key); err != nil {
 		return err
 	}
 	ks.symmetricKey = key
@@ -160,15 +160,6 @@ func ValidatePasetoToken(tokenString string, key []byte, issuer, audience string
 	return &claims, nil
 }
 
-func randomRead(b []byte) (int, error) {
-	f, err := os.Open("/dev/urandom")
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-	return f.Read(b)
-}
-
 func branchIDToString(branchID *uuid.UUID) string {
 	if branchID == nil {
 		return ""
@@ -203,7 +194,7 @@ func EncryptKeyFile(path, masterKeyHex string) error {
 	}
 
 	nonce := make([]byte, aesgcm.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
+	if _, err := crand.Read(nonce); err != nil {
 		return fmt.Errorf("generate nonce: %w", err)
 	}
 
