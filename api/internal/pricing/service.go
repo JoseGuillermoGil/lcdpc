@@ -13,12 +13,17 @@ import (
 
 var ErrNotFound = errors.New("NOT_FOUND")
 
-type Service struct {
-	pool *pgxpool.Pool
+type SystemConfigReader interface {
+	GetNegativeStock(ctx context.Context) (bool, error)
 }
 
-func NewService(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool}
+type Service struct {
+	pool       *pgxpool.Pool
+	sysCfg     SystemConfigReader
+}
+
+func NewService(pool *pgxpool.Pool, sysCfg SystemConfigReader) *Service {
+	return &Service{pool: pool, sysCfg: sysCfg}
 }
 
 // Product
@@ -200,10 +205,12 @@ func (s *Service) UpdateProduct(ctx context.Context, id uuid.UUID, req CreatePro
 		delta := newStock - current.Stock
 		newStockAvail = current.StockAvailable + delta
 
-		if newStock < 0 {
+		negativeStock, _ := s.sysCfg.GetNegativeStock(ctx)
+
+		if newStock < 0 && !negativeStock {
 			return nil, fmt.Errorf("STOCK_BELOW_ZERO")
 		}
-		if newStockAvail < 0 {
+		if newStockAvail < 0 && !negativeStock {
 			return nil, fmt.Errorf("STOCK_AVAILABLE_BELOW_ZERO")
 		}
 		if current.StockBlocked > newStock {

@@ -9,6 +9,7 @@ import { SelectModule } from 'primeng/select';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { TooltipModule } from 'primeng/tooltip';
 import { AuthStore } from '../../../core/auth/auth.store';
+import { SystemConfigStore } from '../../../core/stores/system-config.store';
 import { AppUser } from '../../../core/models/user.model';
 import { DOCUMENT_TYPE_OPTIONS } from '../../../core/models/document-type.model';
 import { UserApiService } from '../../../core/services/user-api.service';
@@ -53,6 +54,7 @@ export class OrderFormDialogComponent implements OnChanges {
   @Output() saved = new EventEmitter<void>();
 
   private readonly authStore = inject(AuthStore);
+  private readonly systemConfigStore = inject(SystemConfigStore);
   private readonly userApi = inject(UserApiService);
   private readonly orderApi = inject(OrderApiService);
   private readonly productApi = inject(ProductApiService);
@@ -100,6 +102,7 @@ export class OrderFormDialogComponent implements OnChanges {
   }
 
   protected get hasStockIssues(): boolean {
+    if (this.systemConfigStore.negativeStock()) return false;
     return this.form.items.some((item) => {
       if (!item.product_id) return false;
       const product = this.products().find((p) => p.productId === item.product_id);
@@ -114,6 +117,7 @@ export class OrderFormDialogComponent implements OnChanges {
   }
 
   protected isOverStock(index: number): boolean {
+    if (this.systemConfigStore.negativeStock()) return false;
     const item = this.form.items[index];
     if (!item.product_id) return false;
     const product = this.products().find((p) => p.productId === item.product_id);

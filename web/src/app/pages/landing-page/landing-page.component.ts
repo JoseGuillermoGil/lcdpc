@@ -11,6 +11,7 @@ import { BranchApiService } from '../../core/services/branch-api.service';
 import { Branch } from '../../core/models/branch.model';
 import { BranchStore } from '../../core/stores/branch.store';
 import { CartStore } from '../../core/stores/cart.store';
+import { SystemConfigStore } from '../../core/stores/system-config.store';
 import { BranchesComponent } from '../../shared/branches/branches.component';
 import { CatalogComponent } from '../../shared/catalog/catalog.component';
 import { HeroComponent } from '../../shared/hero/hero.component';
@@ -66,6 +67,7 @@ export class LandingPageComponent implements OnInit {
   private readonly branchApi = inject(BranchApiService);
   private readonly branchStore = inject(BranchStore);
   private readonly cartStore = inject(CartStore);
+  readonly systemConfigStore = inject(SystemConfigStore);
 
   protected readonly activeHeroIndex = signal(0);
   protected readonly search = signal('');
@@ -242,9 +244,9 @@ export class LandingPageComponent implements OnInit {
     this.products.update((items) =>
       items.map((p) => {
         if (p.id !== productId) return p;
-        if (p.stockAvailable <= 0) return p;
+        if (!this.systemConfigStore.negativeStock() && p.stockAvailable <= 0) return p;
         const max = p.stockAvailable;
-        const newQty = Math.min(p.quantity + 1, max);
+        const newQty = this.systemConfigStore.negativeStock() ? p.quantity + 1 : Math.min(p.quantity + 1, max);
         return { ...p, quantity: newQty };
       })
     );

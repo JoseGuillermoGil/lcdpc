@@ -58,10 +58,10 @@
                           (onClick)="decrement.emit(product.id)"></p-button>
                 <span>{{ product.quantity }}</span>
                 <p-button icon="pi pi-plus" [text]="true"
-                          [disabled]="product.stockAvailable === 0 || (product.quantity >= product.stockAvailable)"
+                          [disabled]="!negativeStock && (product.stockAvailable === 0 || (product.quantity >= product.stockAvailable))"
                           (onClick)="increment.emit(product.id)"></p-button>
               </div>
-              @if (product.stockAvailable > 0) {
+              @if (negativeStock || product.stockAvailable > 0) {
                 <span class="stock-info">{{ product.stockAvailable }} disponibles</span>
               } @else {
                 <span class="stock-info out-of-stock">Sin stock</span>
@@ -70,7 +70,7 @@
                 label="Agregar"
                 icon="pi pi-shopping-cart"
                 [severity]="product.featured ? 'secondary' : 'primary'"
-                [disabled]="product.stockAvailable === 0"
+                [disabled]="!negativeStock && product.stockAvailable === 0"
                 (onClick)="addToCart.emit(product.id)"
               ></p-button>
             </div>

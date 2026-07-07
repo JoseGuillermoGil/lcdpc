@@ -17,6 +17,7 @@ interface SystemConfigGoData {
   page_name: string;
   title: string;
   show_price_in_catalog: boolean;
+  negative_stock: boolean;
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -111,6 +112,12 @@ export class SystemConfigApiService {
       .pipe(map((res) => res.data.show_price_in_catalog));
   }
 
+  getNegativeStock(): Observable<boolean> {
+    return this.http
+      .get<JsendEnvelope<{ negative_stock: boolean }>>(`${this.baseUrl}/api/v1/system/negative-stock`)
+      .pipe(map((res) => res.data.negative_stock));
+  }
+
   resolveImageUrl(img: string | null): string | null {
     if (!img) return null;
     if (img.startsWith('http://') || img.startsWith('https://')) return img;
@@ -125,6 +132,7 @@ export class SystemConfigApiService {
       pageName: raw.page_name,
       title: raw.title,
       showPriceInCatalog: raw.show_price_in_catalog,
+      negativeStock: raw.negative_stock,
       active: raw.active,
       createdAt: raw.created_at,
       updatedAt: raw.updated_at,

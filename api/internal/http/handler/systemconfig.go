@@ -261,3 +261,12 @@ func (h *SystemConfigHandler) GetTitle(w http.ResponseWriter, r *http.Request) {
 	}
 	response.Success(w, map[string]string{"title": result.Title})
 }
+
+func (h *SystemConfigHandler) GetNegativeStock(w http.ResponseWriter, r *http.Request) {
+	result, err := h.svc.GetActive(r.Context())
+	if err != nil {
+		response.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.Success(w, map[string]bool{"negative_stock": result.NegativeStock})
+}

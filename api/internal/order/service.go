@@ -9,12 +9,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Service struct {
-	pool *pgxpool.Pool
+type SystemConfigReader interface {
+	GetNegativeStock(ctx context.Context) (bool, error)
 }
 
-func NewService(pool *pgxpool.Pool) *Service {
-	return &Service{pool: pool}
+type Service struct {
+	pool   *pgxpool.Pool
+	sysCfg SystemConfigReader
+}
+
+func NewService(pool *pgxpool.Pool, sysCfg SystemConfigReader) *Service {
+	return &Service{pool: pool, sysCfg: sysCfg}
 }
 
 func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByUserID uuid.UUID) (*Order, error) {
@@ -69,6 +74,8 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 	var priceTotal float64
 	var totalItems int
 
+	negativeStock, _ := s.sysCfg.GetNegativeStock(ctx)
+
 	for _, item := range req.Items {
 		subtotal := item.Quantity * item.UnitPrice
 		priceTotal += subtotal
@@ -88,7 +95,7 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 			}
 
 			qty := item.Quantity
-			if stockAvailable < qty {
+			if stockAvailable < qty && !negativeStock {
 				return nil, fmt.Errorf("INSUFFICIENT_STOCK: product %s has %.4f available, requested %.4f", item.ProductID, stockAvailable, qty)
 			}
 			if stockBlocked+qty > stock {
@@ -116,7 +123,7 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 			}
 			if blocksProductStock {
 				qty := item.Quantity
-				if bundleAvailable < qty {
+				if bundleAvailable < qty && !negativeStock {
 					return nil, fmt.Errorf("INSUFFICIENT_BUNDLE_STOCK: bundle %s has %.4f available, requested %.4f", item.BundleID, bundleAvailable, qty)
 				}
 				if bundleBlocked+qty > bundleStock {
@@ -131,7 +138,7 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 					return nil, fmt.Errorf("update bundle stock: %w", err)
 				}
 
-				if err := blockBundleProductStock(ctx, tx, item.BundleID, qty); err != nil {
+				if err := blockBundleProductStock(ctx, tx, item.BundleID, qty, negativeStock); err != nil {
 					return nil, err
 				}
 			}
@@ -317,6 +324,8 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 		var priceTotal float64
 		var totalItems int
 
+		negativeStock, _ := s.sysCfg.GetNegativeStock(ctx)
+
 		for _, item := range req.Items {
 			subtotal := item.Quantity * item.UnitPrice
 			priceTotal += subtotal
@@ -336,7 +345,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 				}
 
 				qty := item.Quantity
-				if stockAvailable < qty {
+				if stockAvailable < qty && !negativeStock {
 					return nil, fmt.Errorf("INSUFFICIENT_STOCK: product %s has %.4f available, requested %.4f", item.ProductID, stockAvailable, qty)
 				}
 				if stockBlocked+qty > stock {
@@ -364,7 +373,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 				}
 				if blocksProductStock {
 					qty := item.Quantity
-					if bundleAvailable < qty {
+					if bundleAvailable < qty && !negativeStock {
 						return nil, fmt.Errorf("INSUFFICIENT_BUNDLE_STOCK: bundle %s has %.4f available, requested %.4f", item.BundleID, bundleAvailable, qty)
 					}
 					if bundleBlocked+qty > bundleStock {
@@ -379,7 +388,7 @@ func (s *Service) Update(ctx context.Context, id uuid.UUID, req UpdateOrderReque
 						return nil, fmt.Errorf("update bundle stock: %w", err)
 					}
 
-					if err := blockBundleProductStock(ctx, tx, item.BundleID, qty); err != nil {
+					if err := blockBundleProductStock(ctx, tx, item.BundleID, qty, negativeStock); err != nil {
 						return nil, err
 					}
 				}
@@ -586,7 +595,7 @@ func isStockReleaseStatus(status string) bool {
 	return status == StatusCancelledByCustomer || status == StatusRejectedByValidation
 }
 
-func blockBundleProductStock(ctx context.Context, tx pgx.Tx, bundleID uuid.UUID, bundleQty float64) error {
+func blockBundleProductStock(ctx context.Context, tx pgx.Tx, bundleID uuid.UUID, bundleQty float64, negativeStock bool) error {
 	rows, err := tx.Query(ctx, `
 		SELECT product_id, quantity FROM bundle_items WHERE bundle_id = $1
 	`, bundleID)
@@ -619,7 +628,7 @@ func blockBundleProductStock(ctx context.Context, tx pgx.Tx, bundleID uuid.UUID,
 			if err != nil {
 				return fmt.Errorf("get product stock for bundle block: %w", err)
 			}
-			if stockAvailable < bi.qty {
+			if stockAvailable < bi.qty && !negativeStock {
 				return fmt.Errorf("INSUFFICIENT_STOCK: product %s has %.4f available, bundle needs %.4f", bi.productID, stockAvailable, bi.qty)
 			}
 			if stockBlocked+bi.qty > stock {

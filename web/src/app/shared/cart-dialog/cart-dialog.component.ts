@@ -8,6 +8,7 @@ import { MessageService } from 'primeng/api';
 import { CartStore, CartItem } from '../../core/stores/cart.store';
 import { AuthStore } from '../../core/auth/auth.store';
 import { BranchStore } from '../../core/stores/branch.store';
+import { SystemConfigStore } from '../../core/stores/system-config.store';
 import { OrderApiService } from '../../core/services/order-api.service';
 import { ProductApiService } from '../../core/services/product-api.service';
 import { LoginDialogComponent } from '../login-dialog/login-dialog.component';
@@ -24,6 +25,7 @@ export class CartDialogComponent {
   private readonly cartStore = inject(CartStore);
   private readonly authStore = inject(AuthStore);
   private readonly branchStore = inject(BranchStore);
+  protected readonly systemConfigStore = inject(SystemConfigStore);
   private readonly orderApi = inject(OrderApiService);
   private readonly productApi = inject(ProductApiService);
   private readonly messageService = inject(MessageService);
@@ -43,7 +45,7 @@ export class CartDialogComponent {
   protected readonly isEmpty = computed(() => this.items().length === 0);
 
   protected readonly hasStockIssues = computed(() =>
-    this.items().some((item) => item.quantity > item.stockAvailable)
+    !this.systemConfigStore.negativeStock() && this.items().some((item) => item.quantity > item.stockAvailable)
   );
 
   protected readonly branchId = computed(() => {
@@ -70,7 +72,7 @@ export class CartDialogComponent {
 
   increment(id: string): void {
     const item = this.items().find((i) => i.id === id);
-    if (item && item.quantity < item.stockAvailable) {
+    if (item && (this.systemConfigStore.negativeStock() || item.quantity < item.stockAvailable)) {
       this.cartStore.increment(id);
     }
   }
@@ -80,7 +82,7 @@ export class CartDialogComponent {
   }
 
   isOverStock(item: CartItem): boolean {
-    return item.quantity > item.stockAvailable;
+    return !this.systemConfigStore.negativeStock() && item.quantity > item.stockAvailable;
   }
 
   openLogin(): void {
