@@ -33,9 +33,9 @@ type Product struct {
 	CategoryID     *uuid.UUID `json:"category_id"`
 	BranchID       *uuid.UUID `json:"branch_id"`
 	BaseUnitID     *uuid.UUID `json:"base_unit_id"`
-	Stock          int        `json:"stock"`
-	StockAvailable int        `json:"stock_available"`
-	StockBlocked   int        `json:"stock_blocked"`
+	Stock          float64    `json:"stock"`
+	StockAvailable float64    `json:"stock_available"`
+	StockBlocked   float64    `json:"stock_blocked"`
 }
 
 type CreateProductRequest struct {
@@ -46,9 +46,9 @@ type CreateProductRequest struct {
 	CategoryID     *uuid.UUID `json:"category_id"`
 	BranchID       *uuid.UUID `json:"branch_id"`
 	BaseUnitID     *uuid.UUID `json:"base_unit_id"`
-	Stock          *int       `json:"stock"`
-	StockAvailable *int       `json:"stock_available"`
-	StockBlocked   *int       `json:"stock_blocked"`
+	Stock          *float64   `json:"stock"`
+	StockAvailable *float64   `json:"stock_available"`
+	StockBlocked   *float64   `json:"stock_blocked"`
 }
 
 func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (*Product, error) {
@@ -286,9 +286,9 @@ type Bundle struct {
 	Prices             []BundlePrice `json:"prices"`
 	Img                *string       `json:"img"`
 	CategoryID         *uuid.UUID    `json:"category_id"`
-	Stock              int           `json:"stock"`
-	StockAvailable     int           `json:"stock_available"`
-	StockBlocked       int           `json:"stock_blocked"`
+	Stock              float64       `json:"stock"`
+	StockAvailable     float64       `json:"stock_available"`
+	StockBlocked       float64       `json:"stock_blocked"`
 	BlocksProductStock bool          `json:"blocks_product_stock"`
 }
 
@@ -307,17 +307,17 @@ type BundleItem struct {
 }
 
 type CreateBundleRequest struct {
-	Code               string          `json:"code" validate:"required"`
-	Name               string          `json:"name" validate:"required"`
-	Items              []BundleItemReq `json:"items" validate:"required"`
+	Code               string           `json:"code" validate:"required"`
+	Name               string           `json:"name" validate:"required"`
+	Items              []BundleItemReq  `json:"items" validate:"required"`
 	Prices             []BundlePriceReq `json:"prices"`
-	BranchID           *uuid.UUID      `json:"branch_id"`
-	Img                *string         `json:"img"`
-	CategoryID         *uuid.UUID      `json:"category_id"`
-	Stock              *int            `json:"stock"`
-	StockAvailable     *int            `json:"stock_available"`
-	StockBlocked       *int            `json:"stock_blocked"`
-	BlocksProductStock *bool           `json:"blocks_product_stock"`
+	BranchID           *uuid.UUID       `json:"branch_id"`
+	Img                *string          `json:"img"`
+	CategoryID         *uuid.UUID       `json:"category_id"`
+	Stock              *float64         `json:"stock"`
+	StockAvailable     *float64         `json:"stock_available"`
+	StockBlocked       *float64         `json:"stock_blocked"`
+	BlocksProductStock *bool            `json:"blocks_product_stock"`
 }
 
 type BundleItemReq struct {
@@ -438,7 +438,7 @@ func (s *Service) CreateBundle(ctx context.Context, req CreateBundleRequest) (*B
 			return nil, err
 		}
 		if bundle.Stock > maxStock {
-			return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %d, requested %d", maxStock, bundle.Stock)
+			return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %.4f, requested %.4f", maxStock, bundle.Stock)
 		}
 		if err := BlockProductStock(ctx, tx, toChainItems(bundle.Items), bundle.Stock); err != nil {
 			return nil, err
@@ -706,7 +706,7 @@ func (s *Service) UpdateBundle(ctx context.Context, id uuid.UUID, req CreateBund
 			return nil, err
 		}
 		if bundle.Stock > maxStock {
-			return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %d, requested %d", maxStock, bundle.Stock)
+			return nil, fmt.Errorf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %.4f, requested %.4f", maxStock, bundle.Stock)
 		}
 		if err := BlockProductStock(ctx, tx, toChainItems(bundle.Items), bundle.Stock); err != nil {
 			return nil, err
@@ -753,7 +753,7 @@ func (s *Service) DeleteBundle(ctx context.Context, id uuid.UUID) error {
 	}
 	defer tx.Rollback(ctx)
 
-	var stock int
+	var stock float64
 	var blocksProductStock bool
 	err = tx.QueryRow(ctx, `
 		SELECT stock, blocks_product_stock FROM bundles WHERE bundle_id = $1 FOR UPDATE

@@ -1,8 +1,3 @@
--- Add Pieza and Galon to measurement_units
-INSERT INTO measurement_units (id, name, code, symbol) VALUES
-    (gen_random_uuid(), 'Pieza', 'piece', 'pza'),
-    (gen_random_uuid(), 'Galon', 'gallon', 'gal');
-
 -- Create conversion_factor table
 CREATE TABLE conversion_factors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

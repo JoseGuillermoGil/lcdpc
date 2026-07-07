@@ -6,8 +6,8 @@ One-way inbound data push from an external system (legacy C# POS/inventory) into
 
 ## Auth
 
-- Header: `X-API-Key` (raw token)
-- Mechanism: SHA-256 hash of the key → compared against `api_tokens.token_hash` where `is_active = true`
+- Header: `X-API-Token` (raw token)
+- Mechanism: SHA-256 hash of the token → compared against `api_tokens.token_hash` where `is_active = true`
 - Middleware: `middleware.APIKeyAuth(pool)` in `api/internal/http/middleware/apikey.go`
 - No RBAC permission checks — any valid active API token grants full sync access
 - Seeder: runs on startup if `api_tokens` is empty; generates 32-byte random token (hex 64 chars), stores SHA-256 hash, logs raw token to stdout once (never retrievable again)
@@ -33,8 +33,10 @@ Batch upsert products by `(sku, branch_id)`.
   "is_active": true,
   "brand_code": "string (required, resolves to brands.id)",
   "category_code": "string | null (resolves to categories.category_id)",
+  "category_name": "string | null (display name for auto-create)",
   "branch_code": "string | null (resolves to branches.id)",
   "base_unit_code": "string | null (resolves to measurement_units.id, e.g. 'kg', 'unit')",
+  "base_unit_name": "string | null (display name for auto-create)",
   "stock": 0,
   "prices": [{"code": "string | null (resolves to price_categories.id)", "amount": 0.0}]
 }]
@@ -50,7 +52,7 @@ Batch upsert products by `(sku, branch_id)`.
 
 **New products:** `stockAvailable = stock`, `stockBlocked = 0`
 
-**Code resolution:** All `_code` fields are resolved to their corresponding UUID primary keys. If a code is not found, the item is recorded in `SyncResult.Details` as an error.
+**Code resolution:** All `_code` fields are resolved to their corresponding UUID primary keys. `category_code` and `base_unit_code` support auto-creation — if the code is not found, the system tries by name, then creates the record automatically. Other codes (`brand_code`, `branch_code`, `prices[].code`) still fail if not found.
 
 ### POST /api/v1/sync/bundles
 
@@ -69,6 +71,7 @@ Batch upsert bundles with items and prices, including chain stock management.
   "is_active": true,
   "branch_code": "string | null (resolves to branches.id)",
   "category_code": "string | null (resolves to categories.category_id)",
+  "category_name": "string | null (display name for auto-create)",
   "items": [{"product_code": "string (product code/sku, resolves to product_id)", "quantity": 1.0}],
   "prices": [{"code": "string | null (resolves to price_categories.id)", "amount": 0.0}],
   "stock": 0,
@@ -145,10 +148,24 @@ All `_code` fields in the request are resolved to UUID primary keys before DB op
 |---|---|---|---|
 | `brand_code` | `brands.id` | `brands` | `code` |
 | `category_code` | `categories.category_id` | `categories` | `code` |
+| `category_name` | `categories.category_id` | `categories` | `name` (fallback) |
 | `branch_code` | `branches.id` | `branches` | `code` |
 | `base_unit_code` | `measurement_units.id` | `measurement_units` | `code` |
+| `base_unit_name` | `measurement_units.id` | `measurement_units` | `name` (fallback) |
 | `prices[].code` | `price_categories.id` | `price_categories` | `code` |
 | `items[].product_code` | `products.product_id` | `products` | `sku` + `branch_id` |
+
+### Auto-create for categories and measurement units
+
+When `category_code` or `base_unit_code` is provided but not found in the DB, the system auto-creates the missing record:
+
+1. Try by code (`WHERE code = $1`)
+2. If not found, try by name (`WHERE name = $1`) — only if `_name` field is provided
+3. If still not found, **INSERT** a new record:
+   - `code` = slugified name (lowercase, no accents, hyphens)
+   - `name` = the provided `_name` value (falls back to `_code` if `_name` is nil)
+
+This ensures the sync never fails due to missing categories or measurement units.
 
 ## Relevant migrations
 

@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const ApiKeyHeader = "X-API-Key"
+const ApiKeyHeader = "X-API-TOKEN"
 
 func APIKeyAuth(pool *pgxpool.Pool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -23,8 +23,8 @@ func APIKeyAuth(pool *pgxpool.Pool) func(http.Handler) http.Handler {
 			hash := sha256.Sum256([]byte(apiKey))
 			tokenHash := hex.EncodeToString(hash[:])
 
-		var exists bool
-		err := pool.QueryRow(r.Context(), `
+			var exists bool
+			err := pool.QueryRow(r.Context(), `
 			SELECT EXISTS(SELECT 1 FROM api_tokens WHERE token_hash = $1 AND is_active = true)
 		`, tokenHash).Scan(&exists)
 			if err != nil || !exists {

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -19,6 +20,7 @@ func NewSyncHandler(svc *sync.Service) *SyncHandler {
 func (h *SyncHandler) SyncProducts(w http.ResponseWriter, r *http.Request) {
 	var req []sync.SyncProductRequest
 	if err := response.Decode(r, &req); err != nil {
+		slog.Warn("sync products: decode failed", "error", err)
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid json"})
 		return
 	}
@@ -30,8 +32,15 @@ func (h *SyncHandler) SyncProducts(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.SyncProducts(r.Context(), req)
 	if err != nil {
+		slog.Error("sync products: failed", "error", err)
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": err.Error()})
 		return
+	}
+
+	if result.Errors > 0 {
+		for _, d := range result.Details {
+			slog.Warn("sync products: item error", "identifier", d.Identifier, "message", d.Message)
+		}
 	}
 
 	response.Success(w, result)
@@ -40,6 +49,7 @@ func (h *SyncHandler) SyncProducts(w http.ResponseWriter, r *http.Request) {
 func (h *SyncHandler) SyncBundles(w http.ResponseWriter, r *http.Request) {
 	var req []sync.SyncBundleRequest
 	if err := response.Decode(r, &req); err != nil {
+		slog.Warn("sync bundles: decode failed", "error", err)
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": "invalid json"})
 		return
 	}
@@ -51,8 +61,15 @@ func (h *SyncHandler) SyncBundles(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.SyncBundles(r.Context(), req)
 	if err != nil {
+		slog.Error("sync bundles: failed", "error", err)
 		response.Fail(w, http.StatusBadRequest, map[string]string{"body": err.Error()})
 		return
+	}
+
+	if result.Errors > 0 {
+		for _, d := range result.Details {
+			slog.Warn("sync bundles: item error", "identifier", d.Identifier, "message", d.Message)
+		}
 	}
 
 	response.Success(w, result)

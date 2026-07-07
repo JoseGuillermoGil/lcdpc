@@ -1274,7 +1274,7 @@ Get order status change history.
 ### `POST /api/v1/sync/products`
 Bulk upsert products by `(sku, branch_id)`.
 
-**Auth:** API Key in `X-API-Key` header
+**Auth:** API Key in `X-API-Token` header
 
 **Request:**
 ```json
@@ -1308,7 +1308,7 @@ All `_code` fields are resolved to UUIDs. If a code is not found, the item is re
 ### `POST /api/v1/sync/bundles`
 Bulk upsert bundles by `(code, branch_id)` with items, prices, and chain stock.
 
-**Auth:** API Key in `X-API-Key` header
+**Auth:** API Key in `X-API-Token` header
 
 **Request:**
 ```json
@@ -1344,7 +1344,7 @@ Items resolve `product_code` to `product_id` via product lookup by sku + branch.
 ### `POST /api/v1/sync/products/{sku}/image`
 Upload/update image for a product by SKU.
 
-**Auth:** API Key in `X-API-Key` header
+**Auth:** API Key in `X-API-Token` header
 
 **Request (multipart/form-data):**
 | Field | Type | Required |
@@ -1356,7 +1356,7 @@ Upload/update image for a product by SKU.
 ### `POST /api/v1/sync/bundles/{code}/image`
 Upload/update image for a bundle by code.
 
-**Auth:** API Key in `X-API-Key` header
+**Auth:** API Key in `X-API-Token` header
 
 **Request (multipart/form-data):**
 | Field | Type | Required |
@@ -1378,7 +1378,7 @@ Authorization: Bearer v2.local...
 
 ### API Key (sync only)
 ```
-X-API-Key: {api-key-from-seed}
+X-API-Token: {api-key-from-seed}
 ```
 
 ### Roles

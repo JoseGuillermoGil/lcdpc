@@ -3,11 +3,16 @@ package sync
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 const maxSyncBatchSize = 500
@@ -30,9 +35,11 @@ type SyncProductRequest struct {
 	IsActive     bool               `json:"is_active"`
 	BrandCode    string             `json:"brand_code"`
 	CategoryCode *string            `json:"category_code"`
+	CategoryName *string            `json:"category_name"`
 	BranchCode   *string            `json:"branch_code"`
 	BaseUnitCode *string            `json:"base_unit_code"`
-	Stock        *int               `json:"stock"`
+	BaseUnitName *string            `json:"base_unit_name"`
+	Stock        *float64           `json:"stock"`
 	Prices       []SyncProductPrice `json:"prices"`
 }
 
@@ -47,9 +54,10 @@ type SyncBundleRequest struct {
 	IsActive           bool              `json:"is_active"`
 	BranchCode         *string           `json:"branch_code"`
 	CategoryCode       *string           `json:"category_code"`
+	CategoryName       *string           `json:"category_name"`
 	Items              []SyncBundleItem  `json:"items"`
 	Prices             []SyncBundlePrice `json:"prices"`
-	Stock              *int              `json:"stock"`
+	Stock              *float64          `json:"stock"`
 	BlocksProductStock bool              `json:"blocks_product_stock"`
 }
 
@@ -78,6 +86,16 @@ type SyncResult struct {
 // Validation
 // ---------------------------------------------------------------------------
 
+func (p SyncProductRequest) identifier() string {
+	if p.Code != "" {
+		return p.Code
+	}
+	if p.Name != "" {
+		return fmt.Sprintf("(name=%q)", p.Name)
+	}
+	return "(unknown)"
+}
+
 func (p SyncProductRequest) validate() error {
 	if p.Name == "" {
 		return fmt.Errorf("name is required")
@@ -91,6 +109,16 @@ func (p SyncProductRequest) validate() error {
 	return nil
 }
 
+func (b SyncBundleRequest) identifier() string {
+	if b.Code != "" {
+		return b.Code
+	}
+	if b.Name != "" {
+		return fmt.Sprintf("(name=%q)", b.Name)
+	}
+	return "(unknown)"
+}
+
 func (b SyncBundleRequest) validate() error {
 	if b.Name == "" {
 		return fmt.Errorf("name is required")
@@ -99,6 +127,30 @@ func (b SyncBundleRequest) validate() error {
 		return fmt.Errorf("code is required")
 	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
+
+func slugify(name string) string {
+	t := transform.Chain(norm.NFD, transform.RemoveFunc(func(r rune) bool {
+		return unicode.Is(unicode.Mn, r)
+	}))
+	s, _, _ := transform.String(t, name)
+	s = strings.ToLower(s)
+	s = slugRe.ReplaceAllString(s, "-")
+	s = strings.Trim(s, "-")
+	if len(s) > 50 {
+		s = s[:50]
+		s = strings.TrimRight(s, "-")
+	}
+	if s == "" {
+		return "item"
+	}
+	return s
 }
 
 // ---------------------------------------------------------------------------
@@ -120,17 +172,51 @@ func (s *Service) resolveBranchID(ctx context.Context, tx pgx.Tx, code *string) 
 	return &id, nil
 }
 
-func (s *Service) resolveCategoryID(ctx context.Context, tx pgx.Tx, code *string) (*uuid.UUID, error) {
-	if code == nil {
+func (s *Service) resolveCategoryID(ctx context.Context, tx pgx.Tx, code *string, name *string) (*uuid.UUID, error) {
+	if code == nil && name == nil {
 		return nil, nil
 	}
-	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT category_id FROM categories WHERE code = $1`, *code).Scan(&id)
-	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("category_code %q not found", *code)
+
+	// 1. Try by code
+	if code != nil {
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT category_id FROM categories WHERE code = $1`, *code).Scan(&id)
+		if err == nil {
+			return &id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("resolve category: %w", err)
+		}
 	}
+
+	// 2. Try by name
+	if name != nil {
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT category_id FROM categories WHERE name = $1`, *name).Scan(&id)
+		if err == nil {
+			return &id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("resolve category by name: %w", err)
+		}
+	}
+
+	// 3. Auto-create
+	displayName := ""
+	if name != nil {
+		displayName = *name
+	} else if code != nil {
+		displayName = *code
+	}
+	newCode := slugify(displayName)
+
+	var id uuid.UUID
+	err := tx.QueryRow(ctx, `
+		INSERT INTO categories (category_id, name, code) VALUES ($1, $2, $3)
+		RETURNING category_id
+	`, uuid.New(), displayName, newCode).Scan(&id)
 	if err != nil {
-		return nil, fmt.Errorf("resolve category: %w", err)
+		return nil, fmt.Errorf("auto-create category: %w", err)
 	}
 	return &id, nil
 }
@@ -174,17 +260,58 @@ func (s *Service) resolvePriceCategoryID(ctx context.Context, tx pgx.Tx, code *s
 	return &id, nil
 }
 
-func (s *Service) resolveMeasurementUnitID(ctx context.Context, tx pgx.Tx, code *string) (*uuid.UUID, error) {
-	if code == nil {
+func (s *Service) resolveMeasurementUnitID(ctx context.Context, tx pgx.Tx, code *string, name *string) (*uuid.UUID, error) {
+	if code == nil && name == nil {
 		return nil, nil
 	}
-	var id uuid.UUID
-	err := tx.QueryRow(ctx, `SELECT id FROM measurement_units WHERE code = $1`, *code).Scan(&id)
-	if err == pgx.ErrNoRows {
-		return nil, fmt.Errorf("base_unit_code %q not found", *code)
+
+	// 1. Try by code
+	if code != nil {
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT id FROM measurement_units WHERE code = $1`, *code).Scan(&id)
+		if err == nil {
+			return &id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("resolve measurement unit: %w", err)
+		}
 	}
+
+	// 2. Try by name
+	if name != nil {
+		var id uuid.UUID
+		err := tx.QueryRow(ctx, `SELECT id FROM measurement_units WHERE name = $1`, *name).Scan(&id)
+		if err == nil {
+			return &id, nil
+		}
+		if err != pgx.ErrNoRows {
+			return nil, fmt.Errorf("resolve measurement unit by name: %w", err)
+		}
+	}
+
+	// 3. Auto-create
+	displayName := ""
+	if name != nil {
+		displayName = *name
+	} else if code != nil {
+		displayName = *code
+	}
+	newCode := slugify(displayName)
+
+	var classID *uuid.UUID
+	var cid uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM measurement_unit_classifications WHERE code = 'generic'`).Scan(&cid)
+	if err == nil {
+		classID = &cid
+	}
+
+	var id uuid.UUID
+	err = tx.QueryRow(ctx, `
+		INSERT INTO measurement_units (id, name, code, symbol, classification_id) VALUES ($1, $2, $3, '', $4)
+		RETURNING id
+	`, uuid.New(), displayName, newCode, classID).Scan(&id)
 	if err != nil {
-		return nil, fmt.Errorf("resolve measurement unit: %w", err)
+		return nil, fmt.Errorf("auto-create measurement unit: %w", err)
 	}
 	return &id, nil
 }
@@ -208,7 +335,7 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 	for _, p := range products {
 		if err := p.validate(); err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
@@ -216,40 +343,40 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 		brandID, err := s.resolveBrandID(ctx, tx, p.BrandCode)
 		if err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
-		categoryID, err := s.resolveCategoryID(ctx, tx, p.CategoryCode)
+		categoryID, err := s.resolveCategoryID(ctx, tx, p.CategoryCode, p.CategoryName)
 		if err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
 		branchID, err := s.resolveBranchID(ctx, tx, p.BranchCode)
 		if err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
-		baseUnitID, err := s.resolveMeasurementUnitID(ctx, tx, p.BaseUnitCode)
+		baseUnitID, err := s.resolveMeasurementUnitID(ctx, tx, p.BaseUnitCode, p.BaseUnitName)
 		if err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
 		// Stock handling
-		stock := 0
+		stock := 0.0
 		if p.Stock != nil {
 			stock = *p.Stock
 		}
 
 		stockAvail := stock
-		stockBlocked := 0
-		var currentStock, currentBlocked int
+		stockBlocked := 0.0
+		var currentStock, currentBlocked float64
 		var productID uuid.UUID
 
 		err = tx.QueryRow(ctx, `
@@ -263,17 +390,17 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 
 			if stock < 0 {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: "STOCK_BELOW_ZERO"})
+				result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: "STOCK_BELOW_ZERO"})
 				continue
 			}
 			if stockAvail < 0 {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: "STOCK_AVAILABLE_BELOW_ZERO"})
+				result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: "STOCK_AVAILABLE_BELOW_ZERO"})
 				continue
 			}
 			if stockBlocked > stock {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: "STOCK_BLOCKED_EXCEEDS_STOCK"})
+				result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: "STOCK_BLOCKED_EXCEEDS_STOCK"})
 				continue
 			}
 		} else if err == pgx.ErrNoRows {
@@ -281,7 +408,7 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 			stockBlocked = 0
 		} else {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: "lookup failed"})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: "lookup failed"})
 			continue
 		}
 
@@ -302,21 +429,21 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 		`, uuid.New(), p.Name, p.Code, p.IsActive, brandID, categoryID, branchID, baseUnitID, stock, stockAvail, stockBlocked).Scan(&productID)
 		if err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 			continue
 		}
 
 		// Replace product prices
 		if _, err := tx.Exec(ctx, `DELETE FROM product_branch_prices WHERE product_id = $1`, productID); err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: fmt.Sprintf("delete prices: %v", err)})
+			result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: fmt.Sprintf("delete prices: %v", err)})
 			continue
 		}
 		for _, price := range p.Prices {
 			pcID, err := s.resolvePriceCategoryID(ctx, tx, price.Code)
 			if err != nil {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: err.Error()})
+				result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: err.Error()})
 				continue
 			}
 			if _, err := tx.Exec(ctx, `
@@ -324,7 +451,7 @@ func (s *Service) SyncProducts(ctx context.Context, products []SyncProductReques
 				VALUES ($1, $2, $3, $4, 'USD')
 			`, uuid.New(), productID, pcID, price.Amount); err != nil {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: p.Code, Message: fmt.Sprintf("price insert: %v", err)})
+				result.Details = append(result.Details, SyncError{Identifier: p.identifier(), Message: fmt.Sprintf("price insert: %v", err)})
 				continue
 			}
 		}
@@ -358,7 +485,7 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 	for _, b := range bundles {
 		if err := b.validate(); err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 
@@ -372,20 +499,20 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 		branchID, err := s.resolveBranchID(ctx, tx, b.BranchCode)
 		if err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 
-		categoryID, err := s.resolveCategoryID(ctx, tx, b.CategoryCode)
+		categoryID, err := s.resolveCategoryID(ctx, tx, b.CategoryCode, b.CategoryName)
 		if err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 
 		// 1. Check existing bundle state for chain recalculation
 		var bundleID uuid.UUID
-		var oldStock int
+		var oldStock float64
 		var oldBlocksProductStock bool
 		err = tx.QueryRow(ctx, `
 			SELECT bundle_id, stock, blocks_product_stock FROM bundles WHERE code = $1 AND branch_id IS NOT DISTINCT FROM $2 FOR UPDATE
@@ -394,7 +521,7 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 
 		if err != nil && err != pgx.ErrNoRows {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: "lookup failed"})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: "lookup failed"})
 			continue
 		}
 
@@ -412,13 +539,13 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 			}
 			if err := pricing.ReleaseProductStock(ctx, tx, oldItems, oldStock); err != nil {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 				continue
 			}
 		}
 
 		// 2. Upsert bundle
-		newStock := 0
+		newStock := 0.0
 		if b.Stock != nil {
 			newStock = *b.Stock
 		}
@@ -437,14 +564,14 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 		`, uuid.New(), b.Code, b.Name, status, branchID, categoryID, newStock, b.BlocksProductStock).Scan(&bundleID)
 		if err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 
 		// 3. Replace bundle items
 		if _, err := tx.Exec(ctx, `DELETE FROM bundle_items WHERE bundle_id = $1`, bundleID); err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 		newItems := make([]pricing.ChainItem, 0)
@@ -452,7 +579,7 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 			productID, err := s.resolveProductID(ctx, tx, item.ProductCode, branchID)
 			if err != nil {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 				continue
 			}
 			if _, err := tx.Exec(ctx, `
@@ -460,7 +587,7 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 				VALUES ($1, $2, $3, $4)
 			`, uuid.New(), bundleID, productID, item.Quantity); err != nil {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: fmt.Sprintf("item insert: %v", err)})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: fmt.Sprintf("item insert: %v", err)})
 				continue
 			}
 			newItems = append(newItems, pricing.ChainItem{ProductID: productID, Quantity: item.Quantity})
@@ -469,14 +596,14 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 		// 4. Replace bundle prices
 		if _, err := tx.Exec(ctx, `DELETE FROM bundle_prices WHERE bundle_id = $1`, bundleID); err != nil {
 			result.Errors++
-			result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+			result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 			continue
 		}
 		for _, p := range b.Prices {
 			pcID, err := s.resolvePriceCategoryID(ctx, tx, p.Code)
 			if err != nil {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: err.Error()})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: err.Error()})
 				continue
 			}
 			if _, err := tx.Exec(ctx, `
@@ -484,7 +611,7 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 				VALUES ($1, $2, $3, $4)
 			`, uuid.New(), bundleID, pcID, p.Amount); err != nil {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: fmt.Sprintf("price insert: %v", err)})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: fmt.Sprintf("price insert: %v", err)})
 				continue
 			}
 		}
@@ -494,17 +621,17 @@ func (s *Service) SyncBundles(ctx context.Context, bundles []SyncBundleRequest) 
 			maxStock, chainErr := pricing.MaxBundleStock(ctx, tx, newItems)
 			if chainErr != nil {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: chainErr.Error()})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: chainErr.Error()})
 				continue
 			}
 			if newStock > maxStock {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: fmt.Sprintf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %d, requested %d", maxStock, newStock)})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: fmt.Sprintf("BUNDLE_STOCK_EXCEEDS_CHAIN: max %.4f, requested %.4f", maxStock, newStock)})
 				continue
 			}
 			if blockErr := pricing.BlockProductStock(ctx, tx, newItems, newStock); blockErr != nil {
 				result.Errors++
-				result.Details = append(result.Details, SyncError{Identifier: b.Code, Message: blockErr.Error()})
+				result.Details = append(result.Details, SyncError{Identifier: b.identifier(), Message: blockErr.Error()})
 				continue
 			}
 		}
