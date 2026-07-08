@@ -2,7 +2,8 @@ export interface Order {
   id: string;
   displayId: string;
   branchId: string;
-  clientUserId: string;
+  personId: string | null;
+  clientUserId: string | null;
   status: string;
   priceTotal: number;
   totalItems: number;
@@ -28,7 +29,13 @@ export interface OrderItem {
 
 export interface CreateOrderRequest {
   branch_id: string;
-  client_user_id: string;
+  person_id?: string;
+  client_user_id?: string;
+  person_name?: string;
+  person_identity_document?: string;
+  person_tax_id?: string | null;
+  person_whatsapp_phone?: string;
+  person_full_address?: string;
   notes: string;
   items: CreateOrderItem[];
 }
@@ -56,7 +63,7 @@ export interface StatusHistoryEntry {
   orderId: string;
   fromStatus: string | null;
   toStatus: string;
-  changedByUserId: string;
+  changedByUserId: string | null;
   notes: string | null;
   createdAtUtc: string;
 }
@@ -64,6 +71,7 @@ export interface StatusHistoryEntry {
 export interface OrderFilter {
   branch_id?: string;
   client_user_id?: string;
+  person_id?: string;
   status?: string;
   display_id?: string;
   limit?: number;

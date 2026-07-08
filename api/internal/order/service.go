@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -22,9 +23,13 @@ func NewService(pool *pgxpool.Pool, sysCfg SystemConfigReader) *Service {
 	return &Service{pool: pool, sysCfg: sysCfg}
 }
 
-func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByUserID uuid.UUID) (*Order, error) {
+func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByUserID *uuid.UUID) (*Order, error) {
 	if len(req.Items) == 0 {
 		return nil, fmt.Errorf("order must have at least one item")
+	}
+	resolvedPersonID, resolvedClientUserID, err := s.resolveOrderIdentity(ctx, req, changedByUserID)
+	if err != nil {
+		return nil, err
 	}
 
 	for _, item := range req.Items {
@@ -64,9 +69,9 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO orders (id, display_id, branch_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc)
-		VALUES ($1, $2, $3, $4, $5, 0, 0, 'USD', $6, now(), now())
-	`, orderID, displayID, req.BranchID, req.ClientUserID, StatusPendingReview, nullString(req.Notes))
+		INSERT INTO orders (id, display_id, branch_id, person_id, client_user_id, status, price_total, total_items, currency, notes, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, $4, $5, $6, 0, 0, 'USD', $7, now(), now())
+	`, orderID, displayID, req.BranchID, resolvedPersonID, resolvedClientUserID, StatusPendingReview, nullString(req.Notes))
 	if err != nil {
 		return nil, fmt.Errorf("insert order: %w", err)
 	}
@@ -163,7 +168,7 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 	_, err = tx.Exec(ctx, `
 		INSERT INTO order_status_history (id, order_id, from_status, to_status, changed_by_user_id, notes, created_at_utc)
 		VALUES ($1, $2, NULL, $3, $4, NULL, now())
-	`, uuid.New(), orderID, StatusPendingReview, changedByUserID)
+	`, uuid.New(), orderID, StatusPendingReview, nullableUUID(changedByUserID))
 	if err != nil {
 		return nil, fmt.Errorf("insert status history: %w", err)
 	}
@@ -178,15 +183,29 @@ func (s *Service) Create(ctx context.Context, req CreateOrderRequest, changedByU
 func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Order, error) {
 	o := &Order{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT id, display_id, branch_id, client_user_id, status, price_total, total_items, currency, notes, deleted_at, created_at_utc, updated_at_utc
+		SELECT id, display_id, branch_id, COALESCE(person_id::text, ''), COALESCE(client_user_id::text, ''), status, price_total, total_items, currency, notes, deleted_at, created_at_utc, updated_at_utc
 		FROM orders WHERE id = $1 AND deleted_at IS NULL
-	`, id).Scan(&o.ID, &o.DisplayID, &o.BranchID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
+	`, id).Scan(&o.ID, &o.DisplayID, &o.BranchID, &o.personIDRaw, &o.clientUserIDRaw, &o.Status, &o.PriceTotal, &o.TotalItems,
 		&o.Currency, &o.Notes, &o.DeletedAt, &o.CreatedAtUtc, &o.UpdatedAtUtc)
 	if err == pgx.ErrNoRows {
 		return nil, fmt.Errorf("ORDER_NOT_FOUND")
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get order: %w", err)
+	}
+	if o.personIDRaw != "" {
+		parsed, parseErr := uuid.Parse(o.personIDRaw)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parse person id: %w", parseErr)
+		}
+		o.PersonID = &parsed
+	}
+	if o.clientUserIDRaw != "" {
+		parsed, parseErr := uuid.Parse(o.clientUserIDRaw)
+		if parseErr != nil {
+			return nil, fmt.Errorf("parse client user id: %w", parseErr)
+		}
+		o.ClientUserID = &parsed
 	}
 
 	o.Items, err = s.getItems(ctx, id)
@@ -199,7 +218,7 @@ func (s *Service) GetByID(ctx context.Context, id uuid.UUID) (*Order, error) {
 
 func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, int, error) {
 	countQuery := `SELECT COUNT(*) FROM orders WHERE deleted_at IS NULL`
-	dataQuery := `SELECT id, display_id, branch_id, client_user_id, status, price_total, total_items, currency, notes, deleted_at, created_at_utc, updated_at_utc FROM orders WHERE deleted_at IS NULL`
+	dataQuery := `SELECT id, display_id, branch_id, COALESCE(person_id::text, ''), COALESCE(client_user_id::text, ''), status, price_total, total_items, currency, notes, deleted_at, created_at_utc, updated_at_utc FROM orders WHERE deleted_at IS NULL`
 	args := []interface{}{}
 	argIdx := 1
 
@@ -208,6 +227,13 @@ func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, int, e
 		countQuery += clause
 		dataQuery += clause
 		args = append(args, *filter.BranchID)
+		argIdx++
+	}
+	if filter.PersonID != nil {
+		clause := fmt.Sprintf(" AND person_id = $%d", argIdx)
+		countQuery += clause
+		dataQuery += clause
+		args = append(args, *filter.PersonID)
 		argIdx++
 	}
 	if filter.ClientUserID != nil {
@@ -252,9 +278,23 @@ func (s *Service) List(ctx context.Context, filter OrderFilter) ([]Order, int, e
 	orders := make([]Order, 0)
 	for rows.Next() {
 		var o Order
-		if err := rows.Scan(&o.ID, &o.DisplayID, &o.BranchID, &o.ClientUserID, &o.Status, &o.PriceTotal, &o.TotalItems,
+		if err := rows.Scan(&o.ID, &o.DisplayID, &o.BranchID, &o.personIDRaw, &o.clientUserIDRaw, &o.Status, &o.PriceTotal, &o.TotalItems,
 			&o.Currency, &o.Notes, &o.DeletedAt, &o.CreatedAtUtc, &o.UpdatedAtUtc); err != nil {
 			return nil, 0, fmt.Errorf("scan order: %w", err)
+		}
+		if o.personIDRaw != "" {
+			parsed, parseErr := uuid.Parse(o.personIDRaw)
+			if parseErr != nil {
+				return nil, 0, fmt.Errorf("parse person id: %w", parseErr)
+			}
+			o.PersonID = &parsed
+		}
+		if o.clientUserIDRaw != "" {
+			parsed, parseErr := uuid.Parse(o.clientUserIDRaw)
+			if parseErr != nil {
+				return nil, 0, fmt.Errorf("parse client user id: %w", parseErr)
+			}
+			o.ClientUserID = &parsed
 		}
 		orders = append(orders, o)
 	}
@@ -480,7 +520,7 @@ func (s *Service) ChangeStatus(ctx context.Context, id uuid.UUID, req StatusChan
 	_, err = tx.Exec(ctx, `
 		INSERT INTO order_status_history (id, order_id, from_status, to_status, changed_by_user_id, notes, created_at_utc)
 		VALUES ($1, $2, $3, $4, $5, $6, now())
-	`, uuid.New(), id, o.Status, req.ToStatus, changedByUserID, nullString(req.Notes))
+	`, uuid.New(), id, o.Status, req.ToStatus, nullableUUID(&changedByUserID), nullString(req.Notes))
 	if err != nil {
 		return nil, fmt.Errorf("insert history: %w", err)
 	}
@@ -494,7 +534,7 @@ func (s *Service) ChangeStatus(ctx context.Context, id uuid.UUID, req StatusChan
 
 func (s *Service) GetHistory(ctx context.Context, orderID uuid.UUID) ([]StatusHistoryEntry, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, order_id, from_status, to_status, changed_by_user_id, notes, created_at_utc
+		SELECT id, order_id, from_status, to_status, COALESCE(changed_by_user_id::text, ''), notes, created_at_utc
 		FROM order_status_history WHERE order_id = $1 ORDER BY created_at_utc
 	`, orderID)
 	if err != nil {
@@ -505,8 +545,16 @@ func (s *Service) GetHistory(ctx context.Context, orderID uuid.UUID) ([]StatusHi
 	entries := make([]StatusHistoryEntry, 0)
 	for rows.Next() {
 		var e StatusHistoryEntry
-		if err := rows.Scan(&e.ID, &e.OrderID, &e.FromStatus, &e.ToStatus, &e.ChangedByUserID, &e.Notes, &e.CreatedAtUtc); err != nil {
+		var changedBy string
+		if err := rows.Scan(&e.ID, &e.OrderID, &e.FromStatus, &e.ToStatus, &changedBy, &e.Notes, &e.CreatedAtUtc); err != nil {
 			return nil, fmt.Errorf("scan history: %w", err)
+		}
+		if changedBy != "" {
+			parsed, parseErr := uuid.Parse(changedBy)
+			if parseErr != nil {
+				return nil, fmt.Errorf("parse history user id: %w", parseErr)
+			}
+			e.ChangedByUserID = &parsed
 		}
 		entries = append(entries, e)
 	}
@@ -589,6 +637,179 @@ func (s *Service) validateBundlePrice(ctx context.Context, bundleID uuid.UUID, u
 		return fmt.Errorf("PRICE_MISMATCH: bundle %s unit_price %.2f does not match any registered price", bundleID, unitPrice)
 	}
 	return nil
+}
+
+func (s *Service) resolveOrderIdentity(ctx context.Context, req CreateOrderRequest, actorUserID *uuid.UUID) (uuid.UUID, *uuid.UUID, error) {
+	var resolvedPersonID uuid.UUID
+	var resolvedClientUserID *uuid.UUID
+
+	if req.ClientUserID != nil && strings.TrimSpace(*req.ClientUserID) != "" {
+		if actorUserID == nil || *actorUserID == uuid.Nil {
+			return uuid.Nil, nil, fmt.Errorf("CLIENT_USER_ID_REQUIRES_AUTH")
+		}
+		parsed, parseErr := uuid.Parse(strings.TrimSpace(*req.ClientUserID))
+		if parseErr != nil {
+			return uuid.Nil, nil, fmt.Errorf("invalid client_user_id")
+		}
+		if *actorUserID != parsed {
+			return uuid.Nil, nil, fmt.Errorf("CLIENT_USER_ID_MISMATCH")
+		}
+		resolvedClientUserID = &parsed
+	}
+	if resolvedClientUserID == nil && actorUserID != nil && *actorUserID != uuid.Nil {
+		resolvedClientUserID = actorUserID
+	}
+
+	if req.PersonID != nil && strings.TrimSpace(*req.PersonID) != "" {
+		parsed, parseErr := uuid.Parse(strings.TrimSpace(*req.PersonID))
+		if parseErr != nil {
+			return uuid.Nil, nil, fmt.Errorf("invalid person_id")
+		}
+		if actorUserID == nil {
+			return uuid.Nil, nil, fmt.Errorf("PERSON_ID_REQUIRES_AUTH")
+		}
+		ownerOK, ownerErr := s.userOwnsPerson(ctx, *actorUserID, parsed)
+		if ownerErr != nil {
+			return uuid.Nil, nil, ownerErr
+		}
+		if !ownerOK {
+			return uuid.Nil, nil, fmt.Errorf("PERSON_OWNERSHIP_REQUIRED")
+		}
+		resolvedPersonID = parsed
+	}
+
+	if resolvedPersonID == uuid.Nil {
+		if resolvedClientUserID != nil {
+			personID, resolveErr := s.resolvePersonIDForUser(ctx, *resolvedClientUserID)
+			if resolveErr != nil {
+				return uuid.Nil, nil, resolveErr
+			}
+			if personID != uuid.Nil {
+				resolvedPersonID = personID
+			}
+		}
+		if resolvedPersonID == uuid.Nil {
+			if actorUserID != nil {
+				personID, createErr := s.resolveOrCreatePersonForUser(ctx, *actorUserID, req)
+				if createErr != nil {
+					return uuid.Nil, nil, createErr
+				}
+				resolvedPersonID = personID
+			} else {
+				personID, createErr := s.createGuestPerson(ctx, req)
+				if createErr != nil {
+					return uuid.Nil, nil, createErr
+				}
+				resolvedPersonID = personID
+			}
+		}
+	}
+
+	if resolvedPersonID == uuid.Nil {
+		return uuid.Nil, nil, fmt.Errorf("PERSON_REQUIRED_FOR_ORDER")
+	}
+
+	return resolvedPersonID, resolvedClientUserID, nil
+}
+
+func (s *Service) resolvePersonIDForUser(ctx context.Context, userID uuid.UUID) (uuid.UUID, error) {
+	var personIDStr string
+	err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(person_id::text, '')
+		FROM users
+		WHERE id = $1
+	`, userID).Scan(&personIDStr)
+	if err == pgx.ErrNoRows {
+		return uuid.Nil, fmt.Errorf("PERSON_REQUIRED_FOR_ORDER")
+	}
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("resolve user person: %w", err)
+	}
+	if personIDStr == "" {
+		return uuid.Nil, fmt.Errorf("PERSON_REQUIRED_FOR_ORDER")
+	}
+	personID, err := uuid.Parse(personIDStr)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("resolve user person: %w", err)
+	}
+	return personID, nil
+}
+
+func (s *Service) userOwnsPerson(ctx context.Context, userID, personID uuid.UUID) (bool, error) {
+	var exists bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM users WHERE id = $1 AND person_id = $2
+		)
+	`, userID, personID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check person ownership: %w", err)
+	}
+	return exists, nil
+}
+
+func (s *Service) resolveOrCreatePersonForUser(ctx context.Context, userID uuid.UUID, req CreateOrderRequest) (uuid.UUID, error) {
+	personID, err := s.resolvePersonIDForUser(ctx, userID)
+	if err == nil && personID != uuid.Nil {
+		return personID, nil
+	}
+	personID, err = s.createPersonFromOrderRequest(ctx, req)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if _, err := s.pool.Exec(ctx, `UPDATE users SET person_id = $2 WHERE id = $1`, userID, personID); err != nil {
+		return uuid.Nil, fmt.Errorf("link person to user: %w", err)
+	}
+	return personID, nil
+}
+
+func (s *Service) createGuestPerson(ctx context.Context, req CreateOrderRequest) (uuid.UUID, error) {
+	if req.PersonName == nil || req.PersonIdentityDocument == nil || req.PersonWhatsAppPhone == nil || req.PersonFullAddress == nil {
+		return uuid.Nil, fmt.Errorf("PERSON_REQUIRED_FOR_ORDER")
+	}
+	var exists bool
+	if err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM persons WHERE identity_document = $1)`, strings.ToUpper(strings.TrimSpace(*req.PersonIdentityDocument))).Scan(&exists); err != nil {
+		return uuid.Nil, fmt.Errorf("lookup person: %w", err)
+	}
+	if exists {
+		return uuid.Nil, fmt.Errorf("PERSON_EXISTS")
+	}
+	return s.createPersonFromOrderRequest(ctx, req)
+}
+
+func (s *Service) createPersonFromOrderRequest(ctx context.Context, req CreateOrderRequest) (uuid.UUID, error) {
+	name := strings.TrimSpace(valueOrEmpty(req.PersonName))
+	doc := strings.ToUpper(strings.TrimSpace(valueOrEmpty(req.PersonIdentityDocument)))
+	taxID := strings.TrimSpace(valueOrEmpty(req.PersonTaxID))
+	phone := strings.TrimSpace(valueOrEmpty(req.PersonWhatsAppPhone))
+	address := strings.TrimSpace(valueOrEmpty(req.PersonFullAddress))
+	if name == "" || doc == "" || phone == "" || address == "" {
+		return uuid.Nil, fmt.Errorf("PERSON_REQUIRED_FOR_ORDER")
+	}
+	var personID uuid.UUID
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO persons (id, name, identity_document, tax_id, whatsapp_phone, full_address, is_client, created_at_utc, updated_at_utc)
+		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, true, now(), now())
+		RETURNING id
+	`, uuid.New(), name, doc, taxID, phone, address).Scan(&personID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("create person: %w", err)
+	}
+	return personID, nil
+}
+
+func valueOrEmpty(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func nullableUUID(id *uuid.UUID) interface{} {
+	if id == nil || *id == uuid.Nil {
+		return nil
+	}
+	return *id
 }
 
 func isStockReleaseStatus(status string) bool {

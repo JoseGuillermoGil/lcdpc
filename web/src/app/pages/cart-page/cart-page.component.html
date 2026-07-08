@@ -103,29 +103,105 @@
         <span class="panel-badge accent">Checkout</span>
       </div>
 
-      <form class="checkout-form">
-        <label>
-          <span>Full name</span>
-          <input pInputText [ngModel]="contactName()" (ngModelChange)="contactName.set($event)" name="contactName" placeholder="e.g. John Perez" />
-        </label>
-        <label>
-          <span>WhatsApp number</span>
-          <input pInputText [ngModel]="phone()" (ngModelChange)="phone.set($event)" name="phone" placeholder="+1 555 123 4567" />
-        </label>
-        <label>
-          <span>Delivery address</span>
-          <textarea [ngModel]="address()" (ngModelChange)="address.set($event)" name="address" rows="4" placeholder="Street, building, apartment, reference..."></textarea>
-        </label>
-        <label>
-          <span>Notes</span>
-          <textarea [ngModel]="notes()" (ngModelChange)="notes.set($event)" name="notes" rows="3" placeholder="Additional instructions"></textarea>
-        </label>
-      </form>
+      <div class="person-search-panel">
+        <div class="field-grid two-cols">
+          <div class="field-wrap">
+            <p-floatlabel variant="over">
+              <p-select
+                inputId="personType"
+                [options]="personTypeOptions"
+                [ngModel]="personType()"
+                (ngModelChange)="onPersonTypeChange($event)"
+                name="personType"
+                optionLabel="label"
+                optionValue="value"
+                appendTo="body"
+              ></p-select>
+              <label for="personType">Person type</label>
+            </p-floatlabel>
+          </div>
 
-      @if (!isEmpty() && !isAuthenticated()) {
-        <div class="login-strip">
-          To place the order you must <button type="button" class="inline-link" (click)="openLogin()">sign in</button>
+          <div class="field-wrap">
+            <p-floatlabel variant="over">
+              <p-select
+                inputId="documentType"
+                [options]="documentTypeOptions()"
+                [ngModel]="documentType()"
+                (ngModelChange)="documentType.set($event)"
+                name="documentType"
+                optionLabel="label"
+                optionValue="value"
+                appendTo="body"
+              ></p-select>
+              <label for="documentType">Document type</label>
+            </p-floatlabel>
+          </div>
         </div>
+
+        <div class="field-grid search-row">
+          <div class="field-wrap">
+            <p-floatlabel variant="over">
+              <input
+                id="documentNumber"
+                pInputText
+                type="text"
+                inputmode="numeric"
+                maxlength="9"
+                [ngModel]="documentNumber()"
+                (ngModelChange)="updateDocumentNumber($event)"
+                (keydown)="allowOnlyDigits($event)"
+                (paste)="sanitizeDigitsPaste($event)"
+                name="documentNumber"
+                placeholder=" "
+              />
+              <label for="documentNumber">Document number</label>
+            </p-floatlabel>
+          </div>
+          @if (canUsePersonLookup()) {
+            <p-button
+              label="Search"
+              icon="pi pi-search"
+              severity="secondary"
+              [loading]="searchingPerson()"
+              [disabled]="!canSearchPerson()"
+              (onClick)="searchPerson()"
+            ></p-button>
+          }
+        </div>
+
+        @if (personSearchError()) {
+          <small class="field-error">{{ personSearchError() }}</small>
+        }
+        @if (!canUsePersonLookup()) {
+          <p class="checkout-note">Guest checkout uses the contact data entered below.</p>
+        }
+      </div>
+
+      @if (personFieldsVisible()) {
+        <form class="checkout-form">
+          <label>
+            <span>Full name</span>
+            <input pInputText [ngModel]="contactName()" (ngModelChange)="onNameInput($event)" name="contactName" placeholder="e.g. John Perez" />
+          </label>
+          <label>
+            <span>WhatsApp number</span>
+            <input pInputText [ngModel]="phone()" (ngModelChange)="onPhoneInput($event)" name="phone" placeholder="+1 555 123 4567" />
+          </label>
+          <label>
+            <span>Delivery address</span>
+            <textarea [ngModel]="address()" (ngModelChange)="onAddressInput($event)" name="address" rows="4" placeholder="Street, building, apartment, reference..."></textarea>
+          </label>
+          <label>
+            <span>Tax ID / RIF</span>
+            <input pInputText [ngModel]="taxId()" (ngModelChange)="onTaxIdInput($event)" name="taxId" placeholder="Optional" />
+          </label>
+          <label>
+            <span>Order notes</span>
+            <textarea [ngModel]="orderNotes()" (ngModelChange)="onOrderNotesInput($event)" name="notes" rows="3" placeholder="Additional instructions"></textarea>
+          </label>
+        </form>
+      } @else {
+        <p class="checkout-note">Search a person by document to load or create their checkout data.</p>
       }
 
       <div class="checkout-total">
@@ -147,7 +223,7 @@
         label="Confirm order"
         icon="pi pi-check"
         [loading]="buying()"
-        [disabled]="isEmpty() || hasStockIssues() || !isAuthenticated()"
+        [disabled]="isEmpty() || hasStockIssues() || !personFieldsVisible() || !isPersonFormValid()"
         (onClick)="buy()"
       ></p-button>
 
@@ -156,8 +232,3 @@
   </div>
 </section>
 
-<app-login-dialog
-  [visible]="showLoginDialog()"
-  (visibleChange)="showLoginDialog.set($event)"
-  (loginSuccess)="onLoginSuccess()"
-/>

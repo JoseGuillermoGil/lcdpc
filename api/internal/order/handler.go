@@ -27,11 +27,14 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	changedByStr := middleware.GetUserID(r.Context())
-	changedBy, err := uuid.Parse(changedByStr)
-	if err != nil {
-		response.Error(w, http.StatusUnauthorized, "unauthorized")
-		return
+	var changedBy *uuid.UUID
+	if changedByStr := middleware.GetUserID(r.Context()); changedByStr != "" {
+		parsed, err := uuid.Parse(changedByStr)
+		if err != nil {
+			response.Error(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		changedBy = &parsed
 	}
 
 	result, err := h.svc.Create(r.Context(), req, changedBy)
@@ -65,6 +68,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	if branchIDStr := r.URL.Query().Get("branch_id"); branchIDStr != "" {
 		if branchID, err := uuid.Parse(branchIDStr); err == nil {
 			filter.BranchID = &branchID
+		}
+	}
+	if personStr := r.URL.Query().Get("person_id"); personStr != "" {
+		if personID, err := uuid.Parse(personStr); err == nil {
+			filter.PersonID = &personID
 		}
 	}
 	if clientStr := r.URL.Query().Get("client_user_id"); clientStr != "" {

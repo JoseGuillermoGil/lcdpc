@@ -18,6 +18,7 @@ import (
 	"github.com/lcdpc/lcdpc-go/internal/http/handler"
 	"github.com/lcdpc/lcdpc-go/internal/http/middleware"
 	"github.com/lcdpc/lcdpc-go/internal/order"
+	"github.com/lcdpc/lcdpc-go/internal/person"
 	"github.com/lcdpc/lcdpc-go/internal/pricing"
 	"github.com/lcdpc/lcdpc-go/internal/rbac"
 	"github.com/lcdpc/lcdpc-go/internal/staff"
@@ -41,6 +42,7 @@ func NewServer(
 	rbacStore *rbac.Store,
 	rbacSvc *rbac.Service,
 	orderSvc *order.Service,
+	personSvc *person.Service,
 	systemConfigSvc *systemconfig.Service,
 	userSvc *user.Service,
 	dashboardSvc *dashboard.Service,
@@ -75,6 +77,7 @@ func NewServer(
 	healthH := handler.NewHealthHandler(pool)
 	rbacH := rbac.NewHandler(rbacSvc)
 	orderH := order.NewHandler(orderSvc, rbacStore)
+	personH := handler.NewPersonHandler(personSvc)
 	systemConfigH := handler.NewSystemConfigHandler(systemConfigSvc)
 	userH := handler.NewUserHandler(userSvc)
 	dashboardH := dashboard.NewHandler(dashboardSvc, rbacStore)
@@ -90,15 +93,15 @@ func NewServer(
 	// Discovery
 	r.Get("/.well-known/openid-configuration", func(w http.ResponseWriter, r *http.Request) {
 		discovery := map[string]interface{}{
-			"issuer":                            cfg.OAuth2Issuer,
-			"authorization_endpoint":            cfg.OAuth2Issuer + "/oauth2/authorize",
-			"token_endpoint":                    cfg.OAuth2Issuer + "/oauth2/token",
-			"introspection_endpoint":            cfg.OAuth2Issuer + "/oauth2/introspect",
-			"revocation_endpoint":               cfg.OAuth2Issuer + "/oauth2/revoke",
-			"response_types_supported":          []string{"code"},
-			"grant_types_supported":             []string{"authorization_code", "refresh_token"},
-			"code_challenge_methods_supported":  []string{"S256"},
-			"subject_types_supported":           []string{"public"},
+			"issuer":                           cfg.OAuth2Issuer,
+			"authorization_endpoint":           cfg.OAuth2Issuer + "/oauth2/authorize",
+			"token_endpoint":                   cfg.OAuth2Issuer + "/oauth2/token",
+			"introspection_endpoint":           cfg.OAuth2Issuer + "/oauth2/introspect",
+			"revocation_endpoint":              cfg.OAuth2Issuer + "/oauth2/revoke",
+			"response_types_supported":         []string{"code"},
+			"grant_types_supported":            []string{"authorization_code", "refresh_token"},
+			"code_challenge_methods_supported": []string{"S256"},
+			"subject_types_supported":          []string{"public"},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(discovery)
@@ -531,30 +534,40 @@ func NewServer(
 		})
 	})
 
+	// Persons
+	r.Route("/api/v1/persons", func(r chi.Router) {
+		r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
+		r.Use(middleware.RequireAuth())
+		r.Get("/by-document/{doc}", personH.GetByDocument)
+		r.Post("/upsert", personH.Upsert)
+	})
+
 	// Orders
 	r.Route("/api/v1/orders", func(r chi.Router) {
 		r.Use(middleware.PASETOAuth(keySvc.Key(), cfg.OAuth2Issuer, cfg.OAuth2Audience))
-		r.Use(middleware.RequireAuth())
 
 		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAuth())
 			r.Use(middleware.RequirePermission(rbacStore, "order:view"))
 			r.Get("/", orderH.List)
 			r.Get("/{id}", orderH.GetByID)
 			r.Get("/{id}/history", orderH.GetHistory)
 		})
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequirePermission(rbacStore, "order:create"))
 			r.Post("/", orderH.Create)
 		})
 		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAuth())
 			r.Use(middleware.RequirePermission(rbacStore, "order:update"))
 			r.Put("/{id}", orderH.Update)
 		})
 		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAuth())
 			r.Use(middleware.RequirePermission(rbacStore, "order:delete"))
 			r.Delete("/{id}", orderH.Delete)
 		})
 		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireAuth())
 			r.Use(middleware.RequirePermission(rbacStore, "order:status:change"))
 			r.Post("/{id}/status", orderH.ChangeStatus)
 		})

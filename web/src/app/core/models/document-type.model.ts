@@ -9,6 +9,7 @@ export const DOCUMENT_TYPE_OPTIONS: DocumentTypeOption[] = [
   { label: 'J', value: 'J' },
   { label: 'G', value: 'G' },
   { label: 'C', value: 'C' },
+  { label: 'P', value: 'P' },
 ];
 
-export type DocumentType = 'V' | 'E' | 'J' | 'G' | 'C';
+export type DocumentType = 'V' | 'E' | 'J' | 'G' | 'C' | 'P';

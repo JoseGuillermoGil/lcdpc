@@ -23,7 +23,8 @@ interface OrderGoData {
   id: string;
   display_id: string;
   branch_id: string;
-  client_user_id: string;
+  person_id: string | null;
+  client_user_id: string | null;
   status: string;
   price_total: number;
   total_items: number;
@@ -59,7 +60,7 @@ interface StatusHistoryGoData {
   order_id: string;
   from_status: string | null;
   to_status: string;
-  changed_by_user_id: string;
+  changed_by_user_id: string | null;
   notes: string | null;
   created_at_utc: string;
 }
@@ -79,6 +80,7 @@ export class OrderApiService {
     const params: Record<string, string> = {};
     if (filter?.branch_id) params['branch_id'] = filter.branch_id;
     if (filter?.client_user_id) params['client_user_id'] = filter.client_user_id;
+    if (filter?.person_id) params['person_id'] = filter.person_id;
     if (filter?.status) params['status'] = filter.status;
     if (filter?.display_id) params['display_id'] = filter.display_id;
     if (filter?.limit != null) params['limit'] = String(filter.limit);
@@ -150,6 +152,7 @@ export class OrderApiService {
       id: raw.id,
       displayId: raw.display_id,
       branchId: raw.branch_id,
+      personId: raw.person_id,
       clientUserId: raw.client_user_id,
       status: raw.status,
       priceTotal: raw.price_total,
