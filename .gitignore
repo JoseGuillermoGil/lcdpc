@@ -32,3 +32,5 @@ __pycache__/
 api/static/*
 .opencode/*
 api/LCDPC/web/.angular/cache/*
+api/server
+    
